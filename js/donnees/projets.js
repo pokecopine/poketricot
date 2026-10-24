@@ -5,6 +5,8 @@ import { PALETTE, EPAISSEURS, lireNombre, formaterNombre, metrageLaine, aiguille
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { echantillonsCorrespondants, densitesDuProjet } from "../moteur/densite.js";
 import { planEcharpe } from "../moteur/plan.js";
+import { metrageNecessaire, comparerALaLaine } from "../moteur/metrage.js";
+import { densitePoint } from "../moteur/densite.js";
 import { nomCouleur } from "./couleur.js";
 
 /** Les 6 étapes de la conception, avec leur adresse. */
@@ -198,7 +200,17 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons }) {
     largeurCm: projet.taille.largeurCm, longueurCm: projet.taille.longueurCm,
     blocs, densites, lisieres: projet.lisieres,
   });
-  return { ...r, densites, echantillon, estime: !echantillon || Object.values(densites).some((d) => d.statut !== "mesuree") };
+  let metrage = null;
+  let laineSuffit = null;
+  if (r.ok) {
+    const densiteJersey = densitePoint({ pointId: "jersey", laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon });
+    metrage = metrageNecessaire({ plan: r.plan, laine, echantillon, densiteJersey });
+    if (metrage) laineSuffit = comparerALaLaine(metrage.metres, laine);
+  }
+  return {
+    ...r, densites, echantillon, metrage, laineSuffit,
+    estime: !echantillon || Object.values(densites).some((d) => d.statut !== "mesuree"),
+  };
 }
 
 /** Texte de l'accueil pour un projet en conception : « En conception · étape 3 sur 6 ». */
@@ -217,4 +229,87 @@ export function trierProjets(projets) {
 /** Point utilisé pour la vignette d'un projet. */
 export function pointVignette(projet) {
   return pointParId(projet.pointPrincipal) || pointParId(projet.blocs?.find((b) => b.pointId)?.pointId) || pointParId("jersey");
+}
+
+// ---------------- Blocs du builder ----------------
+
+export const LIMITES_BLOCS = { hauteurCm: [1, 80], largeurMailles: [1, 20] };
+
+const idBloc = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const horizontal = (b) => b.zone !== "cotes";
+
+/** Blocs horizontaux du bas vers le haut (les bandes latérales à part). */
+export const blocsHorizontaux = (projet) => projet.blocs.filter(horizontal);
+export const blocLateral = (projet) => projet.blocs.find((b) => b.zone === "cotes") || null;
+
+/** Nom d'un bloc pour l'écran : « Bordure du bas », « Corps », « Bande », « Bandes latérales ». */
+export function nomBloc(bloc) {
+  return { bas: "Bordure du bas", corps: "Corps", bande: "Bande", haut: "Bordure du haut", cotes: "Bandes latérales" }[bloc.zone] || "Bloc";
+}
+
+/** Nom court pour les pastilles des blocs. */
+export function nomCourtBloc(bloc) {
+  return { bas: "Bordure", corps: "Corps", bande: "Bande", haut: "Bordure", cotes: "Côtés" }[bloc.zone] || "Bloc";
+}
+
+/**
+ * Ajoute un bloc horizontal.
+ * - type "bande" : une bande d'un autre point dans le corps, position "debut" | "milieu" | "fin".
+ *   Au milieu, la bande coupe le corps en deux parties (même point, même longueur).
+ * - type "bordure" : une bordure de plus, position "bas" | "haut", placée entre la bordure existante et le corps.
+ * Renvoie { projet, blocId }.
+ */
+export function ajouterBloc(projet, { type, position, pointId, hauteurCm }) {
+  const nouveau = { id: idBloc(), zone: type === "bordure" ? position : "bande", pointId, hauteurCm };
+  const blocs = [...projet.blocs];
+  const indices = blocs.map((b, i) => (b.zone === "corps" ? i : -1)).filter((i) => i >= 0);
+  let insertion;
+  let enPlus = [];
+  if (type === "bordure" && position === "bas") {
+    insertion = blocs.findIndex((b) => horizontal(b) && b.zone !== "bas");
+  } else if (type === "bordure") {
+    const dernierNonHaut = blocs.reduce((d, b, i) => (horizontal(b) && b.zone !== "haut" ? i : d), -1);
+    insertion = dernierNonHaut + 1;
+  } else if (position === "debut") {
+    insertion = indices[0];
+  } else if (position === "fin") {
+    insertion = indices[indices.length - 1] + 1;
+  } else {
+    // Au milieu : après la partie du corps du milieu, suivie d'une nouvelle partie du corps.
+    insertion = indices[Math.floor((indices.length - 1) / 2)] + 1;
+    enPlus = [{ id: idBloc(), zone: "corps", pointId: projet.pointPrincipal || blocs[indices[0]].pointId }];
+  }
+  if (insertion < 0) insertion = blocs.length;
+  blocs.splice(insertion, 0, nouveau, ...enPlus);
+  return { projet: { ...projet, blocs }, blocId: nouveau.id };
+}
+
+/**
+ * Supprime un bloc (jamais le corps). Une bande qui coupait le corps en deux le recolle.
+ */
+export function supprimerBloc(projet, blocId) {
+  const i = projet.blocs.findIndex((b) => b.id === blocId);
+  if (i < 0 || projet.blocs[i].zone === "corps") return projet;
+  const blocs = [...projet.blocs];
+  const avant = blocs[i - 1];
+  const apres = blocs[i + 1];
+  const recoller = blocs[i].zone === "bande" && avant?.zone === "corps" && apres?.zone === "corps";
+  blocs.splice(i, recoller ? 2 : 1);
+  return { ...projet, blocs };
+}
+
+/** Rajoute les bandes latérales (4 mailles en point mousse) si elles avaient été supprimées. */
+export function avecBandesLaterales(projet) {
+  if (blocLateral(projet)) return projet;
+  return { ...projet, blocs: [...projet.blocs, { id: "cotes", zone: "cotes", pointId: "mousse", largeurMailles: 4 }] };
+}
+
+const borne = (v, [min, max]) => Math.min(max, Math.max(min, v));
+
+export function avecHauteurBloc(projet, blocId, hauteurCm) {
+  return { ...projet, blocs: projet.blocs.map((b) => (b.id === blocId ? { ...b, hauteurCm: borne(hauteurCm, LIMITES_BLOCS.hauteurCm) } : b)) };
+}
+
+export function avecLargeurBandes(projet, mailles) {
+  return { ...projet, blocs: projet.blocs.map((b) => (b.zone === "cotes" ? { ...b, largeurMailles: borne(mailles, LIMITES_BLOCS.largeurMailles) } : b)) };
 }

@@ -287,10 +287,10 @@ export function ChoixPointDuBloc({ id, blocId }) {
     actuel: bloc.pointId,
     titre: bloc.zone === "corps" ? "Point principal" : `Point : ${nomZone}`,
     aide: AIDES_ZONES[bloc.zone] || "",
-    secours: cheminEtape(projet),
+    secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
     choisir: async (pointId) => {
       await modifier((p) => avecPointDuBloc(p, blocId, pointId));
-      retour(cheminEtape(projet));
+      retour(projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet));
     },
   };
   return html`<${CataloguePoints} selection=${selection} />`;

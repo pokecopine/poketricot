@@ -15,6 +15,7 @@ import { NouveauProjet, EtapePiece } from "./ecrans/projet-piece.js";
 import { EtapeMateriel } from "./ecrans/projet-materiel.js";
 import { EtapeTaille, EtapeBientot } from "./ecrans/projet-taille.js";
 import { ChoixPointDuBloc } from "./ecrans/points.js";
+import { EtapeBuilder } from "./ecrans/projet-builder.js";
 import { Reglages } from "./ecrans/reglages.js";
 import { CataloguePoints, FichePoint } from "./ecrans/points.js";
 
@@ -36,6 +37,7 @@ function Ecran({ chemin }) {
     if (troisieme === "piece") return html`<${EtapePiece} key=${id} id=${id} />`;
     if (troisieme === "materiel") return html`<${EtapeMateriel} key=${id} id=${id} />`;
     if (troisieme === "taille") return html`<${EtapeTaille} key=${id} id=${id} />`;
+    if (troisieme === "builder") return html`<${EtapeBuilder} key=${id} id=${id} />`;
     if (troisieme === "point") return html`<${ChoixPointDuBloc} key=${id + quatrieme} id=${id} blocId=${quatrieme} />`;
     return html`<${EtapeBientot} key=${id} id=${id} etape=${troisieme} />`;
   }
