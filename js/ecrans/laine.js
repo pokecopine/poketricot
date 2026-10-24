@@ -88,7 +88,7 @@ const LAINE_VIDE = {
   composition: [{ fibre: "Laine", pourcentage: "100" }],
   couleur: PALETTE[0].hex,
   quantite: { mode: "etiquette", metresParPelote: "", grammesParPelote: "", pelotes: "", grammes: "", metresReference: "", grammesReference: "" },
-  echantillonEtiquette: { mailles: "", aiguilleMm: "" },
+  echantillonEtiquette: { mailles: "", aiguilleMm: "", aiguilleMaxMm: "" },
   note: "",
   archivee: false,
 };
@@ -178,10 +178,17 @@ export function FicheLaine({ id }) {
           options=${EPAISSEURS.map((e) => ({ valeur: e.id, libelle: `${e.nom} · ${texteFourchette(e)}` }))}
           surChangement=${(v) => maj({ epaisseur: v })} />
         <${AideEpaisseur} laine=${laine} surChoix=${(v) => maj({ epaisseur: v })} />
-        <${Champ} libelle="Aiguille conseillée sur l'étiquette (mm, facultatif)" mode="decimal" placeholder="ex. 9"
-          valeur=${laine.echantillonEtiquette.aiguilleMm} erreur=${erreurs.aiguilleMm}
-          aide="Si tu la notes, l'outil s'y fiera pour te conseiller tes aiguilles."
-          surChangement=${(v) => majE({ aiguilleMm: v })} />
+        <div class="champ-groupe">
+          <span class="champ-groupe-titre">Aiguilles conseillées sur l'étiquette (facultatif)</span>
+          <div class="rangee-fois">
+            <${Champ} libelle="De (mm)" mode="decimal" placeholder="ex. 8" valeur=${laine.echantillonEtiquette.aiguilleMm}
+              erreur=${erreurs.aiguilleMm} surChangement=${(v) => majE({ aiguilleMm: v })} />
+            <span class="signe-fois" aria-hidden="true">à</span>
+            <${Champ} libelle="À (mm)" mode="decimal" placeholder="ex. 10" valeur=${laine.echantillonEtiquette.aiguilleMaxMm}
+              erreur=${erreurs.aiguilleMaxMm} surChangement=${(v) => majE({ aiguilleMaxMm: v })} />
+          </div>
+          <span class="aide">Une seule taille sur l'étiquette ? Remplis seulement la première case. L'outil s'y fiera pour te conseiller tes aiguilles.</span>
+        </div>
         <${Composition} composition=${laine.composition} erreur=${erreurs.composition}
           surChangement=${(f) => setLaine((l) => ({ ...l, composition: f(l.composition) }))} />
 

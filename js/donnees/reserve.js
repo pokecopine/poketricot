@@ -113,6 +113,25 @@ export function nomEpaisseur(id) {
   return EPAISSEURS.find((e) => e.id === id)?.nom ?? "";
 }
 
+/**
+ * Aiguilles conseillées sur l'étiquette : une taille (« 9 mm ») ou deux (« 8 à 10 mm »).
+ * Renvoie { min, max } (min = max s'il n'y en a qu'une), ou null.
+ */
+export function aiguillesEtiquette(laine) {
+  const e = laine?.echantillonEtiquette || {};
+  const a = lireNombre(e.aiguilleMm);
+  const b = lireNombre(e.aiguilleMaxMm);
+  const tailles = [a, b].filter((x) => x !== null && x > 0);
+  if (tailles.length === 0) return null;
+  return { min: Math.min(...tailles), max: Math.max(...tailles) };
+}
+
+/** « 9 mm » ou « 8 à 10 mm » */
+export function texteAiguillesEtiquette(f) {
+  if (!f) return "";
+  return f.min === f.max ? `${formaterNombre(f.min, 2)} mm` : `${formaterNombre(f.min, 2)} à ${formaterNombre(f.max, 2)} mm`;
+}
+
 /** Lit un nombre saisi à la française (« 2,5 ») ; renvoie null si vide ou invalide. */
 export function lireNombre(saisie) {
   if (saisie === null || saisie === undefined) return null;
@@ -220,10 +239,15 @@ export function verifierLaine(laine) {
   if (ech.mailles !== undefined && String(ech.mailles).trim() !== "" && (mailles === null || mailles <= 0)) {
     erreurs.echantillonMailles = "Nombre de mailles invalide.";
   }
-  const aig = lireNombre(ech.aiguilleMm);
-  if (ech.aiguilleMm !== undefined && String(ech.aiguilleMm).trim() !== "" && (aig === null || aig < 1.5 || aig > 25)) {
-    erreurs.aiguilleMm = "Indique une taille entre 1,5 et 25 mm.";
+  for (const cle of ["aiguilleMm", "aiguilleMaxMm"]) {
+    const v = lireNombre(ech[cle]);
+    if (ech[cle] !== undefined && String(ech[cle]).trim() !== "" && (v === null || v < 1.5 || v > 25)) {
+      erreurs[cle] = "Indique une taille entre 1,5 et 25 mm.";
+    }
   }
+  const aMin = lireNombre(ech.aiguilleMm);
+  const aMax = lireNombre(ech.aiguilleMaxMm);
+  if (!erreurs.aiguilleMaxMm && aMax !== null && aMin === null) erreurs.aiguilleMm = "Indique d'abord la plus petite taille.";
   return erreurs;
 }
 

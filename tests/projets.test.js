@@ -105,3 +105,19 @@ test("accueil : projets triés, état et adresse de l'étape", () => {
   assert.equal(cheminEtape(liste[2]), "/projet/c/taille");
   assert.equal(cheminEtape(liste[0], 1), "/projet/a/piece");
 });
+
+test("deux tailles d'aiguille sur l'étiquette : une fourchette", async () => {
+  const { aiguillesEtiquette, texteAiguillesEtiquette, verifierLaine } = await import("../js/donnees/reserve.js");
+  const l = { epaisseur: "bulky", echantillonEtiquette: { aiguilleMm: "8", aiguilleMaxMm: "10" } };
+  assert.deepEqual(aiguillesEtiquette(l), { min: 8, max: 10 });
+  assert.equal(texteAiguillesEtiquette(aiguillesEtiquette(l)), "8 à 10 mm");
+  assert.deepEqual(aiguillesEtiquette({ echantillonEtiquette: { aiguilleMm: "10", aiguilleMaxMm: "8" } }), { min: 8, max: 10 });
+  assert.match(detailLaineProjet({ ...laine, echantillonEtiquette: { aiguilleMm: "8", aiguilleMaxMm: "10" } }), /aiguilles 8 à 10 mm$/);
+  assert.match(conseilAiguille(l, 9).texte, /dans la fourchette conseillée sur l'étiquette de ta laine \(8 à 10 mm\)/);
+  assert.equal(conseilAiguille(l, 10.5).ok, true);
+  assert.equal(conseilAiguille(l, 6).ok, false);
+  const base = { nom: "x", epaisseur: "bulky", couleur: "#123456", composition: [{ fibre: "Laine", pourcentage: 100 }], quantite: { mode: "etiquette", metresParPelote: 80, pelotes: 2 } };
+  assert.equal(verifierLaine({ ...base, echantillonEtiquette: { aiguilleMm: "", aiguilleMaxMm: "10" } }).aiguilleMm, "Indique d'abord la plus petite taille.");
+  assert.equal(verifierLaine({ ...base, echantillonEtiquette: { aiguilleMm: "8", aiguilleMaxMm: "40" } }).aiguilleMaxMm, "Indique une taille entre 1,5 et 25 mm.");
+  assert.deepEqual(verifierLaine({ ...base, echantillonEtiquette: { aiguilleMm: "8", aiguilleMaxMm: "10" } }), {});
+});

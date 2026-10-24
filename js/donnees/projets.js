@@ -1,7 +1,7 @@
 // Règles des projets en conception : création, étapes, tailles, matériel, calcul du plan.
 // Fonctions pures, testées sans navigateur.
 
-import { PALETTE, EPAISSEURS, lireNombre, formaterNombre, metrageLaine } from "./reserve.js";
+import { PALETTE, EPAISSEURS, lireNombre, formaterNombre, metrageLaine, aiguillesEtiquette, texteAiguillesEtiquette } from "./reserve.js";
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { echantillonsCorrespondants, densitesDuProjet } from "../moteur/densite.js";
 import { planEcharpe } from "../moteur/plan.js";
@@ -87,19 +87,13 @@ export function nomPropose(type, laine) {
   return c ? `${base} ${c}` : base;
 }
 
-/** Taille d'aiguille conseillée sur l'étiquette de la laine (mm), ou null. */
-export function aiguilleEtiquette(laine) {
-  const t = lireNombre(laine?.echantillonEtiquette?.aiguilleMm);
-  return t && t > 0 ? t : null;
-}
-
 /** « Aran · 400 m disponibles · aiguille 9 mm » */
 export function detailLaineProjet(laine) {
   const ep = EPAISSEURS.find((e) => e.id === laine.epaisseur)?.nom;
   const m = metrageLaine(laine);
   const dispo = m ? `${m.estime ? "environ " : ""}${m.metres} m disponibles` : "métrage inconnu";
-  const a = aiguilleEtiquette(laine);
-  return [ep, dispo, a ? `aiguille ${formaterNombre(a, 2)} mm` : null].filter(Boolean).join(" · ");
+  const f = aiguillesEtiquette(laine);
+  return [ep, dispo, f ? `aiguille${f.min === f.max ? "" : "s"} ${texteAiguillesEtiquette(f)}` : null].filter(Boolean).join(" · ");
 }
 
 /**
@@ -112,11 +106,14 @@ export function conseilAiguille(laine, tailleMm) {
   const t = lireNombre(tailleMm);
   if (!laine || t === null) return null;
   const taille = `${formaterNombre(t, 2)} mm`;
-  const conseillee = aiguilleEtiquette(laine);
-  if (conseillee) {
-    const ecart = t - conseillee;
-    const c = `${formaterNombre(conseillee, 2)} mm`;
-    if (Math.abs(ecart) < 0.01) return { ok: true, texte: `${taille} : c'est la taille conseillée sur l'étiquette de ta laine.` };
+  const f = aiguillesEtiquette(laine);
+  if (f) {
+    const c = texteAiguillesEtiquette(f);
+    const fourchette = f.min !== f.max;
+    if (t >= f.min - 0.01 && t <= f.max + 0.01) {
+      return { ok: true, texte: fourchette ? `${taille} : dans la fourchette conseillée sur l'étiquette de ta laine (${c}).` : `${taille} : c'est la taille conseillée sur l'étiquette de ta laine.` };
+    }
+    const ecart = t < f.min ? t - f.min : t - f.max;
     if (Math.abs(ecart) <= 0.5 + 0.01) {
       return { ok: true, texte: `${taille}, proche des ${c} conseillés sur l'étiquette : le tricot sera un peu plus ${ecart < 0 ? "serré" : "souple"}.` };
     }

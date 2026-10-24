@@ -6,7 +6,7 @@
 // La longueur du câble ne compte pas : seule la taille d'aiguille sert à reconnaître une combinaison.
 
 import { pointParId } from "../catalogue/points.js";
-import { lireNombre } from "../donnees/reserve.js";
+import { lireNombre, aiguillesEtiquette } from "../donnees/reserve.js";
 
 /** En jersey, il y a en général un peu plus de rangs que de mailles pour 10 cm. */
 export const RANGS_PAR_MAILLE_JERSEY = 1.4;
@@ -75,7 +75,9 @@ export function densiteJerseyProvisoire(laine, tailleAiguille) {
   const etiquette = laine?.echantillonEtiquette || {};
   const m = lireNombre(etiquette.mailles);
   if (m && m > 0) {
-    const aiguilleEtiquette = lireNombre(etiquette.aiguilleMm);
+    // Avec deux tailles sur l'étiquette, l'échantillon correspond en général au milieu de la fourchette.
+    const f = aiguillesEtiquette(laine);
+    const aiguilleEtiquette = f ? (f.min + f.max) / 2 : null;
     const t = lireNombre(tailleAiguille);
     // Une aiguille plus grosse que celle conseillée donne moins de mailles pour 10 cm, et inversement.
     const mailles = aiguilleEtiquette && t ? (m * aiguilleEtiquette) / t : m;

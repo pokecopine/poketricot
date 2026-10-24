@@ -304,3 +304,10 @@ test("laine suffisante, juste ou insuffisante", () => {
   assert.deepEqual([manque.statut, manque.manque], ["insuffisant", 120]);
   assert.equal(comparerALaLaine(100, { id: "z" }).statut, "inconnu");
 });
+
+test("densité provisoire : fourchette d'aiguilles sur l'étiquette → milieu de la fourchette", () => {
+  const j = densiteJerseyProvisoire({ echantillonEtiquette: { mailles: 12, aiguilleMm: 8, aiguilleMaxMm: 10 } }, 9);
+  proche(j.mailles, 12);
+  const k = densiteJerseyProvisoire({ echantillonEtiquette: { mailles: 12, aiguilleMm: 8, aiguilleMaxMm: 10 } }, 10);
+  proche(k.mailles, 12 * 9 / 10);
+});
