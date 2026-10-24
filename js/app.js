@@ -122,9 +122,13 @@ async function demarrer() {
     const base = await ouvrirBase();
     let prefs = { ...PREFERENCES_PAR_DEFAUT, ...((await base.lire("preferences", ID_PREFERENCES)) || {}) };
     appliquerPreferencesAffichage(prefs);
-    if (!prefs.stockageDemande) {
+    // Chrome accorde (ou non) la protection de lui-même, sans rien demander à l'utilisatrice :
+    // on la redemande à chaque ouverture tant qu'elle n'est pas accordée, il peut changer d'avis.
+    if (prefs.stockageResultat !== "accorde") {
       const resultat = await demanderStockagePersistant();
-      prefs = await base.ecrire("preferences", { ...prefs, stockageDemande: true, stockageResultat: resultat });
+      if (resultat !== prefs.stockageResultat || !prefs.stockageDemande) {
+        prefs = await base.ecrire("preferences", { ...prefs, stockageDemande: true, stockageResultat: resultat });
+      }
     }
     conteneur.textContent = "";
     render(html`<${App} base=${base} prefsInitiales=${prefs} />`, conteneur);

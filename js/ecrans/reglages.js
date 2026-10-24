@@ -49,6 +49,11 @@ async function proposerFichier(nom, texte) {
   return "telechargement";
 }
 
+/** L'application est-elle ouverte depuis l'icône installée (et non dans un onglet de Chrome) ? */
+function estInstallee() {
+  return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
 export function Reglages() {
   const { base, prefs, majPrefs, flash } = useApp();
   const [stockage, setStockage] = useState(null);
@@ -94,7 +99,7 @@ export function Reglages() {
   async function demanderProtection() {
     const r = await demanderStockagePersistant();
     await rafraichirStockage();
-    flash(r === "accorde" ? "Stockage protégé activé." : "Chrome n'a pas accordé la protection pour l'instant.", r !== "accorde");
+    flash(r === "accorde" ? "Stockage protégé activé." : "Pas encore accordé : Chrome décidera plus tard. Tes données restent enregistrées.");
   }
 
   const r = aImporter?.resume;
@@ -131,10 +136,14 @@ export function Reglages() {
                 <span><strong style="color:var(--sauge-texte)">Stockage protégé : activé</strong><br />
                 Chrome ne supprimera pas tes données pour faire de la place.</span>
               </div>`
-            : html`<${Encart} type="brique">
-                Stockage protégé : pas encore activé. Installe l'application sur l'écran d'accueil, puis réessaie.
-                ${" "}<button type="button" class="bouton-lien" onClick=${demanderProtection}>Activer</button>
-              <//>`}
+            : html`<div class="encart" style="background:var(--lin);flex-direction:column;gap:6px">
+                <strong style="font-size:14px">Stockage protégé : pas encore accordé par Chrome</strong>
+                <span>Tes données sont bien enregistrées. Sans cette protection, Chrome ne les effacerait que si le téléphone manquait vraiment de place.</span>
+                <span>Chrome l'accorde de lui-même, en général quand l'application est installée et utilisée régulièrement. L'outil la redemande à chaque ouverture.</span>
+                ${!estInstallee() &&
+                html`<span><strong>Tu utilises la version navigateur.</strong> Installe l'application : menu ⋮ de Chrome → « Installer l'application ».</span>`}
+                <button type="button" class="bouton-lien" style="align-self:flex-start;padding:0" onClick=${demanderProtection}>Redemander maintenant</button>
+              </div>`}
           <div style="display:flex;justify-content:space-between;font-size:14px">
             <span class="note" style="font-size:14px">Espace utilisé</span>
             <strong>${taille(stockage?.utilise)}</strong>
