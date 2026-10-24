@@ -13,7 +13,7 @@ import {
 } from "../donnees/echantillons.js";
 import { nomAvecArticle } from "../moteur/dimensions.js";
 
-export function FicheEchantillon({ id, laineProposee }) {
+export function FicheEchantillon({ id, laineProposee, pointPropose, aiguilleProposee }) {
   const { base, flash } = useApp();
   const nouveau = !id || id === "nouveau";
   const [e, setE] = useState(null);
@@ -32,7 +32,9 @@ export function FicheEchantillon({ id, laineProposee }) {
       if (nouveau) {
         const actives = l.filter((x) => !x.archivee);
         const laineId = l.some((x) => x.id === laineProposee) ? laineProposee : actives.length === 1 ? actives[0].id : "";
-        setE(echantillonVide({ laineId }));
+        const pointId = pointParId(pointPropose) ? pointPropose : "";
+        const t = lireNombre(aiguilleProposee);
+        setE(echantillonVide({ laineId, pointId, tailleAiguille: t === null ? "" : t }));
       } else {
         const trouve = ech.find((x) => x.id === id);
         if (!trouve) return setIntrouvable(true);

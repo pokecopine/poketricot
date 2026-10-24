@@ -7,6 +7,7 @@ import { IconePelote, IconeReglages, IconePlus, IconeChevron } from "../composan
 import { BandeTexture } from "../composants/texture.js";
 import { POINTS, pointParId } from "../catalogue/points.js";
 import { rappelSauvegardeNecessaire } from "../donnees/sauvegarde.js";
+import { trierProjets, texteEtat, cheminEtape, pointVignette } from "../donnees/projets.js";
 
 function salutation(maintenant = new Date()) {
   const h = maintenant.getHours();
@@ -16,14 +17,18 @@ function salutation(maintenant = new Date()) {
 export function Accueil() {
   const { base, prefs } = useApp();
   const [compte, setCompte] = useState(null);
+  const [projets, setProjets] = useState(null);
+  const [laines, setLaines] = useState([]);
 
   useEffect(() => {
-    Promise.all([base.lister("laines"), base.lister("aiguilles")]).then(([l, a]) =>
-      setCompte({ laines: l.length, aiguilles: a.length })
-    );
+    Promise.all([base.lister("laines"), base.lister("aiguilles"), base.lister("projets")]).then(([l, a, p]) => {
+      setCompte({ laines: l.length, aiguilles: a.length });
+      setLaines(l);
+      setProjets(trierProjets(p));
+    });
   }, [base]);
 
-  const aDesDonnees = compte && compte.laines + compte.aiguilles > 0;
+  const aDesDonnees = compte && compte.laines + compte.aiguilles + (projets?.length || 0) > 0;
   const rappel = rappelSauvegardeNecessaire(prefs.derniereSauvegarde, aDesDonnees);
 
   return html`
@@ -50,13 +55,24 @@ export function Accueil() {
         <//>`}
 
         <h2 style="font-size:18px">En cours</h2>
-        <div class="vide">
+        ${projets && projets.length === 0 &&
+        html`<div class="vide">
           <strong>Aucun projet pour l'instant</strong>
-          <span>La création de projets arrive bientôt. En attendant, tu peux déjà ranger tes laines et tes aiguilles dans ta réserve.</span>
-          <button type="button" class="bouton-pilule" onClick=${() => naviguer("/reserve/laines")}>
-            ${IconePelote()} Ouvrir ma réserve
-          </button>
-        </div>
+          <span>Commence ta première écharpe avec « Nouveau projet ». Tu peux aussi ranger d'abord tes laines, tes aiguilles et tes échantillons dans ta réserve.</span>
+        </div>`}
+        ${(projets || []).map((p) => {
+          const laine = laines.find((l) => l.id === p.laineId);
+          return html`<button type="button" class="carte-accueil" onClick=${() => naviguer(cheminEtape(p))}>
+            <span class="carte-accueil-texture" style="width:72px;height:56px">
+              <${BandeTexture} point=${pointVignette(p)} couleur=${laine?.couleur || "#9A9590"} hauteur=${56} />
+            </span>
+            <span class="ligne-element-texte">
+              <span class="ligne-element-nom" style="font-family:var(--titre);font-size:17px;font-weight:600">${p.nom}</span>
+              <span class="ligne-element-detail">${texteEtat(p)}</span>
+            </span>
+            ${IconeChevron()}
+          </button>`;
+        })}
 
         <div class="section-titre"><h2>Les points</h2></div>
         <button type="button" class="carte-accueil" onClick=${() => naviguer("/points")}>
@@ -79,8 +95,8 @@ export function Accueil() {
       </div>
 
       <div class="ecran-pied">
-        <button type="button" class="bouton-principal sombre" disabled aria-describedby="nouveau-bientot">
-          ${IconePlus()} Nouveau projet <span class="bientot" id="nouveau-bientot">bientôt</span>
+        <button type="button" class="bouton-principal sombre" onClick=${() => naviguer("/projet/nouveau")}>
+          ${IconePlus()} Nouveau projet
         </button>
       </div>
     </main>`;

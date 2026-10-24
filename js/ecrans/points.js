@@ -2,7 +2,10 @@
 import { useEffect, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { useApp } from "../etat.js";
-import { naviguer } from "../routeur.js";
+import { naviguer, retour } from "../routeur.js";
+import { useProjet } from "../composants/etape.js";
+import { zoneAvis, avecPointDuBloc, cheminEtape } from "../donnees/projets.js";
+import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
 import { IconeChevron } from "../composants/icones.js";
@@ -50,14 +53,16 @@ function Etiquettes({ point }) {
 }
 
 /** Fiche résumée d'un point (comme dans la maquette « Choix des points »). */
-function CartePoint({ point, couleur, piece }) {
-  const avis = piece ? avisPour(point, piece) : { avis: "conseille" };
+function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
+  const avis = piece ? avisPour(point, piece, zone) : { avis: "conseille" };
+  const choisi = selection && selection.actuel === point.id;
   return html`
-    <button type="button" class="carte-point" onClick=${() => naviguer("/points/" + point.id)}>
+    <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined}
+      onClick=${() => (selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
       <${BandeTexture} point=${point} couleur=${couleur} hauteur=${64} />
       <span class="carte-point-corps">
         <span class="carte-point-titre">
-          <span>${point.nom}</span>${IconeChevron()}
+          <span>${point.nom}</span>${choisi ? html`<span class="badge">Choisi</span>` : selection ? null : IconeChevron()}
         </span>
         <${Etiquettes} point=${point} />
         <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
@@ -66,7 +71,7 @@ function CartePoint({ point, couleur, piece }) {
     </button>`;
 }
 
-function Famille({ titre, points, couleur, piece, ouverte, alerte }) {
+function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte }) {
   if (points.length === 0) return null;
   return html`
     <details class=${"famille" + (alerte ? " famille-alerte" : "")} open=${ouverte}>
@@ -75,21 +80,26 @@ function Famille({ titre, points, couleur, piece, ouverte, alerte }) {
         <span class="famille-nombre">${points.length} point${points.length > 1 ? "s" : ""}</span>
       </summary>
       <div class="famille-points">
-        ${points.map((p) => html`<${CartePoint} key=${p.id} point=${p} couleur=${couleur} piece=${piece} />`)}
+        ${points.map((p) => html`<${CartePoint} key=${p.id} point=${p} couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} />`)}
       </div>
     </details>`;
 }
 
-export function CataloguePoints() {
+export function CataloguePoints({ selection = null } = {}) {
   const laines = useCouleurs();
-  const [piece, setPiece] = useState(memoire.piece);
-  const [recherche, setRecherche] = useState(memoire.recherche);
+  const [pieceLibre, setPiece] = useState(memoire.piece);
+  const [rechercheLibre, setRecherche] = useState(memoire.recherche);
+  const [rechercheSelection, setRechercheSelection] = useState("");
   const [couleurChoisie, setCouleur] = useState(memoire.couleur);
-  const couleur = couleurChoisie || laines[0]?.couleur || COULEUR_PAR_DEFAUT;
+  const piece = selection ? selection.piece : pieceLibre;
+  const zone = selection ? selection.zone : "corps";
+  const recherche = selection ? rechercheSelection : rechercheLibre;
+  const couleur = selection?.couleur || couleurChoisie || laines[0]?.couleur || COULEUR_PAR_DEFAUT;
 
   useEffect(() => {
-    Object.assign(memoire, { piece, recherche, couleur: couleurChoisie });
-  }, [piece, recherche, couleurChoisie]);
+    if (!selection) Object.assign(memoire, { piece: pieceLibre, recherche: rechercheLibre, couleur: couleurChoisie });
+  }, [pieceLibre, rechercheLibre, couleurChoisie]);
+  const avis = (p) => avisPour(p, piece, zone).avis;
 
   const nomPiece = PIECES.find((p) => p.id === piece)?.nom.toLowerCase();
   const trouves = rechercherPoints(recherche);
@@ -97,20 +107,21 @@ export function CataloguePoints() {
   if (recherche.trim()) {
     familles = [{ id: "resultats", titre: `Résultats (${trouves.length})`, points: trouves, ouverte: true }];
   } else {
-    const adaptes = (p) => !piece || avisPour(p, piece).avis !== "deconseille";
-    familles = FAMILLES.map((f, i) => ({
+    const adaptes = (p) => !piece || avis(p) !== "deconseille";
+    const familleOuverte = selection ? pointParId(selection.actuel)?.famille || FAMILLES[0].id : FAMILLES[0].id;
+    familles = FAMILLES.map((f) => ({
       id: f.id,
       titre: f.nom,
       points: POINTS.filter((p) => p.famille === f.id && adaptes(p))
-        // Les points conseillés pour la pièce en premier.
-        .sort((a, b) => (piece ? (avisPour(a, piece).avis === "conseille" ? 0 : 1) - (avisPour(b, piece).avis === "conseille" ? 0 : 1) : 0)),
-      ouverte: i === 0,
+        // Les points conseillés pour la pièce (et la zone) en premier.
+        .sort((a, b) => (piece ? (avis(a) === "conseille" ? 0 : 1) - (avis(b) === "conseille" ? 0 : 1) : 0)),
+      ouverte: f.id === familleOuverte,
     }));
     if (piece) {
       familles.push({
         id: "peu-adaptes",
         titre: `Peu adaptés à ${nomPiece === "écharpe" ? "l'écharpe" : nomPiece === "couverture" ? "la couverture" : `au ${nomPiece}`}`,
-        points: POINTS.filter((p) => avisPour(p, piece).avis === "deconseille"),
+        points: POINTS.filter((p) => avis(p) === "deconseille"),
         ouverte: false,
         alerte: true,
       });
@@ -119,16 +130,19 @@ export function CataloguePoints() {
 
   return html`
     <main class="ecran">
-      <${EnTete} titre="Catalogue de points" secours="/" libelleRetour="Retour à l'accueil" />
+      ${selection
+        ? html`<${EnTete} titre=${selection.titre} secours=${selection.secours} libelleRetour="Revenir sans changer" />`
+        : html`<${EnTete} titre="Catalogue de points" secours="/" libelleRetour="Retour à l'accueil" />`}
       <div class="ecran-contenu">
         <label class="champ">
           <span class="visuellement-cache">Rechercher un point</span>
           <input type="search" placeholder="Rechercher : riz, côtes, torsade…" value=${recherche}
-            onInput=${(e) => setRecherche(e.currentTarget.value)} />
+            onInput=${(e) => (selection ? setRechercheSelection : setRecherche)(e.currentTarget.value)} />
         </label>
+        ${selection && html`<p class="note">${selection.aide}</p>`}
 
-        <span class="note" style="font-weight:700">Pour quelle pièce ?</span>
-        <div class="puces" role="group" aria-label="Pièce">
+        ${!selection && html`<span class="note" style="font-weight:700">Pour quelle pièce ?</span>`}
+        ${!selection && html`<div class="puces" role="group" aria-label="Pièce">
           <button type="button" class="puce" aria-pressed=${String(!piece)} onClick=${() => setPiece(null)}>Toutes</button>
           ${PIECES.map(
             (p) => html`<button type="button" class="puce" aria-pressed=${String(piece === p.id)} onClick=${() => setPiece(p.id)}>${p.nom}</button>`
@@ -136,11 +150,11 @@ export function CataloguePoints() {
         </div>
 
         <span class="note" style="font-weight:700">Dans la couleur de</span>
-        <${ChoixCouleur} laines=${laines} couleur=${couleur} surChoix=${setCouleur} />
+        <${ChoixCouleur} laines=${laines} couleur=${couleur} surChoix=${setCouleur} />`}
 
         ${familles.map(
           (f) => html`<${Famille} key=${f.id + (piece || "") + recherche} titre=${f.titre} points=${f.points}
-            couleur=${couleur} piece=${piece} ouverte=${f.ouverte} alerte=${f.alerte} />`
+            couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} />`
         )}
         ${recherche.trim() && trouves.length === 0 && html`<p class="note">Aucun point ne porte ce nom pour l'instant.</p>`}
 
@@ -246,4 +260,38 @@ export function FichePoint({ id }) {
         <p class="note">Le lien ouvre le site des Triconautes : il faut du réseau.</p>
       </div>
     </main>`;
+}
+
+// ---------------- Choix du point d'un bloc (mode sélection) ----------------
+
+const AIDES_ZONES = {
+  corps: "Le point du corps est aussi le point de ton échantillon.",
+  bas: "La bordure du bas empêche l'écharpe de rouler : les points qui ne roulent pas sont proposés d'abord.",
+  haut: "La bordure du haut empêche l'écharpe de rouler : les points qui ne roulent pas sont proposés d'abord.",
+  cotes: "Les bandes latérales bordent l'écharpe sur toute sa longueur : les points qui ne roulent pas sont proposés d'abord.",
+  bande: "Une bande décorative dans la longueur de l'écharpe.",
+};
+
+export function ChoixPointDuBloc({ id, blocId }) {
+  const { projet, laines, introuvable, modifier } = useProjet(id);
+  if (introuvable) return html`<main class="ecran"><${EnTete} titre="Projet introuvable" secours="/" /></main>`;
+  if (!projet) return null;
+  const bloc = projet.blocs.find((b) => b.id === blocId);
+  if (!bloc) return html`<main class="ecran"><${EnTete} titre="Bloc introuvable" secours=${cheminEtape(projet)} /></main>`;
+  const laine = laines.find((l) => l.id === projet.laineId);
+  const nomZone = NOMS_DES_ZONES[bloc.zone];
+  const selection = {
+    piece: projet.type,
+    zone: zoneAvis(bloc.zone),
+    couleur: laine?.couleur,
+    actuel: bloc.pointId,
+    titre: bloc.zone === "corps" ? "Point principal" : `Point : ${nomZone}`,
+    aide: AIDES_ZONES[bloc.zone] || "",
+    secours: cheminEtape(projet),
+    choisir: async (pointId) => {
+      await modifier((p) => avecPointDuBloc(p, blocId, pointId));
+      retour(cheminEtape(projet));
+    },
+  };
+  return html`<${CataloguePoints} selection=${selection} />`;
 }

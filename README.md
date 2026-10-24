@@ -13,7 +13,8 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
 | E1 — Catalogue | Notation des points, simulateur, conversion en rond, 15 points, rendu des textures, écran de consultation | ✅ (15 premiers points) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
-| E3 à E6 | Écharpe de bout en bout, bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
+| E3 — Écharpe | Nouveau projet, matériel (échantillon retrouvé), taille ; puis builder, aperçu, patron, suivi | 🟡 étapes 1 à 3 |
+| E4 à E6 | Bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
 

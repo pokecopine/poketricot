@@ -11,20 +11,34 @@ import { Reserve } from "./ecrans/reserve.js";
 import { FicheLaine } from "./ecrans/laine.js";
 import { FicheAiguilles } from "./ecrans/aiguilles.js";
 import { FicheEchantillon } from "./ecrans/echantillon.js";
+import { NouveauProjet, EtapePiece } from "./ecrans/projet-piece.js";
+import { EtapeMateriel } from "./ecrans/projet-materiel.js";
+import { EtapeTaille, EtapeBientot } from "./ecrans/projet-taille.js";
+import { ChoixPointDuBloc } from "./ecrans/points.js";
 import { Reglages } from "./ecrans/reglages.js";
 import { CataloguePoints, FichePoint } from "./ecrans/points.js";
 
 function Ecran({ chemin }) {
-  const [premier, deuxieme, troisieme] = morceaux(chemin);
+  const [premier, deuxieme, troisieme, quatrieme] = morceaux(chemin);
   if (premier === "reserve") {
     if (deuxieme === "laine") return html`<${FicheLaine} key=${troisieme} id=${troisieme} />`;
     if (deuxieme === "aiguilles" && troisieme) return html`<${FicheAiguilles} key=${troisieme} id=${troisieme} />`;
     if (deuxieme === "echantillon") {
-      return html`<${FicheEchantillon} key=${troisieme} id=${troisieme} laineProposee=${parametre(chemin, "laine")} />`;
+      return html`<${FicheEchantillon} key=${troisieme} id=${troisieme} laineProposee=${parametre(chemin, "laine")}
+        pointPropose=${parametre(chemin, "point")} aiguilleProposee=${parametre(chemin, "aiguille")} />`;
     }
     return html`<${Reserve} onglet=${deuxieme} />`;
   }
   if (premier === "reglages") return html`<${Reglages} />`;
+  if (premier === "projet") {
+    if (deuxieme === "nouveau") return html`<${NouveauProjet} />`;
+    const id = deuxieme;
+    if (troisieme === "piece") return html`<${EtapePiece} key=${id} id=${id} />`;
+    if (troisieme === "materiel") return html`<${EtapeMateriel} key=${id} id=${id} />`;
+    if (troisieme === "taille") return html`<${EtapeTaille} key=${id} id=${id} />`;
+    if (troisieme === "point") return html`<${ChoixPointDuBloc} key=${id + quatrieme} id=${id} blocId=${quatrieme} />`;
+    return html`<${EtapeBientot} key=${id} id=${id} etape=${troisieme} />`;
+  }
   if (premier === "points") {
     return deuxieme ? html`<${FichePoint} key=${deuxieme} id=${deuxieme} />` : html`<${CataloguePoints} />`;
   }
