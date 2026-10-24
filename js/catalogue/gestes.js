@@ -1,3 +1,8 @@
+import { GESTES_LOT as GA } from "./lots/lot-a.js";
+import { GESTES_LOT as GB } from "./lots/lot-b.js";
+import { GESTES_LOT as GC } from "./lots/lot-c.js";
+import { GESTES_LOT as GD } from "./lots/lot-d.js";
+
 // Les gestes du tricot, sous forme codée.
 // Chaque geste dit combien de mailles il prend sur l'aiguille gauche (consomme),
 // combien il en pose sur l'aiguille droite (produit), et à quoi ressemblent
@@ -45,6 +50,14 @@ export const GESTES = {
     // 3 mailles en attente derrière : les 3 suivantes passent à droite, par-dessus.
     endroit: ["brinD+", "brinD+", "brinD+", "brinG-", "brinG-", "brinG-"], envers: null, vuDeLAutreCote: null },
 };
+
+// Gestes apportés par les lots de la deuxième fournée.
+for (const lot of [GA, GB, GC, GD]) {
+  for (const [code, g] of Object.entries(lot)) {
+    if (GESTES[code]) throw new Error(`Geste défini deux fois : ${code}`);
+    GESTES[code] = g;
+  }
+}
 
 export function geste(code) {
   const g = GESTES[code];

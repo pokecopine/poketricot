@@ -2,7 +2,7 @@
 // La grille vient du simulateur (version en rond = motif qui se répète sans bord),
 // donc ce qui est dessiné correspond exactement à ce qui sera tricoté.
 
-import { simuler, convertirEnRond, largeurMotif } from "../moteur/simulateur.js";
+import { simuler, convertirEnRond, largeurMotif, consomme } from "../moteur/simulateur.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 
 export const LARGEUR_MAILLE = 12;
@@ -74,14 +74,29 @@ export function aspectVuDeLEnvers(aspect) {
  * grille[0] = rang du bas ; dans un rang, l'indice 0 est la maille la plus à droite.
  */
 export function grilleMotif(point, { face = "endroit" } = {}) {
-  const rond = convertirEnRond(point);
-  if (!rond.ok) return null;
-  const largeur = largeurMotif(point);
-  const sim = simuler({ ...point, rond: { mode: "manuel", rangs: rond.rangs } }, { mailles: largeur, rangs: rond.rangs.length, mode: "rond" });
-  if (!sim.ok) return null;
-  if (face === "endroit") return sim.grille;
+  const grille = grilleEndroit(point);
+  if (!grille) return null;
+  if (face === "endroit") return grille;
   // Vu de l'envers : chaque maille change d'aspect, et la droite devient la gauche.
-  return sim.grille.map((rang) => [...rang].reverse().map(aspectVuDeLEnvers));
+  return grille.map((rang) => [...rang].reverse().map(aspectVuDeLEnvers));
+}
+
+/** Une répétition du motif vue de l'endroit : en rond si le point s'y prête, sinon découpée au milieu d'un tricot à plat. */
+function grilleEndroit(point) {
+  const largeur = largeurMotif(point);
+  const rond = convertirEnRond(point);
+  if (rond.ok) {
+    const sim = simuler({ ...point, rond: { mode: "manuel", rangs: rond.rangs } }, { mailles: largeur, rangs: rond.rangs.length, mode: "rond" });
+    if (sim.ok) return sim.grille;
+  }
+  // À plat : 3 répétitions, on garde celle du milieu (loin des mailles du début et de la fin).
+  const r0 = point.rangs[0];
+  const extras = consomme(r0.debut) + consomme(r0.fin);
+  const premier = point.rangs.find((r) => r.cote === "E");
+  const d0 = premier ? consomme(premier.debut) : 0;
+  const sim = simuler({ ...point, miseEnPlace: [] }, { mailles: extras + 3 * largeur, rangs: point.rangs.length });
+  if (!sim.ok) return null;
+  return sim.grille.map((rang) => rang.slice(d0 + largeur, d0 + 2 * largeur));
 }
 
 /**

@@ -11,7 +11,11 @@
 // article : « le », « la » ou « les » devant le nom en minuscules (« le point de riz », « les côtes 2/2 »).
 // avis : "conseille" | "possible" | "deconseille", avec une raison d'une phrase quand ce n'est pas conseillé.
 
-const TRICONAUTES = "https://www.lestriconautes.com/";
+import { TRICONAUTES, E, V, fois, ok, possible, deconseille } from "./aides.js";
+import { POINTS_LOT as LOT_A } from "./lots/lot-a.js";
+import { POINTS_LOT as LOT_B } from "./lots/lot-b.js";
+import { POINTS_LOT as LOT_C } from "./lots/lot-c.js";
+import { POINTS_LOT as LOT_D } from "./lots/lot-d.js";
 
 export const FAMILLES = [
   { id: "bases", nom: "Bases" },
@@ -28,12 +32,6 @@ export const PIECES = [
   { id: "couverture", nom: "Couverture" },
 ];
 
-const E = (motif, { debut = [], fin = [] } = {}) => ({ cote: "E", debut, motif, fin });
-const V = (motif, { debut = [], fin = [] } = {}) => ({ cote: "V", debut, motif, fin });
-const fois = (code, n) => Array(n).fill(code);
-const ok = { avis: "conseille" };
-const possible = (raison) => ({ avis: "possible", raison });
-const deconseille = (raison) => ({ avis: "deconseille", raison });
 
 export const POINTS = [
   // ---------------- Bases ----------------
@@ -343,6 +341,9 @@ export const POINTS = [
     source: TRICONAUTES + "point-torsade-tricot-differents-points-originaux/",
   },
 ];
+
+// Deuxième fournée : les autres points de l'inventaire, par lots.
+POINTS.push(...LOT_A, ...LOT_B, ...LOT_C, ...LOT_D);
 
 export function pointParId(id) {
   return POINTS.find((p) => p.id === id) || null;

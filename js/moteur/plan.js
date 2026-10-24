@@ -80,7 +80,8 @@ const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
  * projet = {
  *   largeurCm, longueurCm,
  *   blocs: [{ id, zone: "bas" | "corps" | "bande" | "haut" | "cotes", pointId, hauteurCm?, largeurMailles? }],
- *     (blocs horizontaux dans l'ordre, du bas vers le haut ; un seul corps, dont la hauteur se déduit de la longueur)
+ *     (blocs horizontaux dans l'ordre, du bas vers le haut ; le corps peut être coupé en plusieurs parties
+ *      par des bandes : toutes ses parties ont le même point et se partagent la longueur restante)
  *   densites: { [pointId]: { mailles, rangs, statut } },
  *   lisieres: "chainette" | "aucune",
  * }
@@ -95,7 +96,9 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
 
   const horizontaux = blocs.filter((b) => ZONES_HORIZONTALES.includes(b.zone));
   const corpsIndex = horizontaux.findIndex((b) => b.zone === "corps");
-  if (corpsIndex === -1 || horizontaux.filter((b) => b.zone === "corps").length > 1) return echec("Il faut un seul bloc « corps ».");
+  if (corpsIndex === -1) return echec("Il faut un bloc « corps ».");
+  const partiesCorps = horizontaux.filter((b) => b.zone === "corps");
+  if (partiesCorps.some((b) => b.pointId !== partiesCorps[0].pointId)) return echec("Toutes les parties du corps doivent avoir le même point.", partiesCorps[0]);
   const lateral = blocs.find((b) => b.zone === "cotes") || null;
 
   const infos = new Map();
@@ -179,8 +182,10 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     autresCm += h.hauteurCm;
   });
   const corpsHauteurVoulue = longueurCm - autresCm;
-  if (corpsHauteurVoulue < 2) return echec("Les bordures sont plus longues que l'écharpe : le corps n'a plus de place.", corps);
-  hauteurs.set(corps.id, rangsPourHauteur(infos.get(corps.id).point, corpsHauteurVoulue, dCorps));
+  if (corpsHauteurVoulue < 2 * partiesCorps.length) return echec("Les bordures et les bandes sont plus longues que l'écharpe : le corps n'a plus de place.", corps);
+  for (const b of partiesCorps) {
+    hauteurs.set(b.id, rangsPourHauteur(infos.get(corps.id).point, corpsHauteurVoulue / partiesCorps.length, dCorps));
+  }
 
   // ---- Rangs ----
   const bande = lateral ? infos.get(lateral.id).point : null;

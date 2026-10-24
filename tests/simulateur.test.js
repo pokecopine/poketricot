@@ -107,6 +107,10 @@ for (const point of POINTS) {
       assert.equal(plat.ok, true, `à plat sur ${mailles} mailles : ${JSON.stringify(plat.erreurs)}`);
       assert.equal(plat.grille.length, nbRangs);
     }
+    if (point.rond?.mode === "impossible") {
+      assert.ok(point.rond.raison, "raison donnée quand le point ne se tricote pas en rond");
+      return;
+    }
     const rond = convertirEnRond(point);
     assert.equal(rond.ok, true, rond.erreur);
     const kRond = 5;
