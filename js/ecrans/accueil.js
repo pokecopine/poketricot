@@ -3,7 +3,9 @@ import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Encart } from "../composants/base.js";
-import { IconePelote, IconeReglages, IconePlus } from "../composants/icones.js";
+import { IconePelote, IconeReglages, IconePlus, IconeChevron } from "../composants/icones.js";
+import { BandeTexture } from "../composants/texture.js";
+import { POINTS, pointParId } from "../catalogue/points.js";
 import { rappelSauvegardeNecessaire } from "../donnees/sauvegarde.js";
 
 function salutation(maintenant = new Date()) {
@@ -55,6 +57,16 @@ export function Accueil() {
             ${IconePelote()} Ouvrir ma réserve
           </button>
         </div>
+
+        <div class="section-titre"><h2>Les points</h2></div>
+        <button type="button" class="carte-accueil" onClick=${() => naviguer("/points")}>
+          <span class="carte-accueil-texture"><${BandeTexture} point=${pointParId("torsade-gauche")} couleur="#D07E5B" hauteur=${60} /></span>
+          <span class="ligne-element-texte">
+            <span class="ligne-element-nom">Catalogue de points</span>
+            <span class="ligne-element-detail">${POINTS.length} points à découvrir : textures, recettes et gestes expliqués</span>
+          </span>
+          ${IconeChevron()}
+        </button>
 
         <div class="section-titre"><h2>Ma bibliothèque</h2></div>
         <p class="note">Tes projets terminés apparaîtront ici.</p>

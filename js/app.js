@@ -11,6 +11,7 @@ import { Reserve } from "./ecrans/reserve.js";
 import { FicheLaine } from "./ecrans/laine.js";
 import { FicheAiguilles } from "./ecrans/aiguilles.js";
 import { Reglages } from "./ecrans/reglages.js";
+import { CataloguePoints, FichePoint } from "./ecrans/points.js";
 
 function Ecran({ chemin }) {
   const [premier, deuxieme, troisieme] = morceaux(chemin);
@@ -20,6 +21,9 @@ function Ecran({ chemin }) {
     return html`<${Reserve} onglet=${deuxieme} />`;
   }
   if (premier === "reglages") return html`<${Reglages} />`;
+  if (premier === "points") {
+    return deuxieme ? html`<${FichePoint} key=${deuxieme} id=${deuxieme} />` : html`<${CataloguePoints} />`;
+  }
   return html`<${Accueil} />`;
 }
 

@@ -11,7 +11,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Étape | Contenu | État |
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
-| E1 — Catalogue | Notation des points, simulateur, conversion en rond, 15 points, rendu des textures | À venir |
+| E1 — Catalogue | Notation des points, simulateur, conversion en rond, 15 points, rendu des textures, écran de consultation | ✅ (15 premiers points) |
 | E2 à E6 | Moteur de calcul, écharpe de bout en bout, bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
@@ -38,7 +38,10 @@ css/pelote.css        couleurs et formes de l'ambiance Pelote (clair et sombre)
 js/app.js             démarrage et navigation
 js/ecrans/            un fichier par écran
 js/composants/        éléments réutilisables
-js/donnees/           base de données, réserve, sauvegarde
+js/donnees/           base de données, réserve, sauvegarde, couleurs
+js/catalogue/         gestes, points, techniques, consignes écrites
+js/moteur/            simulateur (comptage des mailles, conversion en rond)
+js/rendu/             dessin des textures en SVG
 tests/                tests automatiques
 ```
 

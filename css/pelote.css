@@ -495,3 +495,65 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 
 :root.texte-grand { --taille-rang: 24px; }
 :root { --taille-rang: 20px; }
+
+/* ---------- Catalogue de points ---------- */
+
+.famille {
+  border-radius: 20px;
+  background: var(--lin);
+  padding: 4px;
+}
+.famille > summary {
+  list-style: none;
+  min-height: 52px;
+  padding: 0 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  font-family: var(--titre); font-size: 18px; font-weight: 600;
+  cursor: pointer;
+}
+.famille > summary::-webkit-details-marker { display: none; }
+.famille > summary::after { content: "▾"; font-family: var(--corps); color: var(--texte-2); transition: transform .15s; }
+.famille[open] > summary::after { transform: rotate(180deg); }
+.famille-nombre { font-family: var(--corps); font-size: 13px; font-weight: 600; color: var(--texte-2); margin-left: auto; }
+.famille-points { display: flex; flex-direction: column; gap: 10px; padding: 4px 4px 8px; }
+.famille-alerte { background: var(--brique-fond); }
+.famille-alerte > summary { color: var(--brique); }
+
+.carte-point {
+  display: flex; flex-direction: column;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--carte);
+  border: 1px solid var(--bordure);
+  color: inherit;
+}
+.carte-point-corps { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
+.carte-point-titre {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--titre); font-size: 19px; font-weight: 600;
+}
+
+.liste-avis { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.liste-avis li { display: flex; gap: 10px; align-items: flex-start; }
+.avis { flex: none; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 10px; min-width: 84px; text-align: center; }
+.avis-conseille { background: var(--sauge-fond); color: var(--sauge-texte); }
+.avis-possible { background: var(--lin); color: var(--texte); }
+.avis-deconseille { background: var(--brique-fond); color: var(--brique); }
+
+.recette { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; font-size: 15px; }
+.recette li { padding: 10px 12px; border-radius: 14px; background: var(--fond); }
+.recette li strong { display: block; font-size: 13px; color: var(--texte-2); margin-bottom: 2px; }
+.recette-mep { border: 1px dashed var(--bordure-champ); }
+
+.technique { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.technique p { color: var(--texte); }
+
+.carte-accueil {
+  display: flex; gap: 12px; align-items: center;
+  width: 100%; text-align: left; padding: 10px; border-radius: 20px;
+  background: var(--carte); border: 1px solid var(--bordure); color: inherit;
+}
+.carte-accueil-texture { width: 84px; height: 60px; border-radius: 12px; overflow: hidden; flex: none; }

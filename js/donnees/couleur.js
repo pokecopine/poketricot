@@ -72,3 +72,28 @@ export function nomCouleur(hex) {
   if (s < 0.4 && v > 0.75) return `${base} pastel`;
   return base;
 }
+
+/** Mélange deux couleurs : t = 0 → a, t = 1 → b. */
+export function melanger(a, b, t) {
+  const lire = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const ca = lire(a);
+  const cb = lire(b);
+  const hex = (n) => Math.round(n).toString(16).padStart(2, "0").toUpperCase();
+  return "#" + ca.map((x, i) => hex(x + (cb[i] - x) * t)).join("");
+}
+
+/** Les nuances qui servent à dessiner le tricot dans la couleur d'une laine. */
+export function nuancesLaine(hex) {
+  const base = /^#[0-9a-f]{6}$/i.test(hex || "") ? hex.toUpperCase() : "#D07E5B";
+  const { v } = hexVersHsv(base);
+  // Laines très foncées : on éclaircit un peu les mailles pour que le relief reste visible.
+  const maille = v < 0.25 ? melanger(base, "#FFFFFF", 0.18) : base;
+  return {
+    maille,
+    eclat: melanger(maille, "#FFFFFF", 0.22),
+    grain: melanger(maille, "#000000", 0.1),
+    contour: melanger(maille, "#000000", 0.32),
+    fond: melanger(maille, "#000000", 0.48),
+    trou: melanger(maille, "#000000", 0.72),
+  };
+}
