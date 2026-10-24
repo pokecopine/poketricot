@@ -46,3 +46,9 @@ export function retour(secours = "/") {
     naviguer(secours, { remplacer: true });
   }
 }
+
+/** Valeur d'un paramètre de l'adresse : "/reserve/echantillon/nouveau?laine=abc" → parametre(chemin, "laine") = "abc". */
+export function parametre(chemin, nom) {
+  const requete = chemin.split("?")[1] || "";
+  return new URLSearchParams(requete).get(nom);
+}

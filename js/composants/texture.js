@@ -5,6 +5,6 @@ import { styleTexture } from "../rendu/texture.js";
 
 export function BandeTexture({ point, couleur, hauteur = 64, face = "endroit", echelle = 1, rayon = 0, style = "" }) {
   const fond = useMemo(() => styleTexture(point, couleur, { face, echelle }), [point.id, couleur, face, echelle]);
-  return html`<div role="img" aria-label=${`Texture du ${point.nom.toLowerCase()}${face === "envers" ? ", vue de l'envers" : ""}`}
+  return html`<div role="img" aria-label=${`Texture : ${point.nom.toLowerCase()}${face === "envers" ? ", vue de l'envers" : ""}`}
     style=${`${fond};height:${hauteur}px;border-radius:${rayon}px;width:100%;${style}`}></div>`;
 }

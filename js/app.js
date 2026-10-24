@@ -4,12 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { html } from "./html.js";
 import { ouvrirBase, demanderStockagePersistant } from "./donnees/db.js";
 import { ContexteApp, PREFERENCES_PAR_DEFAUT, ID_PREFERENCES, appliquerPreferencesAffichage } from "./etat.js";
-import { useChemin, morceaux } from "./routeur.js";
+import { useChemin, morceaux, parametre } from "./routeur.js";
 import { MessageFlash } from "./composants/base.js";
 import { Accueil } from "./ecrans/accueil.js";
 import { Reserve } from "./ecrans/reserve.js";
 import { FicheLaine } from "./ecrans/laine.js";
 import { FicheAiguilles } from "./ecrans/aiguilles.js";
+import { FicheEchantillon } from "./ecrans/echantillon.js";
 import { Reglages } from "./ecrans/reglages.js";
 import { CataloguePoints, FichePoint } from "./ecrans/points.js";
 
@@ -18,6 +19,9 @@ function Ecran({ chemin }) {
   if (premier === "reserve") {
     if (deuxieme === "laine") return html`<${FicheLaine} key=${troisieme} id=${troisieme} />`;
     if (deuxieme === "aiguilles" && troisieme) return html`<${FicheAiguilles} key=${troisieme} id=${troisieme} />`;
+    if (deuxieme === "echantillon") {
+      return html`<${FicheEchantillon} key=${troisieme} id=${troisieme} laineProposee=${parametre(chemin, "laine")} />`;
+    }
     return html`<${Reserve} onglet=${deuxieme} />`;
   }
   if (premier === "reglages") return html`<${Reglages} />`;

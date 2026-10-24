@@ -249,6 +249,31 @@ p { margin: 0; }
 .ligne-element-chiffre { font-family: var(--titre); font-size: 18px; font-weight: 600; }
 .ligne-element-etat { font-size: 12px; color: var(--texte-2); }
 .ligne-element.archive { opacity: 0.7; }
+.ligne-echantillon { padding: 12px; gap: 12px; }
+
+/* Filtres de la réserve (échantillons par laine) : une ligne qui défile sur le côté. */
+.filtres {
+  display: flex; gap: 8px;
+  overflow-x: auto; scrollbar-width: none;
+  margin: 0 -16px; padding: 0 16px 2px;
+}
+.filtres::-webkit-scrollbar { display: none; }
+.filtre {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid var(--bordure-champ);
+  background: transparent; color: var(--texte);
+  font-size: 14px; white-space: nowrap;
+}
+.filtre[aria-pressed="true"] { background: var(--texte); border-color: var(--texte); color: var(--fond); font-weight: 700; }
+.filtre-pastille { width: 12px; height: 12px; border-radius: 6px; flex: none; box-shadow: 0 0 0 1px rgba(0,0,0,0.12); }
+
+/* Titre d'une carte dépliable (<details>). */
+.resume-depliable { font-family: var(--titre); font-size: 18px; font-weight: 600; min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+
+/* Guide de l'échantillon, étapes numérotées. */
+.guide { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; font-size: 15px; line-height: 1.45; }
 
 .pastille {
   width: 44px; height: 44px; flex: none;
