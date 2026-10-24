@@ -28,14 +28,30 @@ test("nom proposé avec la couleur de la laine", () => {
   assert.ok(nomPropose("echarpe", { couleur: "#2050C0" }).startsWith("Écharpe bleu"));
 });
 
-test("détail de la laine et conseil d'aiguille", () => {
-  assert.equal(detailLaineProjet(laine), "Aran · 400 m disponibles");
-  assert.deepEqual(conseilAiguille(laine, 5).ok, true);
-  const unPeu = conseilAiguille(laine, 4.5);
-  assert.equal(unPeu.ok, true);
-  assert.match(unPeu.texte, /un peu fin/);
-  assert.equal(conseilAiguille(laine, 3).ok, false);
-  assert.equal(conseilAiguille({ epaisseur: "super-bulky" }, 12).ok, true);
+test("détail de la laine : épaisseur, métrage et aiguille de l'étiquette", () => {
+  assert.equal(detailLaineProjet(laine), "Aran · 400 m disponibles · aiguille 5 mm");
+  assert.equal(detailLaineProjet({ ...laine, echantillonEtiquette: {} }), "Aran · 400 m disponibles");
+});
+
+test("conseil d'aiguille : l'étiquette fait foi", () => {
+  // Laine notée DK mais l'étiquette conseille 9 mm (cas réel de Deborah) : 9 mm est la bonne taille.
+  const dk9 = { epaisseur: "dk", echantillonEtiquette: { aiguilleMm: "9" } };
+  assert.deepEqual(conseilAiguille(dk9, 9), { ok: true, texte: "9 mm : c'est la taille conseillée sur l'étiquette de ta laine." });
+  assert.match(conseilAiguille(dk9, 8.5).texte, /proche des 9 mm.*un peu plus serré/);
+  assert.equal(conseilAiguille(dk9, 8.5).ok, true);
+  const loin = conseilAiguille(dk9, 4);
+  assert.equal(loin.ok, false);
+  assert.match(loin.texte, /L'étiquette de ta laine conseille 9 mm/);
+});
+
+test("conseil d'aiguille sans étiquette : repères de l'épaisseur, sans alarme", () => {
+  const aran = { epaisseur: "aran" };
+  assert.equal(conseilAiguille(aran, 5), null);
+  assert.equal(conseilAiguille(aran, 4.5), null);
+  const gros = conseilAiguille({ epaisseur: "dk" }, 9);
+  assert.equal(gros.ok, true);
+  assert.match(gros.texte, /note-le dans ta laine/);
+  assert.equal(conseilAiguille({}, 5), null);
 });
 
 test("échantillon du projet : retrouvé par laine, point et taille d'aiguille", () => {

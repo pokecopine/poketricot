@@ -87,31 +87,54 @@ export function nomPropose(type, laine) {
   return c ? `${base} ${c}` : base;
 }
 
-/** « Aran · 400 m disponibles » */
+/** Taille d'aiguille conseillée sur l'étiquette de la laine (mm), ou null. */
+export function aiguilleEtiquette(laine) {
+  const t = lireNombre(laine?.echantillonEtiquette?.aiguilleMm);
+  return t && t > 0 ? t : null;
+}
+
+/** « Aran · 400 m disponibles · aiguille 9 mm » */
 export function detailLaineProjet(laine) {
   const ep = EPAISSEURS.find((e) => e.id === laine.epaisseur)?.nom;
   const m = metrageLaine(laine);
   const dispo = m ? `${m.estime ? "environ " : ""}${m.metres} m disponibles` : "métrage inconnu";
-  return [ep, dispo].filter(Boolean).join(" · ");
+  const a = aiguilleEtiquette(laine);
+  return [ep, dispo, a ? `aiguille ${formaterNombre(a, 2)} mm` : null].filter(Boolean).join(" · ");
 }
 
-/** Conseil sur la taille d'aiguille selon l'épaisseur de la laine ; null si on ne sait pas. */
+/**
+ * Conseil sur la taille d'aiguille.
+ * L'étiquette de la laine fait foi : à ± 0,5 mm près, c'est la bonne taille.
+ * Sans aiguille sur l'étiquette, on compare aux repères habituels de l'épaisseur (seulement indicatifs).
+ * Renvoie { ok, texte } ou null si on ne sait rien.
+ */
 export function conseilAiguille(laine, tailleMm) {
-  const ep = EPAISSEURS.find((e) => e.id === laine?.epaisseur);
   const t = lireNombre(tailleMm);
-  if (!ep || t === null) return null;
+  if (!laine || t === null) return null;
+  const taille = `${formaterNombre(t, 2)} mm`;
+  const conseillee = aiguilleEtiquette(laine);
+  if (conseillee) {
+    const ecart = t - conseillee;
+    const c = `${formaterNombre(conseillee, 2)} mm`;
+    if (Math.abs(ecart) < 0.01) return { ok: true, texte: `${taille} : c'est la taille conseillée sur l'étiquette de ta laine.` };
+    if (Math.abs(ecart) <= 0.5 + 0.01) {
+      return { ok: true, texte: `${taille}, proche des ${c} conseillés sur l'étiquette : le tricot sera un peu plus ${ecart < 0 ? "serré" : "souple"}.` };
+    }
+    return {
+      ok: false,
+      texte: `L'étiquette de ta laine conseille ${c}. Avec ${taille}, le tricot sera ${ecart < 0 ? "plus serré et plus raide" : "plus lâche et plus ajouré"} : c'est possible, ton échantillon le dira.`,
+    };
+  }
+  const ep = EPAISSEURS.find((e) => e.id === laine.epaisseur);
+  if (!ep) return null;
   const nombres = (ep.aiguilles.match(/\d+(?:,\d+)?/g) || []).map((x) => lireNombre(x));
   const min = nombres[0];
   const max = ep.aiguilles.includes("plus") ? Infinity : nombres[1] ?? nombres[0];
-  const nom = ep.nom.toLowerCase();
-  const taille = `${formaterNombre(t, 2)} mm`;
-  if (t >= min - 0.01 && t <= max + 0.01) return { ok: true, texte: `${taille} convient bien à une laine ${nom}.` };
-  const ecart = t < min ? min - t : t - max;
-  const peu = ecart <= 0.5 + 0.01;
-  if (t < min) {
-    return { ok: peu, texte: `${taille} est ${peu ? "un peu " : ""}fin pour une laine ${nom} (on conseille ${ep.aiguilles}) : le tricot sera ${peu ? "un peu plus serré" : "serré et raide"}.` };
-  }
-  return { ok: peu, texte: `${taille} est ${peu ? "un peu " : ""}gros pour une laine ${nom} (on conseille ${ep.aiguilles}) : le tricot sera ${peu ? "un peu plus souple" : "lâche et ajouré"}.` };
+  if (t >= min - 0.5 - 0.01 && t <= max + 0.5 + 0.01) return null; // dans les repères habituels : rien à signaler
+  return {
+    ok: true,
+    texte: `D'habitude, une laine ${ep.nom.toLowerCase()} se tricote en ${ep.aiguilles}. Si l'étiquette conseille ${taille}, note-le dans ta laine : l'outil s'y fiera.`,
+  };
 }
 
 /** Zone d'avis d'un bloc : les bordures et les bandes latérales sont jugées comme des bordures. */

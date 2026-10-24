@@ -178,6 +178,10 @@ export function FicheLaine({ id }) {
           options=${EPAISSEURS.map((e) => ({ valeur: e.id, libelle: `${e.nom} · ${texteFourchette(e)}` }))}
           surChangement=${(v) => maj({ epaisseur: v })} />
         <${AideEpaisseur} laine=${laine} surChoix=${(v) => maj({ epaisseur: v })} />
+        <${Champ} libelle="Aiguille conseillée sur l'étiquette (mm, facultatif)" mode="decimal" placeholder="ex. 9"
+          valeur=${laine.echantillonEtiquette.aiguilleMm} erreur=${erreurs.aiguilleMm}
+          aide="Si tu la notes, l'outil s'y fiera pour te conseiller tes aiguilles."
+          surChangement=${(v) => majE({ aiguilleMm: v })} />
         <${Composition} composition=${laine.composition} erreur=${erreurs.composition}
           surChangement=${(f) => setLaine((l) => ({ ...l, composition: f(l.composition) }))} />
 
@@ -253,12 +257,8 @@ export function FicheLaine({ id }) {
             Échantillon de l'étiquette (facultatif)
           </summary>
           <p class="note">Il sert d'estimation tant que tu n'as pas tricoté ton propre échantillon.</p>
-          <div class="rangee">
-            <${Champ} libelle="Mailles sur 10 cm" mode="decimal" valeur=${laine.echantillonEtiquette.mailles}
-              erreur=${erreurs.echantillonMailles} surChangement=${(v) => majE({ mailles: v })} />
-            <${Champ} libelle="Aiguille conseillée (mm)" mode="decimal" valeur=${laine.echantillonEtiquette.aiguilleMm}
-              surChangement=${(v) => majE({ aiguilleMm: v })} />
-          </div>
+          <${Champ} libelle="Mailles sur 10 cm (en jersey)" mode="decimal" valeur=${laine.echantillonEtiquette.mailles}
+            erreur=${erreurs.echantillonMailles} surChangement=${(v) => majE({ mailles: v })} />
         </details>
 
         ${!nouvelle &&

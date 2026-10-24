@@ -220,6 +220,10 @@ export function verifierLaine(laine) {
   if (ech.mailles !== undefined && String(ech.mailles).trim() !== "" && (mailles === null || mailles <= 0)) {
     erreurs.echantillonMailles = "Nombre de mailles invalide.";
   }
+  const aig = lireNombre(ech.aiguilleMm);
+  if (ech.aiguilleMm !== undefined && String(ech.aiguilleMm).trim() !== "" && (aig === null || aig < 1.5 || aig > 25)) {
+    erreurs.aiguilleMm = "Indique une taille entre 1,5 et 25 mm.";
+  }
   return erreurs;
 }
 
