@@ -239,6 +239,13 @@ export function verifierLaine(laine) {
   if (ech.mailles !== undefined && String(ech.mailles).trim() !== "" && (mailles === null || mailles <= 0)) {
     erreurs.echantillonMailles = "Nombre de mailles invalide.";
   }
+  const rangs = lireNombre(ech.rangs);
+  if (ech.rangs !== undefined && String(ech.rangs).trim() !== "" && (rangs === null || rangs <= 0 || rangs > 150)) {
+    erreurs.echantillonRangs = "Nombre de rangs invalide.";
+  }
+  if (!erreurs.echantillonRangs && rangs !== null && (mailles === null || String(ech.mailles ?? "").trim() === "")) {
+    erreurs.echantillonMailles = "Indique aussi les mailles sur 10 cm.";
+  }
   for (const cle of ["aiguilleMm", "aiguilleMaxMm"]) {
     const v = lireNombre(ech[cle]);
     if (ech[cle] !== undefined && String(ech[cle]).trim() !== "" && (v === null || v < 1.5 || v > 25)) {

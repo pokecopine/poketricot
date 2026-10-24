@@ -80,8 +80,12 @@ export function densiteJerseyProvisoire(laine, tailleAiguille) {
     const aiguilleEtiquette = f ? (f.min + f.max) / 2 : null;
     const t = lireNombre(tailleAiguille);
     // Une aiguille plus grosse que celle conseillée donne moins de mailles pour 10 cm, et inversement.
-    const mailles = aiguilleEtiquette && t ? (m * aiguilleEtiquette) / t : m;
-    return { mailles, rangs: mailles * RANGS_PAR_MAILLE_JERSEY, origine: "etiquette" };
+    const facteur = aiguilleEtiquette && t ? aiguilleEtiquette / t : 1;
+    const mailles = m * facteur;
+    // Les rangs de l'étiquette s'ils sont notés, sinon le rapport habituel du jersey.
+    const r = lireNombre(etiquette.rangs);
+    const rangs = r && r > 0 ? r * facteur : mailles * RANGS_PAR_MAILLE_JERSEY;
+    return { mailles, rangs, origine: "etiquette", rangsEtiquette: !!(r && r > 0) };
   }
   const parDefaut = JERSEY_PAR_EPAISSEUR[laine?.epaisseur];
   if (parDefaut) return { mailles: parDefaut, rangs: parDefaut * RANGS_PAR_MAILLE_JERSEY, origine: "epaisseur" };

@@ -88,7 +88,7 @@ const LAINE_VIDE = {
   composition: [{ fibre: "Laine", pourcentage: "100" }],
   couleur: PALETTE[0].hex,
   quantite: { mode: "etiquette", metresParPelote: "", grammesParPelote: "", pelotes: "", grammes: "", metresReference: "", grammesReference: "" },
-  echantillonEtiquette: { mailles: "", aiguilleMm: "", aiguilleMaxMm: "" },
+  echantillonEtiquette: { mailles: "", rangs: "", aiguilleMm: "", aiguilleMaxMm: "" },
   note: "",
   archivee: false,
 };
@@ -264,8 +264,13 @@ export function FicheLaine({ id }) {
             Échantillon de l'étiquette (facultatif)
           </summary>
           <p class="note">Il sert d'estimation tant que tu n'as pas tricoté ton propre échantillon.</p>
-          <${Champ} libelle="Mailles sur 10 cm (en jersey)" mode="decimal" valeur=${laine.echantillonEtiquette.mailles}
-            erreur=${erreurs.echantillonMailles} surChangement=${(v) => majE({ mailles: v })} />
+          <div class="rangee">
+            <${Champ} libelle="Mailles sur 10 cm" mode="decimal" placeholder="ex. 18" valeur=${laine.echantillonEtiquette.mailles}
+              erreur=${erreurs.echantillonMailles} surChangement=${(v) => majE({ mailles: v })} />
+            <${Champ} libelle="Rangs sur 10 cm" mode="decimal" placeholder="ex. 24" valeur=${laine.echantillonEtiquette.rangs}
+              erreur=${erreurs.echantillonRangs} surChangement=${(v) => majE({ rangs: v })} />
+          </div>
+          <p class="note">Ce sont des mesures en jersey, avec les aiguilles conseillées. Sans les rangs, l'outil les estime d'après les mailles.</p>
         </details>
 
         ${!nouvelle &&

@@ -135,3 +135,12 @@ test("composition : vérifications", () => {
   assert.match(verifierComposition([{ fibre: "Soie", pourcentage: "50" }, { fibre: "Soie", pourcentage: "50" }]), /deux fois/);
   assert.match(verifierComposition([{ fibre: "Mérinos", pourcentage: "70" }, { fibre: "Soie", pourcentage: "" }]), /pourcentage de chaque/);
 });
+
+test("échantillon de l'étiquette : rangs vérifiés, mailles exigées avec les rangs", async () => {
+  const { verifierLaine } = await import("../js/donnees/reserve.js");
+  const base = { nom: "x", epaisseur: "aran", couleur: "#123456", composition: [{ fibre: "Laine", pourcentage: 100 }], quantite: { mode: "etiquette", metresParPelote: 80, pelotes: 2 } };
+  const { default: assert } = await import("node:assert/strict");
+  assert.deepEqual(verifierLaine({ ...base, echantillonEtiquette: { mailles: "18", rangs: "24" } }), {});
+  assert.equal(verifierLaine({ ...base, echantillonEtiquette: { mailles: "", rangs: "24" } }).echantillonMailles, "Indique aussi les mailles sur 10 cm.");
+  assert.equal(verifierLaine({ ...base, echantillonEtiquette: { mailles: "18", rangs: "abc" } }).echantillonRangs, "Nombre de rangs invalide.");
+});

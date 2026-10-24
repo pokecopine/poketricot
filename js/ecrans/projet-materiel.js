@@ -153,11 +153,13 @@ function CarteEchantillon({ projet, laine, point, taille, echantillon, adresse, 
     <p class="note">Le guide t'explique comment tricoter un carré d'environ 15 cm, le mesurer et le peser.</p>
     <button type="button" class="bouton-secondaire" aria-pressed=${String(!!projet.sansEchantillon)}
       onClick=${() => modifier((p) => ({ ...p, sansEchantillon: !p.sansEchantillon }))}>
-      ${projet.sansEchantillon ? "✓ Je continue sans échantillon pour l'instant" : "Continuer sans échantillon pour l'instant"}
+      ${provisoire?.origine === "etiquette"
+        ? projet.sansEchantillon ? "✓ J'utilise l'échantillon de l'étiquette" : "Utiliser l'échantillon de l'étiquette pour l'instant"
+        : projet.sansEchantillon ? "✓ Je continue sans échantillon pour l'instant" : "Continuer sans échantillon pour l'instant"}
     </button>
     ${projet.sansEchantillon &&
     html`<${Encart} type="brique">${provisoire
-      ? `Dimensions estimées d'après ${provisoire.origine === "etiquette" ? `l'étiquette (${formaterNombre(provisoire.mailles)} mailles en jersey)` : "l'épaisseur de la laine"}. Le patron demandera ton vrai échantillon.`
+      ? `Dimensions estimées d'après ${provisoire.origine === "etiquette" ? `l'échantillon de l'étiquette (${formaterNombre(provisoire.mailles)} mailles${provisoire.rangsEtiquette ? ` × ${formaterNombre(provisoire.rangs)} rangs` : ""} en jersey${Math.abs(provisoire.mailles - lireNombre(laine.echantillonEtiquette?.mailles)) > 0.05 ? ", ajusté à tes aiguilles" : ""})` : "l'épaisseur de la laine"}. Le patron demandera ton vrai échantillon.`
       : "Sans échantillon ni étiquette, l'outil ne peut pas estimer les dimensions : indique l'échantillon de l'étiquette dans ta laine, ou tricote ton échantillon."}<//>`}
   </div>`;
 }

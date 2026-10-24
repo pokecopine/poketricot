@@ -311,3 +311,17 @@ test("densité provisoire : fourchette d'aiguilles sur l'étiquette → milieu d
   const k = densiteJerseyProvisoire({ echantillonEtiquette: { mailles: 12, aiguilleMm: 8, aiguilleMaxMm: 10 } }, 10);
   proche(k.mailles, 12 * 9 / 10);
 });
+
+test("densité provisoire : les rangs de l'étiquette sont utilisés quand ils sont notés", () => {
+  const j = densiteJerseyProvisoire({ echantillonEtiquette: { mailles: 18, rangs: 24, aiguilleMm: 5 } }, 5);
+  assert.deepEqual([j.mailles, j.rangs, j.rangsEtiquette], [18, 24, true]);
+  // Aiguille plus grosse que celle de l'étiquette : moins de mailles et moins de rangs pour 10 cm.
+  const k = densiteJerseyProvisoire({ echantillonEtiquette: { mailles: 18, rangs: 24, aiguilleMm: 5 } }, 6);
+  proche(k.mailles, 15);
+  proche(k.rangs, 20);
+  const sansRangs = densiteJerseyProvisoire({ echantillonEtiquette: { mailles: 18 } }, 5);
+  proche(sansRangs.rangs, 18 * 1.4);
+  assert.equal(sansRangs.rangsEtiquette, false);
+  const d = densitePoint({ pointId: "mousse", laine: { id: "x", echantillonEtiquette: { mailles: 18, rangs: 24 } }, tailleAiguille: 5 });
+  proche(d.rangs, 24 * 1.75);
+});
