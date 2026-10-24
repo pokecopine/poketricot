@@ -72,6 +72,16 @@ export const TECHNIQUES = {
   glAv: { titre: "Maille glissée fil devant", explication: "Fil devant, fais passer la maille sur l'aiguille droite sans la tricoter, en piquant comme pour une maille envers, puis remets le fil où il était." },
   endT: { titre: "Maille endroit torse", explication: "Tricote la maille à l'endroit en piquant dans le brin arrière : elle se vrille et devient plus nette." },
   envT: { titre: "Maille envers torse", explication: "Tricote la maille à l'envers en piquant dans le brin arrière." },
+  aug: {
+    titre: "1 maille tricotée 2 fois à l'endroit",
+    explication:
+      "Tricote la maille à l'endroit sans la laisser glisser de l'aiguille gauche, puis pique dans son brin arrière et tricote-la une deuxième fois à l'endroit. Laisse-la glisser : tu as 2 mailles au lieu d'une.",
+  },
+  augEnv: {
+    titre: "1 maille tricotée 2 fois à l'envers",
+    explication:
+      "Tricote la maille à l'envers sans la laisser glisser de l'aiguille gauche, puis tricote-la une deuxième fois à l'envers en piquant dans son brin arrière. Laisse-la glisser : tu as 2 mailles au lieu d'une.",
+  },
 };
 
 /** Gestes utilisés par un point (dans l'ordre d'apparition), hors endroit et envers de base. */

@@ -8,6 +8,7 @@
 // consommation : fil utilisé pour une même surface, jersey = 1.
 // Ces chiffres sont des estimations de départ ; tes échantillons enregistrés les remplaceront.
 //
+// article : « le », « la » ou « les » devant le nom en minuscules (« le point de riz », « les côtes 2/2 »).
 // avis : "conseille" | "possible" | "deconseille", avec une raison d'une phrase quand ce n'est pas conseillé.
 
 const TRICONAUTES = "https://www.lestriconautes.com/";
@@ -39,6 +40,7 @@ export const POINTS = [
   {
     id: "jersey",
     nom: "Jersey",
+    article: "le",
     synonymes: ["point jersey", "jersey endroit"],
     famille: "bases",
     rangs: [E(["end"]), V(["env"])],
@@ -58,6 +60,7 @@ export const POINTS = [
   {
     id: "jersey-envers",
     nom: "Jersey envers",
+    article: "le",
     synonymes: ["envers du jersey"],
     famille: "bases",
     rangs: [E(["env"]), V(["end"])],
@@ -77,6 +80,7 @@ export const POINTS = [
   {
     id: "mousse",
     nom: "Point mousse",
+    article: "le",
     synonymes: ["mousse", "point de mousse"],
     famille: "bases",
     rangs: [E(["end"]), V(["end"])],
@@ -98,6 +102,7 @@ export const POINTS = [
   {
     id: "cotes-1-1",
     nom: "Côtes 1/1",
+    article: "les",
     synonymes: ["côtes simples", "côtes 1-1"],
     famille: "cotes",
     rangs: [E(["end", "env"]), V(["end", "env"])],
@@ -117,6 +122,7 @@ export const POINTS = [
   {
     id: "cotes-2-2",
     nom: "Côtes 2/2",
+    article: "les",
     synonymes: ["côtes doubles", "côtes 2-2"],
     famille: "cotes",
     rangs: [E(["end", "end", "env", "env"]), V(["end", "end", "env", "env"])],
@@ -136,6 +142,7 @@ export const POINTS = [
   {
     id: "sillon",
     nom: "Côtes de sillon",
+    article: "les",
     synonymes: ["point de sillon", "côtes farrow", "farrow rib"],
     famille: "cotes",
     rangs: [E(["end", "end", "env"], { fin: ["end"] }), V(["end", "end", "env"], { debut: ["env"] })],
@@ -150,6 +157,7 @@ export const POINTS = [
   {
     id: "fausses-cotes-anglaises",
     nom: "Fausses côtes anglaises",
+    article: "les",
     synonymes: ["brioche facile", "côtes perlées anglaises", "fisherman rib"],
     famille: "cotes",
     miseEnPlace: [V(["env"])],
@@ -172,6 +180,7 @@ export const POINTS = [
   {
     id: "riz",
     nom: "Point de riz",
+    article: "le",
     synonymes: ["riz", "point de grain de riz", "seed stitch"],
     famille: "textures",
     rangs: [E(["end", "env"], { fin: ["end"] }), V(["end", "env"], { fin: ["end"] })],
@@ -186,6 +195,7 @@ export const POINTS = [
   {
     id: "ble",
     nom: "Point de blé",
+    article: "le",
     synonymes: ["blé", "riz double", "double moss"],
     famille: "textures",
     rangs: [E(["end", "env"]), V(["end", "env"]), E(["env", "end"]), V(["env", "end"])],
@@ -201,6 +211,7 @@ export const POINTS = [
   {
     id: "sable",
     nom: "Point de sable",
+    article: "le",
     synonymes: ["sable"],
     famille: "textures",
     rangs: [E(["end", "end"], { fin: ["end"] }), V(["end", "env"], { fin: ["end"] })],
@@ -215,6 +226,7 @@ export const POINTS = [
   {
     id: "nid-abeille",
     nom: "Nid d'abeille",
+    article: "le",
     synonymes: ["rayon de miel", "point nid d'abeille"],
     famille: "textures",
     // Le premier rang se tricote sur l'envers ; les mailles doubles se font sur l'endroit.
@@ -230,6 +242,7 @@ export const POINTS = [
   {
     id: "mini-noisette",
     nom: "Mini noisette",
+    article: "la",
     synonymes: ["petite noisette"],
     famille: "textures",
     rangs: [
@@ -256,6 +269,7 @@ export const POINTS = [
   {
     id: "bourse",
     nom: "Point de bourse",
+    article: "le",
     synonymes: ["bourse"],
     famille: "ajoures",
     rangs: [E(["jete", "2ens"]), V(["jete", "2ens"])],
@@ -275,6 +289,7 @@ export const POINTS = [
   {
     id: "chevron-dentele",
     nom: "Chevron dentelé",
+    article: "le",
     synonymes: ["chevron ajouré"],
     famille: "ajoures",
     rangs: [
@@ -308,6 +323,7 @@ export const POINTS = [
   {
     id: "torsade-gauche",
     nom: "Torsade croisée à gauche",
+    article: "la",
     synonymes: ["torsade simple", "torsade 3/3"],
     famille: "torsades",
     rangs: [

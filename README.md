@@ -12,7 +12,8 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
 | E1 — Catalogue | Notation des points, simulateur, conversion en rond, 15 points, rendu des textures, écran de consultation | ✅ (15 premiers points) |
-| E2 à E6 | Moteur de calcul, écharpe de bout en bout, bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
+| E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | 🟡 moteur prêt ; écran des échantillons à venir |
+| E3 à E6 | Écharpe de bout en bout, bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
 
@@ -40,7 +41,8 @@ js/ecrans/            un fichier par écran
 js/composants/        éléments réutilisables
 js/donnees/           base de données, réserve, sauvegarde, couleurs
 js/catalogue/         gestes, points, techniques, consignes écrites
-js/moteur/            simulateur (comptage des mailles, conversion en rond)
+js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
+                      plan de l'écharpe et sa vérification, métrage
 js/rendu/             dessin des textures en SVG
 tests/                tests automatiques
 ```
