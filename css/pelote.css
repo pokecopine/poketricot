@@ -355,6 +355,61 @@ p { margin: 0; }
   width: 52px; height: 52px; border: none; border-radius: 12px; padding: 0; background: transparent;
 }
 
+/* ---------- Nuancier ---------- */
+
+.nuancier { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+.nuancier-roue {
+  position: relative;
+  width: min(280px, 100%);
+  aspect-ratio: 1;
+  align-self: center;
+  border-radius: 50%;
+  /* teinte selon l'angle (rouge en haut), pâle au centre, vive au bord */
+  background:
+    radial-gradient(closest-side, #FFFFFF, rgba(255, 255, 255, 0)),
+    conic-gradient(from 0deg, #FF0000, #FFFF00, #00FF00, #00FFFF, #0000FF, #FF00FF, #FF0000);
+  box-shadow: 0 0 0 1px var(--bordure), 0 2px 8px rgba(0, 0, 0, 0.12);
+  touch-action: none;
+  cursor: crosshair;
+}
+.nuancier-repere {
+  position: absolute;
+  width: 30px; height: 30px;
+  margin: -15px 0 0 -15px;
+  border-radius: 50%;
+  border: 3px solid #FFFFFF;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.nuancier-reglette input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 32px; padding: 0; border: none;
+  border-radius: 16px;
+  background: var(--fond-reglette);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.nuancier-reglette input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #FFFFFF; border: 2px solid var(--texte);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.nuancier-reglette input[type="range"]::-moz-range-thumb {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #FFFFFF; border: 2px solid var(--texte);
+}
+.nuancier-apercu { display: flex; align-items: center; gap: 12px; }
+
+/* ---------- Composition ---------- */
+
+.fibre { display: grid; grid-template-columns: minmax(0, 1fr) 92px 44px; gap: 8px; align-items: end; }
+.fibre .champ-pourcent { position: relative; }
+.fibre .champ-pourcent input { padding-right: 30px; }
+.fibre .champ-pourcent::after {
+  content: "%"; position: absolute; right: 12px; bottom: 13px;
+  color: var(--texte-2); font-weight: 700; font-size: 15px;
+}
+
 .total {
   display: flex; justify-content: space-between;
   padding: 10px 12px; border-radius: 14px;

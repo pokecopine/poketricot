@@ -38,10 +38,64 @@ export function epaisseurProbable(mPour100g) {
   return EPAISSEURS.find((e) => mPour100g >= e.min && (e.max === null || mPour100g < e.max)) ?? null;
 }
 
-export const MATIERES = [
-  "Laine", "Mérinos", "Alpaga", "Mohair", "Coton", "Lin", "Soie",
-  "Acrylique", "Laine et acrylique", "Laine et coton", "Autre",
+// Fibres proposées pour la composition (une laine peut en mélanger plusieurs).
+export const FIBRES = [
+  "Laine", "Mérinos", "Alpaga", "Mohair", "Cachemire", "Angora", "Yak", "Soie",
+  "Coton", "Lin", "Chanvre", "Bambou", "Viscose", "Lyocell",
+  "Acrylique", "Polyamide (nylon)", "Polyester", "Élasthanne", "Autre",
 ];
+
+/**
+ * Composition d'une laine : liste de { fibre, pourcentage }.
+ * Les laines enregistrées avant la version 0.1.2 n'avaient qu'une « matière » :
+ * elle est relue ici comme une composition (« Laine et coton » → laine + coton, % inconnus).
+ */
+export function compositionDe(laine) {
+  if (Array.isArray(laine?.composition) && laine.composition.length > 0) return laine.composition;
+  const m = (laine?.matiere || "").trim();
+  if (!m) return [];
+  const morceaux = m.split(/\s+et\s+/i).map((x) => x.trim()).filter(Boolean);
+  if (morceaux.length === 1) return [{ fibre: morceaux[0], pourcentage: 100 }];
+  return morceaux.map((f) => ({ fibre: f.charAt(0).toUpperCase() + f.slice(1), pourcentage: "" }));
+}
+
+/** « 70 % mérinos, 30 % polyamide (nylon) » ; « mérinos » s'il n'y a qu'une fibre. */
+export function texteComposition(composition) {
+  const liste = (composition || []).filter((c) => c.fibre);
+  if (liste.length === 0) return "";
+  if (liste.length === 1) return liste[0].fibre.toLowerCase();
+  const tousLesPourcentages = liste.every((c) => lireNombre(c.pourcentage) !== null);
+  return liste
+    .map((c) => (tousLesPourcentages ? `${formaterNombre(lireNombre(c.pourcentage))} % ` : "") + c.fibre.toLowerCase())
+    .join(tousLesPourcentages ? ", " : " / ");
+}
+
+export function totalComposition(composition) {
+  return (composition || []).reduce((t, c) => t + (lireNombre(c.pourcentage) ?? 0), 0);
+}
+
+/** Vérifie la composition ; renvoie un message d'erreur ou null. */
+export function verifierComposition(composition) {
+  const liste = composition || [];
+  if (liste.length === 0) return "Indique au moins une fibre.";
+  if (liste.some((c) => !c.fibre)) return "Choisis la fibre de chaque ligne.";
+  const noms = liste.map((c) => c.fibre);
+  if (new Set(noms).size !== noms.length) return "La même fibre apparaît deux fois.";
+  for (const c of liste) {
+    const p = lireNombre(c.pourcentage);
+    if (String(c.pourcentage ?? "").trim() !== "" && (p === null || p <= 0 || p > 100)) {
+      return "Chaque pourcentage doit être entre 1 et 100.";
+    }
+  }
+  if (liste.length === 1) {
+    const p = lireNombre(liste[0].pourcentage);
+    return p === null || p === 100 ? null : "Avec une seule fibre, la laine en contient 100 %.";
+  }
+  if (liste.some((c) => lireNombre(c.pourcentage) === null)) return "Indique le pourcentage de chaque fibre.";
+  const total = totalComposition(liste);
+  if (Math.abs(total - 100) > 0.01) return `Le total fait ${formaterNombre(total)} % : il doit faire 100 %.`;
+  return null;
+}
 
 export const PALETTE = [
   { nom: "Terracotta", hex: "#D07E5B" },
@@ -112,7 +166,8 @@ export function detailLaine(laine) {
   const morceaux = [];
   const ep = nomEpaisseur(laine.epaisseur);
   if (ep) morceaux.push(ep);
-  if (laine.matiere) morceaux.push(laine.matiere.toLowerCase());
+  const compo = texteComposition(compositionDe(laine));
+  if (compo) morceaux.push(compo);
   const q = laine.quantite;
   if (q?.mode === "etiquette") {
     const p = lireNombre(q.pelotes);
@@ -142,6 +197,8 @@ export function verifierLaine(laine) {
   if (!laine.nom || !laine.nom.trim()) erreurs.nom = "Donne un nom à cette laine.";
   if (!laine.epaisseur) erreurs.epaisseur = "Choisis une épaisseur.";
   if (!/^#[0-9a-fA-F]{6}$/.test(laine.couleur || "")) erreurs.couleur = "Choisis une couleur.";
+  const erreurCompo = verifierComposition(compositionDe(laine));
+  if (erreurCompo) erreurs.composition = erreurCompo;
   const q = laine.quantite || {};
   if (q.mode === "etiquette") {
     const m = lireNombre(q.metresParPelote);

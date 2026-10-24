@@ -46,6 +46,7 @@ test("détail d'une laine comme dans la maquette", () => {
 test("vérification d'une laine", () => {
   const ok = {
     nom: "Mérinos", epaisseur: "aran", couleur: "#D07E5B",
+    composition: [{ fibre: "Mérinos", pourcentage: "100" }],
     quantite: { mode: "etiquette", metresParPelote: "100", pelotes: "4" },
   };
   assert.deepEqual(verifierLaine(ok), {});
@@ -98,4 +99,39 @@ test("les fourchettes se suivent sans trou ni chevauchement", () => {
   assert.equal(triees.at(-1).max, null);
   assert.equal(texteFourchette(EPAISSEURS.find((e) => e.id === "dk")), "200 à 260 m pour 100 g");
   assert.equal(texteFourchette(EPAISSEURS[0]), "plus de 600 m pour 100 g");
+});
+
+import { compositionDe, texteComposition, verifierComposition, totalComposition } from "../js/donnees/reserve.js";
+
+test("composition : les anciennes laines à matière unique sont relues", () => {
+  assert.deepEqual(compositionDe({ matiere: "Mérinos" }), [{ fibre: "Mérinos", pourcentage: 100 }]);
+  assert.deepEqual(compositionDe({ matiere: "Laine et coton" }), [
+    { fibre: "Laine", pourcentage: "" },
+    { fibre: "Coton", pourcentage: "" },
+  ]);
+  const c = [{ fibre: "Alpaga", pourcentage: "100" }];
+  assert.equal(compositionDe({ composition: c, matiere: "Laine" }), c);
+  assert.deepEqual(compositionDe({}), []);
+});
+
+test("composition : texte affiché", () => {
+  assert.equal(texteComposition([{ fibre: "Mérinos", pourcentage: "100" }]), "mérinos");
+  assert.equal(
+    texteComposition([{ fibre: "Mérinos", pourcentage: "70" }, { fibre: "Polyamide (nylon)", pourcentage: "30" }]),
+    "70 % mérinos, 30 % polyamide (nylon)"
+  );
+  assert.equal(texteComposition([{ fibre: "Laine", pourcentage: "" }, { fibre: "Coton", pourcentage: "" }]), "laine / coton");
+  assert.equal(totalComposition([{ pourcentage: "62,5" }, { pourcentage: "37,5" }]), 100);
+});
+
+test("composition : vérifications", () => {
+  assert.equal(verifierComposition([{ fibre: "Laine", pourcentage: "100" }]), null);
+  assert.equal(verifierComposition([{ fibre: "Laine", pourcentage: "" }]), null);
+  assert.match(verifierComposition([]), /au moins une/);
+  assert.match(verifierComposition([{ fibre: "Laine", pourcentage: "80" }]), /100 %/);
+  assert.equal(verifierComposition([{ fibre: "Mérinos", pourcentage: "70" }, { fibre: "Soie", pourcentage: "30" }]), null);
+  assert.match(verifierComposition([{ fibre: "Mérinos", pourcentage: "70" }, { fibre: "Soie", pourcentage: "20" }]), /90 %/);
+  assert.match(verifierComposition([{ fibre: "Mérinos", pourcentage: "70" }, { fibre: "", pourcentage: "30" }]), /Choisis la fibre/);
+  assert.match(verifierComposition([{ fibre: "Soie", pourcentage: "50" }, { fibre: "Soie", pourcentage: "50" }]), /deux fois/);
+  assert.match(verifierComposition([{ fibre: "Mérinos", pourcentage: "70" }, { fibre: "Soie", pourcentage: "" }]), /pourcentage de chaque/);
 });

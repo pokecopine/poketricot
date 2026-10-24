@@ -24,9 +24,15 @@ function Ecran({ chemin }) {
 }
 
 /** Bandeau « Nouvelle version disponible » : rien ne se recharge sans l'accord de Deborah. */
+// Vrai seulement quand Deborah a touché « Mettre à jour » : c'est le seul cas où l'on recharge.
+let miseAJourDemandee = false;
+
 function BandeauMiseAJour({ enAttente }) {
   if (!enAttente) return null;
-  const mettreAJour = () => enAttente.postMessage({ type: "ACTIVER_NOUVELLE_VERSION" });
+  const mettreAJour = () => {
+    miseAJourDemandee = true;
+    enAttente.postMessage({ type: "ACTIVER_NOUVELLE_VERSION" });
+  };
   return html`
     <div class="bandeau-maj" role="status">
       <span>Nouvelle version disponible</span>
@@ -79,10 +85,12 @@ function App({ base, prefsInitiales }) {
 
 function surveillerMisesAJour(signaler) {
   if (!("serviceWorker" in navigator)) return;
-  let rechargementDemande = false;
+  let dejaRecharge = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (rechargementDemande) return;
-    rechargementDemande = true;
+    // À la première installation, le service worker prend la main sans qu'on recharge :
+    // sinon une saisie en cours serait perdue.
+    if (!miseAJourDemandee || dejaRecharge) return;
+    dejaRecharge = true;
     location.reload();
   });
   navigator.serviceWorker
