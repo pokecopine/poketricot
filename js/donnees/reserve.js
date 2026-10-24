@@ -1,16 +1,42 @@
 // Règles de la réserve : listes de choix, calcul du métrage, vérification des saisies.
 // Fonctions pures, testées sans navigateur.
 
+// Repères usuels : mètres pour 100 g (min inclus, max exclu) et aiguilles conseillées.
+// Ce sont des fourchettes approximatives : les fabricants ne sont pas tous d'accord.
 export const EPAISSEURS = [
-  { id: "lace", nom: "Lace", detail: "très fine" },
-  { id: "fingering", nom: "Fingering", detail: "fine, chaussettes" },
-  { id: "sport", nom: "Sport", detail: "fine à moyenne" },
-  { id: "dk", nom: "DK", detail: "moyenne" },
-  { id: "worsted", nom: "Worsted", detail: "moyenne à épaisse" },
-  { id: "aran", nom: "Aran", detail: "épaisse" },
-  { id: "bulky", nom: "Bulky", detail: "très épaisse" },
-  { id: "super-bulky", nom: "Super bulky", detail: "extra épaisse" },
+  { id: "lace", nom: "Lace", detail: "très fine", min: 600, max: null, aiguilles: "2 à 2,5 mm" },
+  { id: "fingering", nom: "Fingering", detail: "fine, chaussettes", min: 350, max: 600, aiguilles: "2,25 à 3,25 mm" },
+  { id: "sport", nom: "Sport", detail: "fine à moyenne", min: 260, max: 350, aiguilles: "3,25 à 3,75 mm" },
+  { id: "dk", nom: "DK", detail: "moyenne", min: 200, max: 260, aiguilles: "3,75 à 4,5 mm" },
+  { id: "worsted", nom: "Worsted", detail: "moyenne à épaisse", min: 170, max: 200, aiguilles: "4,5 à 5,5 mm" },
+  { id: "aran", nom: "Aran", detail: "épaisse", min: 120, max: 170, aiguilles: "5 à 6 mm" },
+  { id: "bulky", nom: "Bulky", detail: "très épaisse", min: 80, max: 120, aiguilles: "6 à 8 mm" },
+  { id: "super-bulky", nom: "Super bulky", detail: "extra épaisse", min: 0, max: 80, aiguilles: "8 mm et plus" },
 ];
+
+/** « 200 à 260 m pour 100 g » */
+export function texteFourchette(e) {
+  if (e.max === null) return `plus de ${e.min} m pour 100 g`;
+  if (e.min === 0) return `moins de ${e.max} m pour 100 g`;
+  return `${e.min} à ${e.max} m pour 100 g`;
+}
+
+/** Mètres pour 100 g d'après l'étiquette (ou la référence de pesée) ; null si inconnu. */
+export function metresPour100g(laine) {
+  const q = laine?.quantite || {};
+  const [m, g] =
+    q.mode === "pesee"
+      ? [lireNombre(q.metresReference), lireNombre(q.grammesReference)]
+      : [lireNombre(q.metresParPelote), lireNombre(q.grammesParPelote)];
+  if (m === null || g === null || m <= 0 || g <= 0) return null;
+  return Math.round((m * 100) / g);
+}
+
+/** Épaisseur la plus probable pour un métrage aux 100 g. */
+export function epaisseurProbable(mPour100g) {
+  if (mPour100g === null || mPour100g === undefined || mPour100g <= 0) return null;
+  return EPAISSEURS.find((e) => mPour100g >= e.min && (e.max === null || mPour100g < e.max)) ?? null;
+}
 
 export const MATIERES = [
   "Laine", "Mérinos", "Alpaga", "Mohair", "Coton", "Lin", "Soie",

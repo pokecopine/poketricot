@@ -42,7 +42,7 @@ export function FicheAiguilles({ id }) {
       <div class="ecran-contenu"><p>Ces aiguilles n'existent plus dans ta réserve.</p></div></main>`;
   }
   if (!a) return null;
-  const maj = (patch) => setA({ ...a, ...patch });
+  const maj = (patch) => setA((x) => ({ ...x, ...patch }));
 
   async function enregistrer() {
     const e = verifierAiguilles(a);

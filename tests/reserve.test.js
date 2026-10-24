@@ -70,3 +70,32 @@ test("les laines archivées passent en dernier", () => {
   ]);
   assert.deepEqual(triees.map((l) => l.nom), ["Coton", "Mérinos", "Alpaga"]);
 });
+
+import { metresPour100g, epaisseurProbable, texteFourchette, EPAISSEURS } from "../js/donnees/reserve.js";
+
+test("mètres pour 100 g depuis l'étiquette ou la référence de pesée", () => {
+  assert.equal(metresPour100g({ quantite: { mode: "etiquette", metresParPelote: "100", grammesParPelote: "50" } }), 200);
+  assert.equal(metresPour100g({ quantite: { mode: "pesee", metresReference: "85", grammesReference: "50" } }), 170);
+  assert.equal(metresPour100g({ quantite: { mode: "etiquette", metresParPelote: "100" } }), null);
+});
+
+test("l'épaisseur est devinée depuis le métrage aux 100 g", () => {
+  assert.equal(epaisseurProbable(800).id, "lace");
+  assert.equal(epaisseurProbable(420).id, "fingering");
+  assert.equal(epaisseurProbable(300).id, "sport");
+  assert.equal(epaisseurProbable(200).id, "dk");
+  assert.equal(epaisseurProbable(180).id, "worsted");
+  assert.equal(epaisseurProbable(140).id, "aran");
+  assert.equal(epaisseurProbable(100).id, "bulky");
+  assert.equal(epaisseurProbable(50).id, "super-bulky");
+  assert.equal(epaisseurProbable(null), null);
+});
+
+test("les fourchettes se suivent sans trou ni chevauchement", () => {
+  const triees = [...EPAISSEURS].sort((a, b) => a.min - b.min);
+  assert.equal(triees[0].min, 0);
+  for (let i = 1; i < triees.length; i++) assert.equal(triees[i].min, triees[i - 1].max);
+  assert.equal(triees.at(-1).max, null);
+  assert.equal(texteFourchette(EPAISSEURS.find((e) => e.id === "dk")), "200 à 260 m pour 100 g");
+  assert.equal(texteFourchette(EPAISSEURS[0]), "plus de 600 m pour 100 g");
+});

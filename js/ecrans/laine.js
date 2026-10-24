@@ -5,7 +5,29 @@ import { retour } from "../routeur.js";
 import { EnTete, Champ, Liste, Onglets, Fenetre, Encart } from "../composants/base.js";
 import {
   EPAISSEURS, MATIERES, PALETTE, metrageLaine, verifierLaine, lireNombre,
+  texteFourchette, metresPour100g, epaisseurProbable,
 } from "../donnees/reserve.js";
+
+/** Aide au choix de l'épaisseur : repères, et déduction depuis l'étiquette. */
+function AideEpaisseur({ laine, surChoix }) {
+  const m100 = metresPour100g(laine);
+  const probable = epaisseurProbable(m100);
+  const choisie = EPAISSEURS.find((e) => e.id === laine.epaisseur);
+  if (probable) {
+    return html`
+      <div class="encart encart-sauge" style="flex-direction:column;gap:6px">
+        <span>D'après l'étiquette : <strong>${m100} m pour 100 g</strong>, c'est probablement du <strong>${probable.nom}</strong> (${probable.detail}, aiguilles ${probable.aiguilles}).</span>
+        ${laine.epaisseur !== probable.id &&
+        html`<button type="button" class="bouton-lien" style="align-self:flex-start;padding:0"
+          onClick=${() => surChoix(probable.id)}>Choisir ${probable.nom}</button>`}
+      </div>`;
+  }
+  return html`
+    <p class="note">
+      ${choisie ? html`${choisie.nom} : ${texteFourchette(choisie)}, aiguilles ${choisie.aiguilles}. ` : ""}
+      Pas sûre ? Indique plus bas les mètres et les grammes d'une pelote : l'outil devinera l'épaisseur.
+    </p>`;
+}
 
 const LAINE_VIDE = {
   nom: "",
@@ -48,9 +70,10 @@ export function FicheLaine({ id }) {
   }
   if (!laine) return null;
 
-  const maj = (patch) => setLaine({ ...laine, ...patch });
-  const majQ = (patch) => setLaine({ ...laine, quantite: { ...laine.quantite, ...patch } });
-  const majE = (patch) => setLaine({ ...laine, echantillonEtiquette: { ...laine.echantillonEtiquette, ...patch } });
+  // Mises à jour à partir de l'état le plus récent : deux saisies rapides ne s'écrasent pas.
+  const maj = (patch) => setLaine((l) => ({ ...l, ...patch }));
+  const majQ = (patch) => setLaine((l) => ({ ...l, quantite: { ...l.quantite, ...patch } }));
+  const majE = (patch) => setLaine((l) => ({ ...l, echantillonEtiquette: { ...l.echantillonEtiquette, ...patch } }));
   const q = laine.quantite;
   const metrage = metrageLaine(laine);
   const couleurDeLaPalette = PALETTE.some((c) => c.hex.toLowerCase() === laine.couleur.toLowerCase());
@@ -94,14 +117,13 @@ export function FicheLaine({ id }) {
         <${Champ} libelle="Nom" valeur=${laine.nom} erreur=${erreurs.nom} placeholder="ex. Mérinos terracotta"
           surChangement=${(v) => maj({ nom: v })} />
 
-        <div class="rangee">
-          <${Liste} libelle="Épaisseur" valeur=${laine.epaisseur} erreur=${erreurs.epaisseur}
-            options=${EPAISSEURS.map((e) => ({ valeur: e.id, libelle: `${e.nom} (${e.detail})` }))}
-            surChangement=${(v) => maj({ epaisseur: v })} />
-          <${Liste} libelle="Matière" valeur=${laine.matiere}
-            options=${MATIERES.map((m) => ({ valeur: m, libelle: m }))}
-            surChangement=${(v) => maj({ matiere: v })} />
-        </div>
+        <${Liste} libelle="Épaisseur" valeur=${laine.epaisseur} erreur=${erreurs.epaisseur}
+          options=${EPAISSEURS.map((e) => ({ valeur: e.id, libelle: `${e.nom} · ${texteFourchette(e)}` }))}
+          surChangement=${(v) => maj({ epaisseur: v })} />
+        <${AideEpaisseur} laine=${laine} surChoix=${(v) => maj({ epaisseur: v })} />
+        <${Liste} libelle="Matière" valeur=${laine.matiere}
+          options=${MATIERES.map((m) => ({ valeur: m, libelle: m }))}
+          surChangement=${(v) => maj({ matiere: v })} />
 
         <section class="carte-bloc" aria-labelledby="titre-couleur">
           <h2 id="titre-couleur">Couleur</h2>
@@ -140,7 +162,7 @@ export function FicheLaine({ id }) {
             </div>
             <p class="note">Une pelote entamée ? Écris par exemple 2,5.</p>
             <${Champ} libelle="Grammes par pelote (facultatif)" mode="decimal" valeur=${q.grammesParPelote}
-              aide="Utile plus tard pour estimer les restes par pesée."
+              aide="Sert à deviner l'épaisseur et, plus tard, à estimer les restes par pesée."
               surChangement=${(v) => majQ({ grammesParPelote: v })} />`}
 
           ${q.mode === "pesee" &&
@@ -167,6 +189,12 @@ export function FicheLaine({ id }) {
             <span>${q.mode === "pesee" ? "Estimation" : "Total"}</span>
             <strong>${metrage ? `${metrage.estime ? "≈ " : ""}${metrage.metres} m` : "—"}</strong>
           </div>
+          ${(() => {
+            const p = epaisseurProbable(metresPour100g(laine));
+            return p && laine.epaisseur !== p.id
+              ? html`<${AideEpaisseur} laine=${laine} surChoix=${(v) => maj({ epaisseur: v })} />`
+              : null;
+          })()}
         </section>
 
         <details class="carte-bloc">
