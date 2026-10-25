@@ -121,7 +121,7 @@ export function CataloguePoints({ selection = null } = {}) {
     if (piece) {
       familles.push({
         id: "peu-adaptes",
-        titre: `Peu adaptés à ${nomPiece === "écharpe" ? "l'écharpe" : nomPiece === "couverture" ? "la couverture" : `au ${nomPiece}`}`,
+        titre: selection?.titrePeuAdaptes || `Peu adaptés à ${nomPiece === "écharpe" ? "l'écharpe" : nomPiece === "couverture" ? "la couverture" : `au ${nomPiece}`}`,
         points: POINTS.filter((p) => avis(p) === "deconseille"),
         ouverte: false,
         alerte: true,
@@ -288,6 +288,7 @@ export function ChoixPointDuBloc({ id, blocId }) {
     couleur: laine?.couleur,
     actuel: bloc.pointId,
     avis: (p) => avisPourBloc(p, projet.type, bloc.zone),
+    titrePeuAdaptes: { bas: "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
     titre: bloc.zone === "corps" ? "Point principal" : `Point : ${nomZone}`,
     aide: AIDES_ZONES[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),

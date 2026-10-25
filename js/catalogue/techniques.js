@@ -2,6 +2,7 @@ import { TECHNIQUES_LOT as TA } from "./lots/lot-a.js";
 import { TECHNIQUES_LOT as TB } from "./lots/lot-b.js";
 import { TECHNIQUES_LOT as TC } from "./lots/lot-c.js";
 import { TECHNIQUES_LOT as TD } from "./lots/lot-d.js";
+import { TECHNIQUES_LOT as TE } from "./lots/lot-e.js";
 
 // Explications des gestes, rédigées pour l'outil, pour la méthode continentale
 // (le fil est tenu dans la main gauche). Une explication courte, au moment où le geste apparaît.
@@ -89,7 +90,7 @@ export const TECHNIQUES = {
   },
 };
 
-Object.assign(TECHNIQUES, TA, TB, TC, TD);
+Object.assign(TECHNIQUES, TA, TB, TC, TD, TE);
 
 /** Gestes utilisés par un point (dans l'ordre d'apparition), hors endroit et envers de base. */
 export function techniquesDuPoint(point, { inclureBases = false } = {}) {
