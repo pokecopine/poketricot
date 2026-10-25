@@ -13,7 +13,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
 | E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, écran de consultation | ✅ 91 points (5 lots) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
-| E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu drapé, patron figé rang par rang, suivi des rangs | ✅ (0.5) |
+| E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu drapé, patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.5.3) ; reste l'essai 📱 |
 | E4 à E6 | Bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
@@ -38,7 +38,7 @@ manifest.webmanifest  installation sur l'écran d'accueil
 sw.js                 fonctionnement hors connexion et mises à jour
 css/pelote.css        couleurs et formes de l'ambiance Pelote (clair et sombre)
 js/app.js             démarrage et navigation
-js/ecrans/            un fichier par écran
+js/ecrans/            un fichier par écran (projet-*.js : étapes 1 à 5 ; patron.js : patron figé et suivi)
 js/composants/        éléments réutilisables
 js/donnees/           base de données, réserve, sauvegarde, couleurs
 js/catalogue/         gestes, points (première fournée + lots/), techniques, consignes écrites
