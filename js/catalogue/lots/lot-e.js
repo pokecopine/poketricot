@@ -16,8 +16,11 @@
 //   - Chevron penché : l'article donne un rang 3 incomplet (17 mailles seulement).
 //   - Point alvéole : l'article reprend un « fil glissé » qu'aucun rang ne glisse.
 //   - Point de chevron à mailles tombées : la façon de laisser tomber les mailles n'est pas définie.
-//   - Point de nasse, rayon de miel glissé : rangs contradictoires dans l'article.
-//   - Point de pointillés, petites coquilles, point de boucles, côtes décalées 2/2 : article non lu cette nuit.
+//   - Point de nasse : le rang 2 est tronqué dans les deux articles qui le donnent.
+//   - Rayon de miel glissé : rangs contradictoires ; l'article « 4 rangs » le dit identique au point de boucles (codé).
+//   - Côtes décalées 2/2 : le nombre de mailles change d'un rang à l'autre dans l'article (coquille probable).
+//   - Point de boucles : l'article ne dit pas où passe le fil des mailles glissées ; on les glisse fil devant
+//     sur l'envers (le fil reste côté envers), comme pour un nid d'abeille glissé.
 //   - Point de lin : l'article n'en donne pas la recette.
 //   - Points bicolores, bordures tricotées perpendiculairement, noisette au crochet : techniques pas encore prises en charge.
 
@@ -122,6 +125,8 @@ const changerCote = (r) => ({ ...r, cote: r.cote === "E" ? "V" : "E" });
 const BRISE_A = (cote) => (cote === "E" ? E : V)(kp("P1 K3"), { debut: kp("K3") });
 const BRISE_B = (cote) => (cote === "E" ? E : V)(kp("P1 K3"), { debut: kp("K1"), fin: kp("P1 K1") });
 const ORDRE_BRISE = "ABABABBABABA";
+
+// Point de pointillés et petites coquilles : article « point fantaisie 4 rangs », lu le 25/10.
 
 // Parallélogrammes de riz.
 const RIZ5 = kp("P1 K1 P1 K1 P1");
@@ -402,5 +407,69 @@ export const POINTS_LOT = [
     zones: { bordure: possible("Belle en bande décorative, un peu large pour une bordure.") },
     resume: "Une torsade qui monte en biais, soulignée d'une ligne de petits trous : des arches ajourées, sur 12 rangs.",
     source: TRICONAUTES + "point-torsade-tricot-differents-points-originaux/",
+  },
+  {
+    id: "pointilles",
+    nom: "Point de pointillés",
+    article: "le",
+    synonymes: ["pointillés"],
+    famille: "textures",
+    rangs: [
+      E(kp("P1 K3"), { debut: kp("K1"), fin: kp("P1 K1") }),
+      V(["env"]),
+      E(kp("K3 P1"), { fin: kp("K3") }),
+      V(["env"]),
+    ],
+    densite: { mailles: 1, rangs: 1 },
+    consommation: 1.02,
+    proprietes: { reversible: false, roule: true, elasticite: 1, chaleur: 2, niveau: 1 },
+    ouvrages: { echarpe: ok, snood: ok, bonnet: ok, couverture: ok },
+    zones: { bordure: deconseille("Fond de jersey : une bordure dans ce point s'enroulerait.") },
+    resume: "Du jersey parsemé de petits points envers, décalés d'un rang à l'autre : une texture discrète.",
+    source: TRICONAUTES + "point-fantaisie-4-rangs/",
+  },
+  {
+    id: "petites-coquilles",
+    nom: "Petites coquilles",
+    article: "les",
+    synonymes: ["point de petites coquilles", "coquilles"],
+    famille: "ajoures",
+    rangs: [
+      E(["end"]),
+      V(["env"]),
+      E(["jete", "env", "3ensEnv", "env", "jete", "end", "end"], { debut: kp("K2") }),
+      V(["env"]),
+    ],
+    densite: { mailles: 1, rangs: 1 },
+    consommation: 1,
+    blocage: true,
+    proprietes: { reversible: false, roule: true, elasticite: 1, chaleur: 1, niveau: 2 },
+    ouvrages: {
+      echarpe: possible("Fond jersey : il faut des bordures et des bandes latérales qui ne roulent pas."),
+      snood: ok, bonnet: ok, couverture: possible("Léger et ajouré : plutôt une couverture d'été."),
+    },
+    zones: { bordure: deconseille("Fond de jersey : une bordure dans ce point s'enroulerait.") },
+    resume: "Deux jetés autour de 3 mailles ensemble : des petites coquilles ajourées sur fond de jersey, sur 4 rangs.",
+    source: TRICONAUTES + "point-fantaisie-4-rangs/",
+  },
+  {
+    id: "point-boucles",
+    nom: "Point de boucles",
+    article: "le",
+    synonymes: ["rayon de miel glissé", "point d'étamines", "nid d'abeille glissé"],
+    famille: "textures",
+    rangs: [
+      E(["end"]),
+      V(["end", "glAv"], { fin: kp("K2") }),
+      E(["end"]),
+      V(["glAv", "end"], { debut: kp("K2") }),
+    ],
+    densite: { mailles: 1.05, rangs: 1.5 },
+    consommation: 1.15,
+    proprietes: { reversible: false, roule: false, elasticite: 1, chaleur: 2, niveau: 1 },
+    ouvrages: { echarpe: ok, snood: ok, bonnet: ok, couverture: ok },
+    zones: { bordure: possible("Il tient à plat, mais les boucles se voient peu sur quelques rangs.") },
+    resume: "Des mailles glissées tous les deux rangs, en quinconce, sur un fond de point mousse : de petites alvéoles.",
+    source: TRICONAUTES + "point-fantaisie-4-rangs/",
   },
 ];

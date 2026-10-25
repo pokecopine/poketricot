@@ -11,7 +11,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Étape | Contenu | État |
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
-| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, écran de consultation | ✅ 88 points (5 lots) |
+| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, écran de consultation | ✅ 91 points (5 lots) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu drapé, patron figé rang par rang, suivi des rangs | ✅ (0.5) |
 | E4 à E6 | Bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |

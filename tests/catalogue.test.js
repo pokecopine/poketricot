@@ -37,7 +37,7 @@ test("multiples en toutes lettres, comme dans l'inventaire", () => {
 
 test("recherche par nom ou synonyme, sans accents", () => {
   assert.deepEqual(rechercherPoints("farrow").map((p) => p.id), ["sillon"]);
-  assert.deepEqual(rechercherPoints("rayon de miel").map((p) => p.id), ["nid-abeille"]);
+  assert.deepEqual(rechercherPoints("rayon de miel").map((p) => p.id), ["nid-abeille", "point-boucles"]);
   assert.ok(rechercherPoints("cotes").length >= 3);
   assert.equal(rechercherPoints("").length, POINTS.length);
 });
