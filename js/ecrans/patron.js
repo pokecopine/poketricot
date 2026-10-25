@@ -5,6 +5,7 @@ import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Encart, Fenetre, EnTete, BoutonRetour } from "../composants/base.js";
 import { DessinEcharpe } from "../composants/piece.js";
+import { ConfirmerSuppression } from "../composants/suppression.js";
 import { pointParId } from "../catalogue/points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { texteDate } from "../donnees/echantillons.js";
@@ -91,6 +92,7 @@ export function EcranPatron({ id }) {
   const { charge, projet, patron, suivi } = usePatron(id);
   const [technique, setTechnique] = useState(null);
   const [coches, setCoches] = useState({});
+  const [supprimer, setSupprimer] = useState(false);
 
   if (!charge) return null;
   if (!projet || !patron) {
@@ -178,6 +180,7 @@ export function EcranPatron({ id }) {
         </details>`}
         ${corps?.source && html`<p class="note">Le point du corps vient des Triconautes : <a href=${corps.source} target="_blank" rel="noopener">voir l'article et la vidéo</a> (il faut du réseau).</p>`}
         <p class="note">Patron créé le ${texteDate(patron.creeLe.slice(0, 10))}, vérifié rang par rang par l'outil : ${total} rangs.</p>
+        <button type="button" class="bouton-lien bouton-danger" onClick=${() => setSupprimer(true)}>Supprimer ce projet</button>
       </div>
 
       <div class="ecran-pied ecran-pied-pile">
@@ -187,6 +190,10 @@ export function EcranPatron({ id }) {
         </button>`}
         <button type="button" class="bouton-secondaire" onClick=${dupliquer}>Dupliquer en variante</button>
       </div>
+
+      <${ConfirmerSuppression} projet=${supprimer ? projet : null} suivi=${suivi}
+        surFermeture=${() => setSupprimer(false)}
+        surSuppression=${() => naviguer("/", { remplacer: true })} />
 
       <${Fenetre} ouverte=${!!technique} titre=${technique ? patron.techniques[technique].titre : ""} surFermeture=${() => setTechnique(null)}
         actions=${html`<button type="button" class="bouton-secondaire" onClick=${() => setTechnique(null)}>Fermer</button>`}>

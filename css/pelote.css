@@ -758,3 +758,9 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .bouton-retour-rang { color: var(--texte-2); font-weight: 600; font-size: 15px; }
 .mini-jauge { display: block; height: 5px; border-radius: 3px; background: var(--lin); margin-top: 4px; overflow: hidden; }
 .mini-jauge span { display: block; height: 100%; background: var(--accent); }
+
+/* ---------- Suppression d'un projet depuis l'accueil ---------- */
+.carte-projet { display: flex; align-items: stretch; gap: 6px; }
+.carte-projet > .carte-accueil { flex: 1; min-width: 0; }
+.bouton-supprimer { flex: none; width: 44px; border: none; border-radius: 16px; background: transparent; color: var(--texte-2); display: flex; align-items: center; justify-content: center; }
+.bouton-supprimer:hover, .bouton-supprimer:focus-visible { background: var(--brique-fond); color: var(--brique); }

@@ -2,7 +2,7 @@
 // À chaque publication, changer VERSION (identique à js/version.js : un test le vérifie).
 // Tout nouveau fichier de l'application doit être ajouté à FICHIERS (un test le vérifie aussi).
 
-const VERSION = "0.5.2";
+const VERSION = "0.5.3";
 const CACHE = "createur-patrons-" + VERSION;
 
 const FICHIERS = [
@@ -32,6 +32,7 @@ const FICHIERS = [
   "js/composants/icones.js",
   "js/composants/nuancier.js",
   "js/composants/piece.js",
+  "js/composants/suppression.js",
   "js/composants/drape.js",
   "js/composants/texture.js",
   "js/catalogue/aides.js",

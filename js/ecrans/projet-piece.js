@@ -5,6 +5,7 @@ import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Champ, Fenetre, Encart } from "../composants/base.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
+import { supprimerProjet } from "../composants/suppression.js";
 import { nouveauProjet, cheminEtape, TYPES_DISPONIBLES } from "../donnees/projets.js";
 
 const PIECES = [
@@ -93,7 +94,7 @@ export function EtapePiece({ id }) {
     naviguer(cheminEtape(projet, 2));
   }
   async function supprimer() {
-    await base.supprimer("projets", projet.id);
+    await supprimerProjet(base, projet);
     setConfirmer(false);
     flash("Projet supprimé.");
     naviguer("/", { remplacer: true });

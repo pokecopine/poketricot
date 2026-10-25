@@ -3,7 +3,8 @@ import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Encart } from "../composants/base.js";
-import { IconePelote, IconeReglages, IconePlus, IconeChevron } from "../composants/icones.js";
+import { IconePelote, IconeReglages, IconePlus, IconeChevron, IconeCorbeille } from "../composants/icones.js";
+import { ConfirmerSuppression } from "../composants/suppression.js";
 import { BandeTexture } from "../composants/texture.js";
 import { POINTS, pointParId } from "../catalogue/points.js";
 import { rappelSauvegardeNecessaire } from "../donnees/sauvegarde.js";
@@ -21,6 +22,8 @@ export function Accueil() {
   const [laines, setLaines] = useState([]);
   const [termines, setTermines] = useState([]);
   const [suivis, setSuivis] = useState({});
+  const [aSupprimer, setASupprimer] = useState(null);
+  const [rechargement, setRechargement] = useState(0);
 
   useEffect(() => {
     Promise.all([base.lister("laines"), base.lister("aiguilles"), base.lister("projets"), base.lister("suivis")]).then(([l, a, p, s]) => {
@@ -30,13 +33,14 @@ export function Accueil() {
       setTermines(p.filter((x) => x.statut === "termine").sort((x, y) => String(y.termineLe || "").localeCompare(String(x.termineLe || ""))));
       setSuivis(Object.fromEntries(s.map((x) => [x.id, x])));
     });
-  }, [base]);
+  }, [base, rechargement]);
 
   const carte = (p) => {
     const laine = laines.find((l) => l.id === p.laineId);
     const suivi = p.patronId ? suivis[p.patronId] : null;
     const total = p.patron?.nbRangs || 0;
-    return html`<button type="button" class="carte-accueil" onClick=${() => naviguer(cheminProjet(p, suivi))}>
+    return html`<div class="carte-projet" key=${p.id}>
+    <button type="button" class="carte-accueil" onClick=${() => naviguer(cheminProjet(p, suivi))}>
       <span class="carte-accueil-texture" style="width:72px;height:56px">
         <${BandeTexture} point=${pointVignette(p)} couleur=${laine?.couleur || "#9A9590"} hauteur=${56} />
       </span>
@@ -47,7 +51,10 @@ export function Accueil() {
         html`<span class="mini-jauge" aria-hidden="true"><span style=${`width:${Math.floor((suivi.rangsFaits / total) * 100)}%`}></span></span>`}
       </span>
       ${IconeChevron()}
-    </button>`;
+    </button>
+    <button type="button" class="bouton-supprimer" aria-label=${`Supprimer « ${p.nom} »`}
+      onClick=${() => setASupprimer({ projet: p, suivi })}>${IconeCorbeille()}</button>
+    </div>`;
   };
 
   const aDesDonnees = compte && compte.laines + compte.aiguilles + (projets?.length || 0) > 0;
@@ -105,6 +112,10 @@ export function Accueil() {
           ${" "}${compte.aiguilles} paire${compte.aiguilles > 1 ? "s" : ""} d'aiguilles.
         </p>`}
       </div>
+
+      <${ConfirmerSuppression} projet=${aSupprimer?.projet || null} suivi=${aSupprimer?.suivi}
+        surFermeture=${() => setASupprimer(null)}
+        surSuppression=${() => { setASupprimer(null); setRechargement((n) => n + 1); }} />
 
       <div class="ecran-pied">
         <button type="button" class="bouton-principal sombre" onClick=${() => naviguer("/projet/nouveau")}>

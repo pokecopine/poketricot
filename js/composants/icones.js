@@ -21,6 +21,8 @@ export const IconeExporter = (o) =>
   trait(html`<path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 19h14"></path>`, { epaisseur: 2.2, ...o });
 export const IconeImporter = (o) =>
   trait(html`<path d="M12 15V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 19h14"></path>`, { epaisseur: 2.2, ...o });
+export const IconeCorbeille = (o) =>
+  trait(html`<path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path><path d="M10 11v6M14 11v6"></path>`, o);
 export const IconeChevron = (o) => trait(html`<path d="M9 18l6-6-6-6"></path>`, { taille: 18, ...o });
 
 export const IconeAiguilles = ({ couleur = "var(--accent)" } = {}) => html`
