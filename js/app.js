@@ -99,13 +99,24 @@ function App({ base, prefsInitiales }) {
     minuterie.current = setTimeout(() => setMessage(null), 3200);
   }, []);
 
+  // Les modifications se suivent : chacune part des préférences les plus récentes (deux cœurs touchés vite ne s'écrasent pas).
+  // patch : un objet, ou une fonction (préférences actuelles → objet).
+  const prefsActuelles = useRef(prefsInitiales);
+  const fileForPrefs = useRef(Promise.resolve());
   const majPrefs = useCallback(
-    async (patch) => {
-      const nouvelles = await base.ecrire("preferences", { ...prefs, ...patch, id: ID_PREFERENCES });
-      setPrefs(nouvelles);
-      return nouvelles;
+    (patch) => {
+      const suite = fileForPrefs.current.then(async () => {
+        const p = prefsActuelles.current;
+        const changement = typeof patch === "function" ? patch(p) : patch;
+        const nouvelles = await base.ecrire("preferences", { ...p, ...changement, id: ID_PREFERENCES });
+        prefsActuelles.current = nouvelles;
+        setPrefs(nouvelles);
+        return nouvelles;
+      });
+      fileForPrefs.current = suite.catch(() => {});
+      return suite;
     },
-    [base, prefs]
+    [base]
   );
 
   return html`

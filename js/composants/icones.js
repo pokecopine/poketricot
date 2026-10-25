@@ -23,6 +23,19 @@ export const IconeImporter = (o) =>
   trait(html`<path d="M12 15V4"></path><path d="M7 9l5-5 5 5"></path><path d="M5 19h14"></path>`, { epaisseur: 2.2, ...o });
 export const IconeCorbeille = (o) =>
   trait(html`<path d="M4 7h16"></path><path d="M9 7V4h6v3"></path><path d="M6 7l1 13h10l1-13"></path><path d="M10 11v6M14 11v6"></path>`, o);
+/** Cœur des favoris : plein quand le point est en favori. */
+export const IconeCoeur = ({ plein = false, taille = 22 } = {}) =>
+  html`<svg width=${taille} height=${taille} viewBox="0 0 24 24" fill=${plein ? "currentColor" : "none"} stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 20.5l-1.3-1.2C5.8 14.9 3 12.3 3 8.9 3 6.1 5.2 4 7.9 4c1.6 0 3.1.7 4.1 1.9C13 4.7 14.5 4 16.1 4 18.8 4 21 6.1 21 8.9c0 3.4-2.8 6-7.7 10.4L12 20.5z"></path>
+  </svg>`;
+/** Éprouvette (test de chimie) : remplie quand le point est à tester. */
+export const IconeEprouvette = ({ plein = false, taille = 22 } = {}) =>
+  html`<svg width=${taille} height=${taille} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    ${plein && html`<path d="M9 12.5h6v4.7a3 3 0 01-6 0z" fill="currentColor" stroke="none"></path>`}
+    <path d="M7.5 3h9"></path><path d="M9 3v14.2a3 3 0 006 0V3"></path><path d="M9 8.5h3"></path>
+  </svg>`;
 export const IconeChevron = (o) => trait(html`<path d="M9 18l6-6-6-6"></path>`, { taille: 18, ...o });
 
 export const IconeAiguilles = ({ couleur = "var(--accent)" } = {}) => html`

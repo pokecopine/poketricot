@@ -9,7 +9,8 @@ import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBlo
 import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
-import { IconeChevron } from "../composants/icones.js";
+import { IconeChevron, IconeCoeur, IconeEprouvette } from "../composants/icones.js";
+import { MARQUES, pointsMarques, estMarque, basculerMarque } from "../donnees/marques.js";
 import { POINTS, FAMILLES, PIECES, pointParId, rechercherPoints, avisPour } from "../catalogue/points.js";
 import { etiquettesProprietes, texteConsommation, texteDensite, texteMultiple, texteOuvragesConseilles } from "../catalogue/fiche.js";
 import { texteRang, texteCote } from "../catalogue/texte.js";
@@ -53,30 +54,67 @@ function Etiquettes({ point }) {
   </div>`;
 }
 
+/** Nom du site d'où vient un point : « Les Triconautes », ou le nom de domaine. */
+export function nomSource(url) {
+  try {
+    const hote = new URL(url).hostname.replace(/^www\./, "");
+    return hote.includes("lestriconautes") ? "Les Triconautes" : hote;
+  } catch {
+    return "la source";
+  }
+}
+
+/** Cœur (favori) et éprouvette (à tester) d'un point : boutons à cocher. */
+function MarquesPoint({ point, classe = "marques-point" }) {
+  const { prefs, majPrefs, flash } = useApp();
+  const bouton = (marque, Icone) => {
+    const actif = estMarque(prefs, marque.cle, point.id);
+    return html`<button type="button" class=${"marque marque-" + marque.cle} aria-pressed=${String(actif)}
+      aria-label=${`${actif ? marque.retirer : marque.ajouter} : ${point.nom}`} title=${actif ? marque.retirer : marque.ajouter}
+      onClick=${async (e) => {
+        e.stopPropagation();
+        await majPrefs((p) => basculerMarque(p, marque.cle, point.id));
+        flash(actif ? marque.retire : marque.ajoute);
+      }}>
+      ${Icone({ plein: actif })}
+    </button>`;
+  };
+  return html`<div class=${classe}>${bouton(MARQUES.favoris, IconeCoeur)}${bouton(MARQUES.aTester, IconeEprouvette)}</div>`;
+}
+
 /** Fiche résumée d'un point (comme dans la maquette « Choix des points »). */
 function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
   const avis = selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
   const choisi = selection && selection.actuel === point.id;
   return html`
-    <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined}
-      onClick=${() => (selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
-      <${BandeTexture} point=${point} couleur=${couleur} hauteur=${64} />
-      <span class="carte-point-corps">
-        <span class="carte-point-titre">
-          <span>${point.nom}</span>${choisi ? html`<span class="badge">Choisi</span>` : selection ? null : IconeChevron()}
+    <div class=${"carte-point-cadre" + (choisi ? " carte-point-choisie" : "")}>
+      <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined}
+        onClick=${() => (selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
+        <${BandeTexture} point=${point} couleur=${couleur} hauteur=${64} />
+        <span class="carte-point-corps">
+          <span class="carte-point-titre">
+            <span>${point.nom}</span>${choisi ? html`<span class="badge">Choisi</span>` : selection ? null : IconeChevron()}
+          </span>
+          <${Etiquettes} point=${point} />
+          <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
+          ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
         </span>
-        <${Etiquettes} point=${point} />
-        <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
-        ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
-      </span>
-    </button>`;
+      </button>
+      <${MarquesPoint} point=${point} />
+      ${selection && point.source &&
+      html`<a class="carte-point-lien" href=${point.source} target="_blank" rel="noopener">
+        Voir l'article et la vidéo (${nomSource(point.source)})
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M20 4l-9 9"></path><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"></path></svg>
+      </a>`}
+    </div>`;
 }
 
-function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte }) {
+function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte, icone, classe = "" }) {
   if (points.length === 0) return null;
   return html`
-    <details class=${"famille" + (alerte ? " famille-alerte" : "")} open=${ouverte}>
+    <details class=${"famille" + (alerte ? " famille-alerte" : "") + (icone ? " famille-marque" : "") + (classe ? " " + classe : "")} open=${ouverte}>
       <summary>
+        ${icone && html`<span class="famille-icone">${icone}</span>`}
         <span>${titre}</span>
         <span class="famille-nombre">${points.length} point${points.length > 1 ? "s" : ""}</span>
       </summary>
@@ -87,6 +125,7 @@ function Famille({ titre, points, couleur, piece, zone, selection, ouverte, aler
 }
 
 export function CataloguePoints({ selection = null } = {}) {
+  const { prefs } = useApp();
   const laines = useCouleurs();
   const [pieceLibre, setPiece] = useState(memoire.piece);
   const [rechercheLibre, setRecherche] = useState(memoire.recherche);
@@ -118,6 +157,17 @@ export function CataloguePoints({ selection = null } = {}) {
         .sort((a, b) => (piece ? (avis(a) === "conseille" ? 0 : 1) - (avis(b) === "conseille" ? 0 : 1) : 0)),
       ouverte: f.id === familleOuverte,
     }));
+    // Mes points favoris et ceux à tester, en tête : ils restent aussi dans leur famille d'origine.
+    const conseillesDabord = (liste) =>
+      liste.sort((a, b) => (piece ? (avis(a) === "conseille" ? 0 : avis(a) === "possible" ? 1 : 2) - (avis(b) === "conseille" ? 0 : avis(b) === "possible" ? 1 : 2) : 0));
+    const marques = [
+      { m: MARQUES.favoris, icone: IconeCoeur({ plein: true, taille: 18 }) },
+      { m: MARQUES.aTester, icone: IconeEprouvette({ plein: true, taille: 18 }) },
+    ].map(({ m, icone }) => ({
+      id: m.cle, titre: m.titre, icone, ouverte: true, classe: "famille-" + m.cle,
+      points: conseillesDabord(pointsMarques(prefs, m.cle).map(pointParId)),
+    }));
+    familles = [...marques, ...familles];
     if (piece) {
       familles.push({
         id: "peu-adaptes",
@@ -154,12 +204,14 @@ export function CataloguePoints({ selection = null } = {}) {
         <${ChoixCouleur} laines=${laines} couleur=${couleur} surChoix=${setCouleur} />`}
 
         ${familles.map(
-          (f) => html`<${Famille} key=${f.id + (piece || "") + recherche} titre=${f.titre} points=${f.points}
+          (f) => html`<${Famille} key=${f.id + (piece || "") + recherche} titre=${f.titre} points=${f.points} icone=${f.icone} classe=${f.classe}
             couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} />`
         )}
+        ${!recherche.trim() && !pointsMarques(prefs, "favoris").length && !pointsMarques(prefs, "aTester").length &&
+        html`<p class="note astuce-marques">Touche le ${IconeCoeur({ taille: 15 })} d'un point pour le garder dans « Mes points favoris », ou l'${IconeEprouvette({ taille: 15 })} pour le mettre dans « À tester en priorité ».</p>`}
         ${recherche.trim() && trouves.length === 0 && html`<p class="note">Aucun point ne porte ce nom pour l'instant.</p>`}
 
-        <p class="note">Première fournée : ${POINTS.length} points. Les autres arrivent ensuite.</p>
+        <p class="note">Catalogue : ${POINTS.length} points. D'autres arrivent ensuite.</p>
       </div>
     </main>`;
 }
@@ -207,7 +259,10 @@ export function FichePoint({ id }) {
     <main class="ecran">
       <${EnTete} titre=${point.nom} secours="/points" libelleRetour="Retour au catalogue" />
       <div class="ecran-contenu">
-        <${BandeTexture} point=${point} couleur=${couleur} hauteur=${190} face=${face} echelle=${1.5} rayon=${20} />
+        <div class="fiche-texture">
+          <${BandeTexture} point=${point} couleur=${couleur} hauteur=${190} face=${face} echelle=${1.5} rayon=${20} />
+          <${MarquesPoint} point=${point} />
+        </div>
         <${Onglets} libelle="Côté du tricot" valeur=${face}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]}
           surChoix=${setFace} />
@@ -257,8 +312,8 @@ export function FichePoint({ id }) {
           )}
         </section>`}
 
-        <a class="bouton-secondaire" href=${point.source} target="_blank" rel="noopener">Voir l'article et la vidéo (Les Triconautes)</a>
-        <p class="note">Le lien ouvre le site des Triconautes : il faut du réseau.</p>
+        <a class="bouton-secondaire" href=${point.source} target="_blank" rel="noopener">Voir l'article et la vidéo (${nomSource(point.source)})</a>
+        <p class="note">Le lien ouvre le site ${nomSource(point.source) === "Les Triconautes" ? "des Triconautes" : nomSource(point.source)} : il faut du réseau.</p>
       </div>
     </main>`;
 }

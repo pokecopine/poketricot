@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { useApp } from "../etat.js";
+import { marquesDeLaSauvegarde } from "../donnees/marques.js";
 import { EnTete, Onglets, Fenetre, Encart } from "../composants/base.js";
 import { IconeExporter, IconeImporter, IconeCoche } from "../composants/icones.js";
 import { etatStockage, demanderStockagePersistant } from "../donnees/db.js";
@@ -89,10 +90,12 @@ export function Reglages({ apresProjet = false } = {}) {
   async function confirmerImport() {
     const { sauvegarde } = aImporter;
     // Les préférences d'affichage de ce téléphone sont gardées ; le reste vient du fichier.
-    const donnees = { ...sauvegarde.donnees, preferences: [{ ...prefs, derniereSauvegarde: sauvegarde.exporteLe }] };
+    // Les points favoris et à tester viennent du fichier.
+    const marques = marquesDeLaSauvegarde(sauvegarde.donnees.preferences);
+    const donnees = { ...sauvegarde.donnees, preferences: [{ ...prefs, ...marques, derniereSauvegarde: sauvegarde.exporteLe }] };
     await base.toutRemplacer(donnees);
     setAImporter(null);
-    await majPrefs({ derniereSauvegarde: sauvegarde.exporteLe });
+    await majPrefs({ ...marques, derniereSauvegarde: sauvegarde.exporteLe });
     flash("Sauvegarde importée : tes données sont revenues.");
   }
 
