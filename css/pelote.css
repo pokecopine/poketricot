@@ -676,6 +676,49 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .jauge-barre { position: relative; height: 10px; border-radius: 5px; background: var(--lin); overflow: hidden; display: flex; }
 .jauge-plein { height: 100%; background: var(--sauge); border-radius: 5px; }
 .jauge-manque { flex: 1; height: 100%; background: repeating-linear-gradient(45deg, var(--brique-fond), var(--brique-fond) 4px, var(--brique) 4px, var(--brique) 6px); }
+/* Colonnes et laines (E3b) */
+.bloc-colonnes { display: flex; gap: 2px; width: 96px; }
+.bloc-colonnes > * { flex: 1; min-width: 0; }
+.rang-mailles { display: flex; flex-direction: column; gap: 6px; padding: 10px 10px 8px; border-radius: 16px; background: var(--carte); }
+.rang-mailles-titre { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--texte-2); }
+.rang-mailles-titre strong { font-family: var(--titre); font-size: 18px; color: var(--texte); }
+.rang-mailles-ligne { display: flex; gap: 3px; }
+.rang-morceau {
+  flex: 1 1 0; min-width: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 4px 2px; border-radius: 8px; background: var(--lin); line-height: 1.15; overflow: hidden;
+}
+.rang-morceau strong { font-size: 15px; }
+.rang-morceau span { font-size: 10px; color: var(--texte-2); white-space: nowrap; }
+.rang-morceau-milieu { background: var(--sauge-fond); }
+.rang-morceau-milieu strong { color: var(--sauge-texte); }
+.rang-morceau-choisi { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rang-mailles-vide { text-align: center; }
+.sous-section { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--bordure); }
+.liste-colonnes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.colonne { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 16px; border: 1px solid var(--bordure); }
+.colonne-choisie { border: 2px solid var(--accent); }
+.colonne-point {
+  flex: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px; text-align: left;
+  border: none; background: transparent; color: var(--texte); padding: 0;
+}
+.colonne-point > div { flex: 0 0 52px; }
+.colonne-point > span { display: flex; flex-direction: column; min-width: 0; }
+.colonne-point > span strong { font-size: 14px; }
+.colonne-point > span span { font-size: 13px; color: var(--lien); text-decoration: underline; text-underline-offset: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compteur-petit { gap: 4px; flex: none; }
+.compteur-petit button { width: 40px; height: 40px; border-radius: 20px; font-size: 20px; }
+.compteur-petit output { min-width: 56px; font-size: 16px; }
+.champ-avec-pastille { display: flex; align-items: center; gap: 10px; }
+.champ-avec-pastille select { flex: 1; min-width: 0; }
+.carte-option { align-items: flex-start; padding: 12px 14px; border-radius: 18px; background: var(--carte); border: 1px solid var(--bordure); font-size: 14px; }
+.carte-option input[type="checkbox"] { margin-top: 2px; }
+.jauge-une { display: flex; flex-direction: column; gap: 8px; }
+.jauge-une + .jauge-une { padding-top: 10px; border-top: 1px solid var(--bordure); }
+.jauge-nom { display: inline-flex; align-items: center; gap: 6px; }
+.lignes-rang .pastille { display: inline-block; vertical-align: -2px; margin-right: 6px; }
+.liste-laines { display: flex; flex-direction: column; gap: 4px; }
+.liste-laines span { display: inline-flex; align-items: center; gap: 6px; }
+
 .rangee-choix { display: flex; gap: 8px; }
 .choix-carte {
   flex: 1; display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px; border-radius: 18px;
@@ -764,3 +807,4 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .carte-projet > .carte-accueil { flex: 1; min-width: 0; }
 .bouton-supprimer { flex: none; width: 44px; border: none; border-radius: 16px; background: transparent; color: var(--texte-2); display: flex; align-items: center; justify-content: center; }
 .bouton-supprimer:hover, .bouton-supprimer:focus-visible { background: var(--brique-fond); color: var(--brique); }
+.etiquette-laine { display: inline-flex; align-items: center; gap: 6px; }

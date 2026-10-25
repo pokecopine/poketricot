@@ -3,7 +3,7 @@
 // chaque bloc rempli avec la texture de son point, à la vraie proportion des mailles, puis ombré.
 
 import { html } from "../html.js";
-import { useMotifs, geometrieEcharpe } from "./piece.js";
+import { useMotifs, motifDe, geometrieEcharpe, couleurDeLaine } from "./piece.js";
 import { LARGEUR_MAILLE, HAUTEUR_RANG } from "../rendu/texture.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 
@@ -38,29 +38,34 @@ function rectsDuPan(geo, pan, de, a, inverse) {
       l += 12;
     }
     if (r.x + r.l > geo.largeur - 0.01) l += 12;
-    rects.push({ pointId: r.pointId, x, y: top, l, h: (y1 - y0) * ky, cote: r.cote });
+    rects.push({ pointId: r.pointId, couleur: r.couleur, x, y: top, l, h: (y1 - y0) * ky, cote: r.cote });
   }
   return rects;
 }
 
-export function EcharpeDrapee({ projet, plan, couleur, densite, face = "endroit", pointLoupe, libelle }) {
-  const geo = geometrieEcharpe(projet, plan);
+export function EcharpeDrapee({ projet, plan, couleur, laines = [], densite, face = "endroit", pointLoupe, libelle }) {
+  const brut = geometrieEcharpe(projet, plan);
+  const geo = { ...brut, rects: brut.rects.map((r) => ({ ...r, couleur: couleurDeLaine(r.laineId, couleur, laines) })) };
   const c = nuancesLaine(couleur);
   // Échelle des mailles : la largeur de l'écharpe occupe la largeur du pan de devant.
   const pxParCm = (AVANT.droite - AVANT.gauche) / geo.largeur;
   const mailles = densite?.mailles || 18;
   const rangs = densite?.rangs || 25;
   const echelle = { x: (pxParCm * 10) / mailles / LARGEUR_MAILLE, y: (pxParCm * 10) / rangs / HAUTEUR_RANG };
-  const ids = [...new Set(geo.rects.map((r) => r.pointId).filter(Boolean))];
-  const motifs = useMotifs(ids, couleur, echelle, "drape", face);
-  const loupe = useMotifs(pointLoupe ? [pointLoupe] : [], couleur, { x: echelle.x * 3, y: echelle.y * 3 }, "loupe", face);
+  const motifs = useMotifs(geo.rects.map((r) => ({ pointId: r.pointId, couleur: r.couleur })), echelle, "drape", face);
+  const loupe = useMotifs(pointLoupe ? [{ pointId: pointLoupe, couleur }] : [], { x: echelle.x * 3, y: echelle.y * 3 }, "loupe", face);
   const moitie = geo.longueur / 2;
   // Un peu de l'écharpe passe par-dessus la barre : les pans montrent chacun un peu moins de la moitié.
   const avant = rectsDuPan(geo, AVANT, 0, moitie * 0.94, false);
   const arriere = rectsDuPan(geo, ARRIERE, moitie * 1.06, geo.longueur, true);
-  const corps = projet.blocs.find((b) => b.zone === "corps")?.pointId;
-  const remplir = (id) => (motifs[id] ? `url(#${motifs[id].id})` : c.maille);
-  const motifLoupe = pointLoupe && loupe[pointLoupe];
+  // Le pli sur la barre : le milieu de l'écharpe (le corps, ou sa colonne du milieu).
+  const auMilieu = geo.rects.filter((r) => !r.cote && r.y <= moitie && r.y + r.h >= moitie);
+  const pli = auMilieu[Math.floor(auMilieu.length / 2)] || { pointId: projet.pointPrincipal, couleur };
+  const remplir = (r) => {
+    const m = motifDe(motifs, r.pointId, r.couleur);
+    return m ? `url(#${m.id})` : nuancesLaine(r.couleur).maille;
+  };
+  const motifLoupe = pointLoupe && motifDe(loupe, pointLoupe, couleur);
 
   return html`
     <svg width="350" height="500" viewBox="0 0 350 500" role="img" aria-label=${libelle} style="display:block;max-width:100%;height:auto;margin:0 auto">
@@ -94,15 +99,15 @@ export function EcharpeDrapee({ projet, plan, couleur, densite, face = "endroit"
       <circle cx="310" cy="62" r="9" fill="#8E6440"></circle>
       <g clip-path="url(#drape-arriere)">
         <rect x="160" y="60" width="130" height="350" fill=${c.fond}></rect>
-        ${arriere.map((r) => html`<rect x=${f(r.x)} y=${f(r.y)} width=${f(r.l)} height=${f(r.h + 0.5)} fill=${motifs[r.pointId] ? `url(#${motifs[r.pointId].id}-r)` : c.maille}></rect>`)}
+        ${arriere.map((r) => html`<rect x=${f(r.x)} y=${f(r.y)} width=${f(r.l)} height=${f(r.h + 0.5)} fill=${motifDe(motifs, r.pointId, r.couleur) ? `url(#${motifDe(motifs, r.pointId, r.couleur).id}-r)` : nuancesLaine(r.couleur).maille}></rect>`)}
         <rect x="170" y="60" width="110" height="350" fill="url(#drape-volume)"></rect>
         <rect x="160" y="60" width="130" height="350" fill="#000" fill-opacity="0.16"></rect>
       </g>
-      <path d=${PLI} fill=${remplir(corps)}></path>
+      <path d=${PLI} fill=${remplir(pli)}></path>
       <path d=${PLI} fill="url(#drape-pli)"></path>
       <g clip-path="url(#drape-avant)">
         <rect x="80" y="60" width="130" height="420" fill=${c.fond}></rect>
-        ${avant.map((r) => html`<rect x=${f(r.x)} y=${f(r.y)} width=${f(r.l)} height=${f(r.h + 0.5)} fill=${remplir(r.pointId)}></rect>`)}
+        ${avant.map((r) => html`<rect x=${f(r.x)} y=${f(r.y)} width=${f(r.l)} height=${f(r.h + 0.5)} fill=${remplir(r)}></rect>`)}
         <rect x="88" y="60" width="112" height="420" fill="url(#drape-volume)"></rect>
       </g>
       ${motifLoupe &&

@@ -12,9 +12,10 @@ import { pointParId } from "../catalogue/points.js";
 import { geste } from "../catalogue/gestes.js";
 import { consomme, produit, deplier, maillesLesPlusProches, maillesConviennent } from "./simulateur.js";
 import {
-  maillesPourLargeur, explicationAjustement, rangsPourHauteur, largeurCommune,
+  maillesPourLargeur, explicationAjustement, rangsPourHauteur, rangsPourHauteurMotif, largeurCommune,
   gestesDeTransition, explicationTransition, nomAvecArticle,
 } from "./dimensions.js";
+import { repartirMailles, repartitionEgale, densiteDesColonnes, motifCommun, explicationColonnes } from "./colonnes.js";
 
 /** Au-delà, un motif est trop large pour des bandes latérales (quelques mailles de chaque côté). */
 export const MAILLES_MAX_BANDE_LATERALE = 12;
@@ -82,9 +83,12 @@ const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
  * Construit le plan d'une écharpe.
  * projet = {
  *   largeurCm, longueurCm,
- *   blocs: [{ id, zone: "bas" | "corps" | "bande" | "haut" | "cotes", pointId, hauteurCm?, largeurMailles? }],
+ *   blocs: [{ id, zone: "bas" | "corps" | "bande" | "haut" | "cotes", pointId, hauteurCm?, largeurMailles?, laineId?, colonnes? }],
  *     (blocs horizontaux dans l'ordre, du bas vers le haut ; le corps peut être coupé en plusieurs parties
  *      par des bandes : toutes ses parties ont le même point et se partagent la longueur restante)
+ *     colonnes : [{ id, pointId, mailles? }] (2 ou plus) — le bloc est coupé dans la largeur, chaque colonne
+ *      avec son point ; mailles fixe la largeur d'une colonne, les autres se partagent le reste.
+ *     laineId : une autre laine pour ce bloc (la couleur change sur toute la largeur du rang).
  *   densites: { [pointId]: { mailles, rangs, statut } },
  *   lisieres: "chainette" | "aucune",
  * }
@@ -106,12 +110,48 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
 
   const infos = new Map();
   for (const b of [...horizontaux, ...(lateral ? [lateral] : [])]) {
+    if (b.zone !== "cotes" && b.colonnes?.length >= 2) {
+      const colonnes = [];
+      for (const c of b.colonnes) {
+        const point = pointParId(c.pointId);
+        if (!point) return echec(`Point inconnu : ${c.pointId}`, b);
+        const densite = densites[c.pointId];
+        if (!densite) return echec(`Densité inconnue pour ${nomAvecArticle(point)}.`, b);
+        colonnes.push({ id: c.id, pointId: c.pointId, point, densite, mailles: c.mailles });
+      }
+      infos.set(b.id, {
+        point: pointParId(b.pointId) || colonnes[0].point,
+        densite: densiteDesColonnes(colonnes.map((c) => c.densite)),
+        colonnes,
+        convient: (n) => repartirMailles(colonnes, n) !== null,
+        convientEgal: (n) => repartitionEgale(colonnes, n),
+      });
+      continue;
+    }
     const point = pointParId(b.pointId);
     if (!point) return echec(`Point inconnu : ${b.pointId}`, b);
     const densite = densites[b.pointId];
     if (!densite) return echec(`Densité inconnue pour ${nomAvecArticle(point)}.`, b);
     infos.set(b.id, { point, densite });
   }
+  const convient = (info, n) => (info.convient ? info.convient(n) : maillesConviennent(info.point, n));
+  // Pour un bloc en colonnes : le nombre de mailles le plus proche où les colonnes tombent juste.
+  const plusProche = (info, cible) => {
+    if (!info.colonnes) return maillesLesPlusProches(info.point, cible, "plat");
+    for (let e = 0; e <= 200; e++) {
+      if (cible - e > 0 && convient(info, cible - e)) return cible - e;
+      if (convient(info, cible + e)) return cible + e;
+    }
+    return null;
+  };
+  const DE_LA_ZONE = { bas: "de la bordure du bas", corps: "du corps", bande: "de la bande", haut: "de la bordure du haut" };
+  const ajustement = (info, voulu, retenu, zone) => {
+    if (!info.colonnes) return explicationAjustement(info.point, voulu, retenu);
+    if (retenu === null || retenu === voulu) return null;
+    return `${retenu} mailles au lieu de ${voulu} pour que les colonnes ${DE_LA_ZONE[zone]} tombent juste`;
+  };
+  const hauteurDuBloc = (info, cm) =>
+    info.colonnes ? rangsPourHauteurMotif(motifCommun(info.colonnes.map((c) => c.point)), cm, info.densite) : rangsPourHauteur(info.point, cm, info.densite);
   const corps = horizontaux[corpsIndex];
   const dCorps = infos.get(corps.id).densite;
 
@@ -134,11 +174,16 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
 
   // Un même nombre de mailles pour tous les blocs horizontaux, sinon des rangs de transition.
   const listeH = horizontaux.map((b) => infos.get(b.id));
-  const commun = largeurCommune(listeH, corpsCm, { prioritaire: corpsIndex });
+  // Des colonnes égales d'abord (Deborah divise en parts égales), quitte à s'écarter un peu plus de la largeur.
+  let commun = null;
+  if (listeH.some((x) => x.colonnes)) {
+    commun = largeurCommune(listeH.map((x) => (x.colonnes ? { ...x, convient: x.convientEgal } : x)), corpsCm, { prioritaire: corpsIndex, tolerance: 0.1 });
+  }
+  if (commun === null) commun = largeurCommune(listeH, corpsCm, { prioritaire: corpsIndex });
   const mailles = [];
   if (commun !== null) {
     horizontaux.forEach(() => mailles.push(commun));
-    const e = explicationAjustement(infos.get(corps.id).point, Math.max(1, Math.round((corpsCm * dCorps.mailles) / 10)), commun);
+    const e = ajustement(infos.get(corps.id), Math.max(1, Math.round((corpsCm * dCorps.mailles) / 10)), commun, "corps");
     if (e) explications.push(e);
   } else {
     // Le corps d'abord ; puis, en s'éloignant du corps, chaque bloc garde le nombre de mailles de son voisin
@@ -146,15 +191,17 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     const choix = new Array(horizontaux.length);
     const fixer = (i, voisin) => {
       const b = horizontaux[i];
-      const { point, densite } = infos.get(b.id);
-      const ideal = (corpsCm * densite.mailles) / 10;
-      if (voisin !== undefined && maillesConviennent(point, voisin) && Math.abs(voisin / ideal - 1) <= 0.05) {
+      const info = infos.get(b.id);
+      const ideal = (corpsCm * info.densite.mailles) / 10;
+      if (voisin !== undefined && convient(info, voisin) && Math.abs(voisin / ideal - 1) <= 0.05) {
         choix[i] = { n: voisin, explication: null };
         return true;
       }
-      const r = maillesPourLargeur(point, corpsCm, densite);
-      if (r.retenu === null) return false;
-      choix[i] = { n: r.retenu, explication: r.explication && r.explication + (b.zone === "corps" ? "" : ` (${NOMS_DES_ZONES[b.zone]})`) };
+      const voulu = Math.max(1, Math.round(ideal));
+      const retenu = info.colonnes ? plusProche(info, voulu) : maillesPourLargeur(info.point, corpsCm, info.densite).retenu;
+      if (retenu === null) return false;
+      const explication = ajustement(info, voulu, retenu, b.zone);
+      choix[i] = { n: retenu, explication: explication && explication + (b.zone === "corps" || info.colonnes ? "" : ` (${NOMS_DES_ZONES[b.zone]})`) };
       return true;
     };
     const ordre = [corpsIndex];
@@ -163,7 +210,13 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     for (const i of ordre) {
       const voisin = i === corpsIndex ? undefined : choix[i < corpsIndex ? i + 1 : i - 1].n;
       if (!fixer(i, voisin)) {
-        return echec(`${nomAvecArticle(infos.get(horizontaux[i].id).point)} ne tombe juste sur aucun nombre de mailles proche.`, horizontaux[i]);
+        const info = infos.get(horizontaux[i].id);
+        return echec(
+          info.colonnes
+            ? "Les colonnes ne tombent juste sur aucun nombre de mailles proche : change la largeur d'une colonne, ou répartis-les également."
+            : `${nomAvecArticle(info.point)} ne tombe juste sur aucun nombre de mailles proche.`,
+          horizontaux[i],
+        );
       }
     }
     for (const c of choix) {
@@ -171,6 +224,32 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       if (c.explication) explications.push(c.explication);
     }
   }
+
+  // ---- Colonnes : mailles de chaque colonne ----
+  const repartitions = new Map();
+  // Les colonnes de blocs différents s'alignent autant que possible (damier) : celles du corps servent de modèle.
+  const ordreColonnes = horizontaux.map((b, i) => i).sort((a, b) => (horizontaux[a].zone === "corps" ? 0 : 1) - (horizontaux[b].zone === "corps" ? 0 : 1));
+  const modeles = new Map();
+  ordreColonnes.forEach((i) => {
+    const b = horizontaux[i];
+    const info = infos.get(b.id);
+    if (!info.colonnes) return;
+    const cle = `${info.colonnes.length}|${mailles[i]}`;
+    const r = repartirMailles(info.colonnes, mailles[i], "plat", modeles.get(cle) || null);
+    if (r && !modeles.has(cle)) modeles.set(cle, r);
+    repartitions.set(b.id, r);
+  });
+  horizontaux.forEach((b) => {
+    const r = repartitions.get(b.id);
+    const e = r && explicationColonnes(infos.get(b.id).colonnes, r, DE_LA_ZONE[b.zone]);
+    if (e && !explications.includes(e)) explications.push(e);
+  });
+  for (const [id, r] of repartitions) if (!r) return echec("Les colonnes ne tombent pas juste.", horizontaux.find((b) => b.id === id));
+  const largeurBlocCm = (b, i) => {
+    const info = infos.get(b.id);
+    if (!info.colonnes) return (mailles[i] * 10) / info.densite.mailles;
+    return repartitions.get(b.id).reduce((t, m, j) => t + (m * 10) / info.colonnes[j].densite.mailles, 0);
+  };
 
   // ---- Hauteurs ----
   const hauteurs = new Map();
@@ -180,14 +259,14 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     const transition = i > 0 && mailles[i] !== mailles[i - 1] ? 10 / densite.rangs : 0;
     autresCm += transition;
     if (b.zone === "corps") return;
-    const h = rangsPourHauteur(infos.get(b.id).point, b.hauteurCm || 0, densite);
+    const h = hauteurDuBloc(infos.get(b.id), b.hauteurCm || 0);
     hauteurs.set(b.id, h);
     autresCm += h.hauteurCm;
   });
   const corpsHauteurVoulue = longueurCm - autresCm;
   if (corpsHauteurVoulue < 2 * partiesCorps.length) return echec("Les bordures et les bandes sont plus longues que l'écharpe : le corps n'a plus de place.", corps);
   for (const b of partiesCorps) {
-    hauteurs.set(b.id, rangsPourHauteur(infos.get(corps.id).point, corpsHauteurVoulue / partiesCorps.length, dCorps));
+    hauteurs.set(b.id, hauteurDuBloc(infos.get(b.id), corpsHauteurVoulue / partiesCorps.length));
   }
 
   // ---- Rangs ----
@@ -214,10 +293,13 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, nBande) }];
     };
     const lisiere = (zone, code) => (nLisiere ? [{ zone, pointId: null, rang: null, lisiere: true, gestes: [code] }] : []);
-    const corpsZ = { zone: "corps", ...corpsSegment };
+    // Colonnes : sur un rang endroit, on part du bord droit (colonne 1) ; sur l'envers, de la dernière colonne.
+    const corpsZ = Array.isArray(corpsSegment)
+      ? (c === "E" ? corpsSegment : [...corpsSegment].reverse())
+      : [{ zone: "corps", ...corpsSegment }];
     return c === "E"
-      ? [...lisiere("bordD", "glAv"), ...bandes("bandeD"), corpsZ, ...bandes("bandeG"), ...lisiere("bordG", "end")]
-      : [...lisiere("bordG", "glAv"), ...bandes("bandeG"), corpsZ, ...bandes("bandeD"), ...lisiere("bordD", "end")];
+      ? [...lisiere("bordD", "glAv"), ...bandes("bandeD"), ...corpsZ, ...bandes("bandeG"), ...lisiere("bordG", "end")]
+      : [...lisiere("bordG", "glAv"), ...bandes("bandeG"), ...corpsZ, ...bandes("bandeD"), ...lisiere("bordD", "end")];
   };
   const ajouterRang = (infosRang, corpsSegment, hauteurRangCm) => {
     const segments = segmentsDuRang(cote, corpsSegment);
@@ -233,33 +315,72 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   let maillesCorps = mailles[0];
   for (let i = 0; i < horizontaux.length; i++) {
     const b = horizontaux[i];
-    const { point, densite } = infos.get(b.id);
+    const info = infos.get(b.id);
+    const { point, densite } = info;
     const hRang = 10 / densite.rangs;
     const premier = rangs.length + 1;
+    const laineId = b.laineId || null;
     if (mailles[i] !== maillesCorps) {
       const tr = gestesDeTransition(maillesCorps, mailles[i], cote);
       if (!tr) return echec("L'écart de mailles entre deux blocs est trop grand pour un seul rang de transition.", b);
-      ajouterRang({ blocId: b.id, type: "transition", numeroMotif: null, rangsDuMotif: null }, { pointId: null, rang: null, transition: true, gestes: tr.gestes }, hRang);
-      explications.push(explicationTransition(maillesCorps, mailles[i], point));
+      ajouterRang({ blocId: b.id, laineId, type: "transition", numeroMotif: null, rangsDuMotif: null }, { pointId: null, rang: null, transition: true, gestes: tr.gestes }, hRang);
+      explications.push(explicationTransition(maillesCorps, mailles[i], info.colonnes ? info.colonnes[0].point : point));
       maillesCorps = mailles[i];
+    }
+    if (info.colonnes) {
+      const rep = repartitions.get(b.id);
+      const preps = [];
+      for (const c of info.colonnes) {
+        const pc = preparerPoint(c.point, cote);
+        if (pc.erreur) return echec(pc.erreur, b);
+        preps.push(pc);
+      }
+      const { L: Lc, mep: mepMax } = motifCommun(info.colonnes.map((c) => c.point));
+      const H = hauteurs.get(b.id).rangs;
+      for (let t = 0; t < H; t++) {
+        const segments = info.colonnes.map((c, j) => {
+          const pc = preps[j];
+          const n = pc.miseEnPlace.length;
+          const r = t < n ? pc.miseEnPlace[t] : c.point.rangs[(pc.phase + t - n) % c.point.rangs.length];
+          return { zone: "corps", colonne: j + 1, colonneId: c.id, pointId: c.pointId, rang: r, gestes: deplier(r, rep[j]) || [] };
+        });
+        const enMiseEnPlace = t < mepMax;
+        ajouterRang(
+          {
+            blocId: b.id, laineId, type: enMiseEnPlace ? "miseEnPlace" : "motif",
+            numeroMotif: enMiseEnPlace ? null : ((t - mepMax) % Lc) + 1, rangsDuMotif: enMiseEnPlace ? null : Lc,
+          },
+          segments, hRang,
+        );
+      }
+      plansDesBlocs.push({
+        id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId, laineId,
+        premierRang: premier, dernierRang: rangs.length, rangs: rangs.length - premier + 1,
+        maillesCorps: mailles[i], hauteurCm: rangs.slice(premier - 1).reduce((t, r) => t + r.hauteurCm, 0),
+        densite: info.densite,
+        colonnes: info.colonnes.map((c, j) => ({
+          id: c.id, pointId: c.pointId, mailles: rep[j], largeurCm: (rep[j] * 10) / c.densite.mailles, densite: c.densite,
+        })),
+      });
+      continue;
     }
     const p = preparerPoint(point, cote);
     if (p.erreur) return echec(p.erreur, b);
     for (const r of p.miseEnPlace) {
-      ajouterRang({ blocId: b.id, type: "miseEnPlace", numeroMotif: null, rangsDuMotif: null }, { pointId: b.pointId, rang: r, gestes: deplier(r, maillesCorps) || [] }, hRang);
+      ajouterRang({ blocId: b.id, laineId, type: "miseEnPlace", numeroMotif: null, rangsDuMotif: null }, { pointId: b.pointId, rang: r, gestes: deplier(r, maillesCorps) || [] }, hRang);
     }
     const L = point.rangs.length;
     const h = hauteurs.get(b.id);
     for (let r = 0; r < h.repetitions * L; r++) {
       const rang = point.rangs[(p.phase + r) % L];
       ajouterRang(
-        { blocId: b.id, type: "motif", numeroMotif: (r % L) + 1, rangsDuMotif: L },
+        { blocId: b.id, laineId, type: "motif", numeroMotif: (r % L) + 1, rangsDuMotif: L },
         { pointId: b.pointId, rang, gestes: deplier(rang, maillesCorps) || [] },
         hRang,
       );
     }
     plansDesBlocs.push({
-      id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId,
+      id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId, laineId, colonnes: null,
       premierRang: premier, dernierRang: rangs.length, rangs: rangs.length - premier + 1,
       maillesCorps: mailles[i], hauteurCm: rangs.slice(premier - 1).reduce((t, r) => t + r.hauteurCm, 0),
       densite: infos.get(b.id).densite,
@@ -281,7 +402,7 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     rabattage: { mailles: derniers },
     largeur: {
       viseeCm: largeurCm,
-      reelleCm: (mailles[corpsIndex] * 10) / dCorps.mailles + 2 * bandeCm + 2 * lisiereCm,
+      reelleCm: largeurBlocCm(corps, corpsIndex) + 2 * bandeCm + 2 * lisiereCm,
     },
     longueur: { viseeCm: longueurCm, reelleCm: rangs.reduce((t, r) => t + r.hauteurCm, 0) },
     estime: Object.values(densites).some((d) => d && d.statut !== "mesuree"),
@@ -313,13 +434,22 @@ export function verifierPlan(plan) {
   for (const rang of plan.rangs) {
     if (precedent && precedent.cote === rang.cote) return erreur(rang, "deux rangs de suite sur le même côté");
     const aspects = [];
+    // Une zone peut être faite de plusieurs segments (le corps en colonnes) : ensemble, ils prennent toutes ses mailles.
+    const prises = {};
+    const produites = {};
     for (const s of rang.segments) {
-      const n = comptes[s.zone];
-      if (n === undefined) return erreur(rang, `zone inconnue : ${s.zone}`);
-      if (consomme(s.gestes) !== n) {
-        return erreur(rang, `${s.zone === "corps" ? "le corps" : "une bordure"} a ${n} mailles mais le rang en tricote ${consomme(s.gestes)}`);
+      if (comptes[s.zone] === undefined) return erreur(rang, `zone inconnue : ${s.zone}`);
+      prises[s.zone] = (prises[s.zone] || 0) + consomme(s.gestes);
+      produites[s.zone] = (produites[s.zone] || 0) + produit(s.gestes);
+    }
+    for (const [zone, n] of Object.entries(prises)) {
+      if (n !== comptes[zone]) {
+        return erreur(rang, `${zone === "corps" ? "le corps" : "une bordure"} a ${comptes[zone]} mailles mais le rang en tricote ${n}`);
       }
+    }
+    for (const s of rang.segments) {
       if (s.rang) {
+        const n = consomme(s.gestes);
         if (s.rang.cote !== rang.cote) return erreur(rang, "un rang du point est tricoté du mauvais côté");
         const attendu = deplier(s.rang, n);
         if (!attendu) return erreur(rang, `le motif ne tombe pas juste sur ${n} mailles`);
@@ -333,8 +463,8 @@ export function verifierPlan(plan) {
         if (!vus) return erreur(rang, `« ${g.nom} » se fait sur l'endroit du travail`);
         aspects.push(...vus);
       }
-      comptes[s.zone] = produit(s.gestes);
     }
+    Object.assign(comptes, produites);
     const total = Object.values(comptes).reduce((t, n) => t + n, 0);
     if (total !== rang.mailles) return erreur(rang, `le rang annonce ${rang.mailles} mailles, il en reste ${total}`);
     if (rang.cote === "V") aspects.reverse();

@@ -43,7 +43,10 @@ function Ecran({ chemin }) {
     if (troisieme === "apercu") return html`<${EtapeApercu} key=${id} id=${id} />`;
     if (troisieme === "patron") return html`<${EcranPatron} key=${id} id=${id} />`;
     if (troisieme === "suivi") return html`<${EcranSuivi} key=${id} id=${id} />`;
-    if (troisieme === "point") return html`<${ChoixPointDuBloc} key=${id + quatrieme} id=${id} blocId=${quatrieme} />`;
+    if (troisieme === "point") {
+      const colonne = parametre(chemin, "colonne");
+      return html`<${ChoixPointDuBloc} key=${id + quatrieme + (colonne || "")} id=${id} blocId=${quatrieme} colonneId=${colonne} />`;
+    }
     return html`<${EtapeBientot} key=${id} id=${id} etape=${troisieme} />`;
   }
   if (premier === "points") {

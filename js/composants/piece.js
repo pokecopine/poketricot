@@ -11,9 +11,11 @@ import { nuancesLaine } from "../donnees/couleur.js";
 const f = (n) => Math.round(n * 100) / 100;
 
 /**
- * Géométrie de l'écharpe en centimètres : une liste de rectangles { blocId, pointId, x, y, l, h }
- * (x sur la largeur, y le long de l'écharpe à partir du bas).
- * Avec un plan calculé, les vraies hauteurs ; sinon, celles demandées, le corps prenant le reste.
+ * Géométrie de l'écharpe en centimètres : une liste de rectangles
+ * { blocId, colonneId?, pointId, laineId, rangee, x, y, l, h, cote? }
+ * (x sur la largeur à partir du bord droit, y le long de l'écharpe à partir du bas ; rangee : indice du bloc horizontal).
+ * Avec un plan calculé, les vraies hauteurs et largeurs de colonnes ; sinon, celles demandées, le corps prenant le reste.
+ * Les bandes latérales sont découpées à la hauteur de chaque bloc : elles prennent sa laine.
  */
 export function geometrieEcharpe(projet, plan) {
   const largeur = plan ? plan.largeur.reelleCm : projet.taille.largeurCm;
@@ -35,42 +37,77 @@ export function geometrieEcharpe(projet, plan) {
   }
   const total = hauteurs.reduce((t, h) => t + h, 0) || 1;
   const rects = [];
+  const milieu = largeur - 2 * bandeCm;
   let y = 0;
   horizontaux.forEach((b, i) => {
     const h = (hauteurs[i] * longueur) / total;
-    rects.push({ blocId: b.id, pointId: b.pointId, x: bandeCm, y, l: largeur - 2 * bandeCm, h });
+    const laineId = b.laineId || null;
+    const pb = plan?.blocs.find((p) => p.id === b.id);
+    const colonnes = pb ? pb.colonnes : b.colonnes?.length >= 2 ? b.colonnes : null;
+    if (colonnes) {
+      // Largeurs réelles des colonnes si le plan les donne, sinon parts égales.
+      const poids = colonnes.map((c) => c.largeurCm || 1);
+      const somme = poids.reduce((t, w) => t + w, 0);
+      let x = bandeCm;
+      colonnes.forEach((c, j) => {
+        const l = (poids[j] / somme) * milieu;
+        rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId, rangee: i, x, y, l, h });
+        x += l;
+      });
+    } else {
+      rects.push({ blocId: b.id, pointId: b.pointId, laineId, rangee: i, x: bandeCm, y, l: milieu, h });
+    }
+    if (lateral && bandeCm > 0) {
+      rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId, rangee: i, x: 0, y, l: bandeCm, h, cote: "droit" });
+      rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId, rangee: i, x: largeur - bandeCm, y, l: bandeCm, h, cote: "gauche" });
+    }
     y += h;
   });
-  if (lateral && bandeCm > 0) {
-    rects.push({ blocId: lateral.id, pointId: lateral.pointId, x: 0, y: 0, l: bandeCm, h: longueur, cote: "droit" });
-    rects.push({ blocId: lateral.id, pointId: lateral.pointId, x: largeur - bandeCm, y: 0, l: bandeCm, h: longueur, cote: "gauche" });
-  }
-  return { largeur, longueur, rects };
+  return { largeur, longueur, rects, rangees: horizontaux.map((b, i) => ({ blocId: b.id, zone: b.zone, hauteur: (hauteurs[i] * longueur) / total })) };
 }
 
+/** Couleur d'un rectangle : celle de la laine du bloc, sinon celle de la laine principale. */
+export function couleurDeLaine(laineId, couleur, laines = []) {
+  return (laineId && laines.find((l) => l.id === laineId)?.couleur) || couleur;
+}
+
+const cleMotif = (pointId, couleur) => `${pointId}|${couleur}`;
+
 /**
- * Motifs SVG (un par point utilisé), à l'échelle voulue.
- * echelle : un nombre, ou { x, y } pour respecter la vraie proportion des mailles.
+ * Motifs SVG (un par point et par couleur utilisés), à l'échelle voulue.
+ * paires : [{ pointId, couleur }] ; echelle : un nombre, ou { x, y } pour respecter la vraie proportion des mailles.
+ * Renvoie un dictionnaire indexé par motifDe(pointId, couleur).
  */
-export function useMotifs(pointIds, couleur, echelle, prefixe, face = "endroit") {
-  const cle = [...new Set(pointIds)].sort().join(",");
+export function useMotifs(paires, echelle, prefixe, face = "endroit") {
+  const uniques = [...new Map(paires.filter((p) => p.pointId).map((p) => [cleMotif(p.pointId, p.couleur), p])).values()];
+  const cle = uniques.map((p) => cleMotif(p.pointId, p.couleur)).sort().join(",");
   const ex = typeof echelle === "number" ? echelle : echelle.x;
   const ey = typeof echelle === "number" ? echelle : echelle.y;
   return useMemo(() => {
     const motifs = {};
-    for (const id of new Set(pointIds)) {
-      const point = pointParId(id);
+    uniques.forEach(({ pointId, couleur }, i) => {
+      const point = pointParId(pointId);
       const t = point && tuileSVG(point, couleur, { face });
-      if (!t) continue;
-      motifs[id] = {
-        id: `${prefixe}-${id}`,
+      if (!t) return;
+      motifs[cleMotif(pointId, couleur)] = {
+        id: `${prefixe}-${pointId}-${String(couleur).replace(/[^0-9a-z]/gi, "")}-${i}`,
         url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(t.svg)}`,
         l: t.largeur * ex,
         h: t.hauteur * ey,
       };
-    }
+    });
     return motifs;
-  }, [cle, couleur, ex, ey, prefixe, face]);
+  }, [cle, ex, ey, prefixe, face]);
+}
+export const motifDe = (motifs, pointId, couleur) => motifs[cleMotif(pointId, couleur)];
+
+/** Contour (en coordonnées écran) qui entoure une liste de formes. */
+function boite(formes) {
+  const x0 = Math.min(...formes.map((r) => r.px.x));
+  const y0 = Math.min(...formes.map((r) => r.px.y));
+  const x1 = Math.max(...formes.map((r) => r.px.x + r.px.l));
+  const y1 = Math.max(...formes.map((r) => r.px.y + r.px.h));
+  return { x: x0, y: y0, l: x1 - x0, h: y1 - y0 };
 }
 
 /**
@@ -79,11 +116,12 @@ export function useMotifs(pointIds, couleur, echelle, prefixe, face = "endroit")
  * blocChoisi : contour terracotta autour de ce bloc. surChoix(blocId) : toucher un bloc le choisit.
  */
 export function DessinEcharpe({
-  projet, plan, couleur, orientation = "horizontale", blocChoisi = null, surChoix = null,
+  projet, plan, couleur, laines = [], orientation = "horizontale", blocChoisi = null, colonneChoisie = null, surChoix = null,
   largeurPx = 340, longueurVerticalePx = 460, echelleTexture = 0.42, prefixe = "ech", libelle,
 }) {
   const geo = geometrieEcharpe(projet, plan);
-  const motifs = useMotifs(geo.rects.map((r) => r.pointId).filter(Boolean), couleur, echelleTexture, prefixe);
+  const teinte = (r) => couleurDeLaine(r.laineId, couleur, laines);
+  const motifs = useMotifs(geo.rects.map((r) => ({ pointId: r.pointId, couleur: teinte(r) })), echelleTexture, prefixe);
   const c = nuancesLaine(couleur);
   const marge = 8;
 
@@ -97,37 +135,32 @@ export function DessinEcharpe({
 
   // Hauteurs à l'écran : une bordure ou une bande reste visible (quelques pixels au moins), le corps prend le reste.
   const minBloc = 8;
-  const horiz = geo.rects.filter((r) => !r.cote);
-  const corpsIds = new Set(projet.blocs.filter((b) => b.zone === "corps").map((b) => b.id));
-  const hPx = new Map(horiz.map((r) => [r, corpsIds.has(r.blocId) ? r.h * k : Math.max(minBloc, r.h * k)]));
-  const fixe = horiz.filter((r) => !corpsIds.has(r.blocId)).reduce((t, r) => t + hPx.get(r), 0);
-  const corpsBrut = horiz.filter((r) => corpsIds.has(r.blocId)).reduce((t, r) => t + r.h * k, 0) || 1;
-  for (const r of horiz) if (corpsIds.has(r.blocId)) hPx.set(r, (r.h * k * Math.max(0, longueurPx - fixe)) / corpsBrut);
+  const rangees = geo.rangees.map((r) => ({ ...r, corps: r.zone === "corps" }));
+  const hPx = rangees.map((r) => (r.corps ? r.hauteur * k : Math.max(minBloc, r.hauteur * k)));
+  const fixe = rangees.reduce((t, r, i) => t + (r.corps ? 0 : hPx[i]), 0);
+  const corpsBrut = rangees.reduce((t, r) => t + (r.corps ? r.hauteur * k : 0), 0) || 1;
+  rangees.forEach((r, i) => {
+    if (r.corps) hPx[i] = (r.hauteur * k * Math.max(0, longueurPx - fixe)) / corpsBrut;
+  });
+  const yPx = [];
   let cumul = 0;
-  const yPx = new Map();
-  for (const r of horiz) {
-    yPx.set(r, longueurPx - cumul - hPx.get(r));
-    cumul += hPx.get(r);
-  }
+  rangees.forEach((r, i) => {
+    yPx[i] = longueurPx - cumul - hPx[i];
+    cumul += hPx[i];
+  });
 
-  // Coordonnées « tricot » : x sur la largeur, y vers le haut. On dessine dans un repère où le bas est en bas.
+  // Bandes latérales jamais plus fines que quelques pixels, pour qu'on les voie.
+  const lateralCm = geo.rects.find((q) => q.cote)?.l || 0;
+  const bandePx = lateralCm ? Math.max(minBande, lateralCm * kx) : 0;
+  const milieuCm = geo.largeur - 2 * lateralCm;
+  const milieuPx = epaisseurPx - 2 * bandePx;
   const formes = geo.rects.map((r) => {
-    let x = r.x * kx;
-    let l = r.l * kx;
-    // Bandes latérales jamais plus fines que quelques pixels, pour qu'on les voie.
-    if (r.cote === "droit") l = Math.max(minBande, l);
-    if (r.cote === "gauche") {
-      l = Math.max(minBande, l);
-      x = epaisseurPx - l;
-    }
-    if (!r.cote && geo.rects.some((q) => q.cote)) {
-      const b = Math.max(minBande, geo.rects.find((q) => q.cote).l * kx);
-      x = b;
-      l = epaisseurPx - 2 * b;
-    }
-    const y = r.cote ? 0 : yPx.get(r);
-    const h = r.cote ? longueurPx : hPx.get(r);
-    return { ...r, px: { x: f(x), y: f(y), l: f(l), h: f(h) } };
+    let x;
+    let l;
+    if (r.cote === "droit") [x, l] = [0, bandePx];
+    else if (r.cote === "gauche") [x, l] = [epaisseurPx - bandePx, bandePx];
+    else [x, l] = [bandePx + ((r.x - lateralCm) / milieuCm) * milieuPx, (r.l / milieuCm) * milieuPx];
+    return { ...r, couleur: teinte(r), px: { x: f(x), y: f(yPx[r.rangee]), l: f(l), h: f(hPx[r.rangee]) } };
   });
 
   const transform =
@@ -137,7 +170,16 @@ export function DessinEcharpe({
   const largeurSvg = orientation === "horizontale" ? largeurPx : epaisseurPx + 2 * marge;
   const hauteurSvg = orientation === "horizontale" ? epaisseurPx + 2 * marge : longueurVerticalePx;
 
-  const choisis = formes.filter((r) => r.blocId === blocChoisi);
+  // Contour du bloc choisi (un par côté pour les bandes latérales), ou de la colonne choisie.
+  const choisis = formes.filter((r) => r.blocId === blocChoisi && (!colonneChoisie || r.colonneId === colonneChoisie));
+  const contours = ["droit", "gauche", undefined]
+    .map((cote) => choisis.filter((r) => r.cote === cote))
+    .filter((liste) => liste.length)
+    .map(boite);
+  const remplir = (r) => {
+    const m = motifDe(motifs, r.pointId, r.couleur);
+    return m ? `url(#${m.id})` : nuancesLaine(r.couleur).maille;
+  };
 
   return html`
     <svg width=${largeurSvg} height=${hauteurSvg} viewBox=${`0 0 ${largeurSvg} ${hauteurSvg}`} role="img"
@@ -156,16 +198,19 @@ export function DessinEcharpe({
         <g clip-path=${`url(#${prefixe}-contour)`}>
           <rect x="0" y="0" width=${epaisseurPx} height=${longueurPx} fill=${c.fond} />
           ${formes.map(
-            (r) => html`<rect x=${r.px.x} y=${r.px.y} width=${r.px.l} height=${r.px.h}
-              fill=${motifs[r.pointId] ? `url(#${motifs[r.pointId].id})` : c.maille}
-              style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix(r.blocId) : undefined} />`
+            (r) => html`<rect x=${r.px.x} y=${r.px.y} width=${r.px.l} height=${f(r.px.h + 0.4)}
+              fill=${remplir(r)}
+              style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix(r.blocId, r.colonneId) : undefined} />`
           )}
-          ${formes.filter((r) => !r.cote).slice(1).map(
-            (r) => html`<line x1="0" x2=${epaisseurPx} y1=${f(r.px.y + r.px.h)} y2=${f(r.px.y + r.px.h)} stroke=${c.contour} stroke-width="0.8" opacity="0.6" />`
+          ${rangees.slice(1).map(
+            (r, i) => html`<line x1="0" x2=${epaisseurPx} y1=${f(yPx[i + 1] + hPx[i + 1])} y2=${f(yPx[i + 1] + hPx[i + 1])} stroke=${c.contour} stroke-width="0.8" opacity="0.6" />`
+          )}
+          ${formes.filter((r) => r.colonne > 1).map(
+            (r) => html`<line x1=${r.px.x} x2=${r.px.x} y1=${r.px.y} y2=${f(r.px.y + r.px.h)} stroke=${nuancesLaine(r.couleur).contour} stroke-width="0.8" opacity="0.7" />`
           )}
         </g>
-        ${choisis.map(
-          (r) => html`<rect x=${f(r.px.x - 2)} y=${f(Math.max(-2, r.px.y - 2))} width=${f(r.px.l + 4)} height=${f(Math.min(longueurPx + 4, r.px.h + 4))}
+        ${contours.map(
+          (b) => html`<rect x=${f(b.x - 2)} y=${f(Math.max(-2, b.y - 2))} width=${f(b.l + 4)} height=${f(Math.min(longueurPx + 4, b.h + 4))}
             rx="5" fill="none" stroke="var(--accent)" stroke-width="3" pointer-events="none" />`
         )}
       </g>

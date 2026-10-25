@@ -11,7 +11,7 @@ import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { genererPatron, nouveauSuivi, texteReversible } from "../moteur/patron.js";
-import { cheminEtape, calculerProjet, etatCreationPatron } from "../donnees/projets.js";
+import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet } from "../donnees/projets.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 const minuscule = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -33,7 +33,7 @@ export function EtapeApercu({ id }) {
   const [enCours, setEnCours] = useState(false);
   const laine = projet && laines.find((l) => l.id === projet.laineId);
   const aig = projet && aiguilles.find((a) => a.id === projet.aiguillesId);
-  const calcul = useMemo(() => (projet ? calculerProjet({ projet, laine, aiguilles: aig, echantillons }) : null), [projet, laine, aig, echantillons]);
+  const calcul = useMemo(() => (projet ? calculerProjet({ projet, laine, aiguilles: aig, echantillons, laines }) : null), [projet, laine, aig, echantillons, laines]);
 
   if (introuvable) return html`<${ProjetIntrouvable} />`;
   if (!projet) return null;
@@ -46,7 +46,9 @@ export function EtapeApercu({ id }) {
   const dCorps = calcul?.densites?.[projet.pointPrincipal];
   const m = calcul?.metrage;
   const c = calcul?.laineSuffit;
-  const avertir = etat.possible && (etat.approximatif || etat.laineManque > 0);
+  const manques = etat.manques || [];
+  const avertir = etat.possible && (etat.approximatif || manques.length > 0);
+  const utilisees = lainesDuProjet(projet, laines);
 
   async function creer() {
     if (!etat.possible || enCours) return;
@@ -55,6 +57,7 @@ export function EtapeApercu({ id }) {
       const patron = genererPatron({
         projet, plan, laine, aiguilles: aig, echantillon: calcul.echantillon,
         densites: calcul.densites, metrage: calcul.metrage, laineSuffit: calcul.laineSuffit,
+        laines: utilisees, parLaine: calcul.parLaine,
       });
       await base.ecrire("patrons", patron);
       await base.ecrire("suivis", nouveauSuivi(patron));
@@ -76,9 +79,9 @@ export function EtapeApercu({ id }) {
       <${EnTeteEtape} titre="Ton écharpe, terminée" numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
         <div class="vitrine">
-          <${EcharpeDrapee} projet=${projet} plan=${plan} couleur=${couleur} densite=${dCorps} face=${face}
+          <${EcharpeDrapee} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densite=${dCorps} face=${face}
             pointLoupe=${projet.pointPrincipal}
-            libelle=${`Illustration de l'écharpe terminée, drapée sur une barre en bois : ${projet.blocs.filter((b) => b.zone !== "cotes").map((b) => `${b.zone === "corps" ? "corps" : b.zone === "bande" ? "bande" : "bordure"} en ${minuscule(pointParId(b.pointId)?.nom || "")}`).join(", ")}. La loupe grossit le corps trois fois.`} />
+            libelle=${`Illustration de l'écharpe terminée, drapée sur une barre en bois : ${projet.blocs.filter((b) => b.zone !== "cotes").map((b) => `${b.zone === "corps" ? "corps" : b.zone === "bande" ? "bande" : "bordure"} en ${b.colonnes?.length >= 2 ? `colonnes (${b.colonnes.map((c) => minuscule(pointParId(c.pointId)?.nom || "")).join(", ")})` : minuscule(pointParId(b.pointId)?.nom || "")}${b.laineId && b.laineId !== projet.laineId ? ` dans la laine « ${laines.find((l) => l.id === b.laineId)?.nom || ""} »` : ""}`).join(", ")}. La loupe grossit le corps trois fois.`} />
           <span class="vitrine-etiquette">
             ${plan ? `${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm` : `${projet.taille.largeurCm} × ${projet.taille.longueurCm} cm`}${corps ? ` · ${minuscule(corps.nom)}` : ""}
           </span>
@@ -88,25 +91,28 @@ export function EtapeApercu({ id }) {
         html`<${Onglets} libelle="Côté de l'écharpe" valeur=${face} surChoix=${setFace}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]} />`}
 
-        ${laine &&
+        ${utilisees.length > 0 &&
         html`<div class="ligne-couleur">
-          <${Pastille} couleur=${couleur} taille=${28} />
-          <span><strong>${laine.nom}</strong></span>
+          ${utilisees.map((l) => html`<${Pastille} couleur=${l.couleur} taille=${28} />`)}
+          <span><strong>${utilisees.map((l) => l.nom).join(" · ")}</strong></span>
         </div>`}
 
         ${plan &&
         html`<div class="chiffres-cles">
           <div><strong>${plan.montage.mailles}</strong><span>mailles à monter</span></div>
           <div><strong>${plan.rangs.length}</strong><span>rangs</span></div>
-          <div><strong>${m ? `≈ ${m.metres} m` : "?"}</strong><span>${c?.disponible ? `sur ${c.disponible} m` : "de laine"}</span></div>
+          <div><strong>${m ? `≈ ${m.metres} m` : "?"}</strong><span>${calcul.parLaine?.length > 1 ? `de laine en tout (${calcul.parLaine.length} laines)` : c?.disponible ? `sur ${c.disponible} m` : "de laine"}</span></div>
         </div>`}
 
         <ul class="verifs">
           <${Coche} ok=${!!calcul?.ok}>${calcul?.ok ? "Les motifs tombent juste et le patron a été tricoté en entier par l'outil, sans erreur" : etat.raison}<//>
-          ${c && c.statut !== "inconnu" &&
-          html`<${Coche} ok=${c.statut !== "insuffisant"}>
-            ${c.statut === "insuffisant" ? `Il manque environ ${Math.ceil(c.manque)} m de laine` : c.statut === "juste" ? "La laine devrait suffire, de justesse" : "La laine suffit"}
-          <//>`}
+          ${(calcul?.parLaine?.length > 1 ? calcul.parLaine : c ? [{ laine, suffit: c }] : []).filter((x) => x.suffit && x.suffit.statut !== "inconnu").map((x) => {
+            const nom = calcul.parLaine?.length > 1 ? ` « ${x.laine.nom} »` : "";
+            const s = x.suffit;
+            return html`<${Coche} ok=${s.statut !== "insuffisant"}>
+              ${s.statut === "insuffisant" ? `Il manque environ ${Math.ceil(s.manque)} m de laine${nom}` : s.statut === "juste" ? `La laine${nom} devrait suffire, de justesse` : `La laine${nom} suffit`}
+            <//>`;
+          })}
           ${dCorps &&
           html`<${Coche} ok=${dCorps.statut === "mesuree"}>
             ${dCorps.statut === "mesuree"
@@ -140,7 +146,7 @@ export function EtapeApercu({ id }) {
           <button type="button" class="bouton-secondaire" onClick=${() => setConfirmer(false)}>Pas encore</button>`}>
         ${etat.approximatif &&
         html`<${Encart} type="brique"><strong>Tailles approximatives</strong> : sans échantillon tricoté en ${corps ? minuscule(corps.nom) : "ce point"}, l'écart réel peut dépasser 10 %. Le patron portera cette mention.<//>`}
-        ${etat.laineManque > 0 && html`<${Encart} type="brique">Il manque environ ${etat.laineManque} m de laine : prévois une pelote de plus, du même bain si possible.<//>`}
+        ${manques.map((x) => html`<${Encart} type="brique">Il manque environ ${x.metres} m${manques.length > 1 || utilisees.length > 1 ? ` de « ${x.nom} »` : " de laine"} : prévois une pelote de plus, du même bain si possible.<//>`)}
         ${dCorps?.origine === "etiquette" && corps &&
         html`<p class="note">Astuce : tricote les 15 premiers centimètres du corps, mesure-les, et compare avec le patron (il indique la longueur tricotée à chaque rang).</p>`}
       <//>

@@ -5,7 +5,8 @@ import { PALETTE, EPAISSEURS, lireNombre, formaterNombre, metrageLaine, aiguille
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { echantillonsCorrespondants, densitesDuProjet } from "../moteur/densite.js";
 import { planEcharpe, MAILLES_MAX_BANDE_LATERALE } from "../moteur/plan.js";
-import { maillesMinimum } from "../moteur/simulateur.js";
+import { maillesMinimum, maillesConviennent } from "../moteur/simulateur.js";
+import { repartirMailles, maillesVoisines, totauxEgaux, COLONNES_MIN, COLONNES_MAX } from "../moteur/colonnes.js";
 import { metrageNecessaire, comparerALaLaine } from "../moteur/metrage.js";
 import { densitePoint } from "../moteur/densite.js";
 import { nomCouleur } from "./couleur.js";
@@ -198,17 +199,49 @@ export function materielManquant(projet, { echantillon }) {
   return manque;
 }
 
+/** Points utilisés par un bloc : le sien, et ceux de ses colonnes. */
+export const pointsDuBloc = (b) => [b.pointId, ...(b.colonnes || []).map((c) => c.pointId)].filter(Boolean);
+
+/**
+ * Laines utilisées par le projet : la principale d'abord, puis celles des blocs, dans l'ordre (sans doublon).
+ * Une laine qui n'est plus dans la réserve est ignorée (le bloc reprend la laine principale).
+ */
+export function lainesDuProjet(projet, laines = []) {
+  const principale = laines.find((l) => l.id === projet.laineId);
+  const liste = principale ? [principale] : [];
+  for (const b of projet.blocs) {
+    const l = b.laineId && b.laineId !== projet.laineId ? laines.find((x) => x.id === b.laineId) : null;
+    if (l && !liste.includes(l)) liste.push(l);
+  }
+  return liste;
+}
+
+/** Laine d'un bloc (null = la laine principale), en ignorant une laine disparue de la réserve. */
+export function laineDuBloc(projet, bloc, laines) {
+  if (!bloc?.laineId || bloc.laineId === projet.laineId) return null;
+  return laines && !laines.some((l) => l.id === bloc.laineId) ? null : bloc.laineId;
+}
+
 /**
  * Calcule le plan du projet avec les densités disponibles.
- * Renvoie { plan, ok, erreurs, explications, densites, estime } (ou null si on ne sait rien de la laine).
+ * laines : toute la réserve (pour les blocs d'une autre laine) ; sans elle, seule la laine principale compte.
+ * Renvoie { plan, ok, erreurs, explications, densites, estime, parLaine, avertissements }
+ * (ou null si on ne sait rien de la laine).
  */
-export function calculerProjet({ projet, laine, aiguilles, echantillons }) {
+export function calculerProjet({ projet, laine, aiguilles, echantillons, laines = null }) {
   const taille = lireNombre(aiguilles?.tailleMm);
   if (!laine || taille === null || !projet.pointPrincipal) return null;
   const echantillon = echantillonDuProjet(projet, aiguilles, echantillons);
-  const blocs = projet.blocs.filter((b) => b.pointId);
+  const reserve = laines || [laine];
+  const blocs = projet.blocs
+    .filter((b) => b.pointId)
+    .map((b) => {
+      const laineId = laineDuBloc(projet, b, reserve);
+      const colonnes = b.colonnes?.length >= COLONNES_MIN && b.zone !== "cotes" ? b.colonnes.filter((c) => c.pointId) : null;
+      return { ...b, laineId, colonnes: colonnes?.length >= COLONNES_MIN ? colonnes : undefined };
+    });
   const densites = densitesDuProjet({
-    pointIds: blocs.map((b) => b.pointId), laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon,
+    pointIds: [...new Set(blocs.flatMap(pointsDuBloc))], laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon,
   });
   if (Object.values(densites).some((d) => !d)) return null;
   const r = planEcharpe({
@@ -217,13 +250,30 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons }) {
   });
   let metrage = null;
   let laineSuffit = null;
+  let parLaine = [];
   if (r.ok) {
     const densiteJersey = densitePoint({ pointId: "jersey", laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon });
     metrage = metrageNecessaire({ plan: r.plan, laine, echantillon, densiteJersey });
-    if (metrage) laineSuffit = comparerALaLaine(metrage.metres, laine);
+    if (metrage) {
+      parLaine = metrage.parLaine.map((x) => {
+        const l = x.laineId ? reserve.find((y) => y.id === x.laineId) : laine;
+        return { laineId: l.id, laine: l, principale: !x.laineId, metres: x.metres, suffit: comparerALaLaine(x.metres, l) };
+      });
+      // Laine principale en premier.
+      parLaine.sort((a, b) => (b.principale ? 1 : 0) - (a.principale ? 1 : 0));
+      laineSuffit = parLaine.find((x) => x.principale)?.suffit || comparerALaLaine(metrage.metres, laine);
+    }
+  }
+  // Une laine d'une autre épaisseur que la principale : les dimensions de ses blocs sont moins sûres.
+  const avertissements = [];
+  for (const l of lainesDuProjet({ ...projet, blocs }, reserve).slice(1)) {
+    if (laine.epaisseur && l.epaisseur && l.epaisseur !== laine.epaisseur) {
+      const ep = (id) => EPAISSEURS.find((e) => e.id === id)?.nom.toLowerCase() || id;
+      avertissements.push(`« ${l.nom} » est ${ep(l.epaisseur)}, ta laine principale est ${ep(laine.epaisseur)} : les blocs dans cette laine n'auront pas tout à fait la même taille. Choisis plutôt une laine de même épaisseur.`);
+    }
   }
   return {
-    ...r, densites, echantillon, metrage, laineSuffit,
+    ...r, densites, echantillon, metrage, laineSuffit, parLaine, avertissements,
     estime: !echantillon || Object.values(densites).some((d) => d.statut !== "mesuree"),
   };
 }
@@ -301,8 +351,11 @@ export function ajouterBloc(projet, { type, position, pointId, hauteurCm }) {
     insertion = indices[indices.length - 1] + 1;
   } else {
     // Au milieu : après la partie du corps du milieu, suivie d'une nouvelle partie du corps.
+    const coupe = blocs[indices[Math.floor((indices.length - 1) / 2)]];
     insertion = indices[Math.floor((indices.length - 1) / 2)] + 1;
-    enPlus = [{ id: idBloc(), zone: "corps", pointId: projet.pointPrincipal || blocs[indices[0]].pointId }];
+    // La nouvelle partie du corps garde les colonnes de celle qu'elle prolonge.
+    const colonnes = coupe.colonnes?.map((c, j) => ({ ...c, id: `c${j + 1}-${Math.random().toString(36).slice(2, 6)}` }));
+    enPlus = [{ id: idBloc(), zone: "corps", pointId: projet.pointPrincipal || blocs[indices[0]].pointId, ...(colonnes ? { colonnes } : {}) }];
   }
   if (insertion < 0) insertion = blocs.length;
   blocs.splice(insertion, 0, nouveau, ...enPlus);
@@ -339,6 +392,142 @@ export function avecLargeurBandes(projet, mailles) {
   return { ...projet, blocs: projet.blocs.map((b) => (b.zone === "cotes" ? { ...b, largeurMailles: borne(mailles, LIMITES_BLOCS.largeurMailles) } : b)) };
 }
 
+// ---------------- Colonnes ----------------
+
+/** Les blocs qui peuvent être coupés en colonnes : le corps et les bandes. */
+export const divisible = (bloc) => bloc?.zone === "corps" || bloc?.zone === "bande";
+
+/** Point proposé pour les colonnes paires : un point qui contraste avec celui du bloc. */
+export function pointAlterne(pointId) {
+  return pointId === "riz" ? "jersey" : "riz";
+}
+
+/**
+ * Coupe un bloc en n colonnes : la première garde le point du bloc, les suivantes alternent avec un autre point.
+ * Les colonnes déjà là sont gardées (avec leur point) quand on change leur nombre ; leurs largeurs repartent à égalité.
+ */
+export function diviserBloc(projet, blocId, n) {
+  const k = Math.max(COLONNES_MIN, Math.min(COLONNES_MAX, Math.round(n)));
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) => {
+      if (b.id !== blocId || !divisible(b)) return b;
+      const base = b.pointId || projet.pointPrincipal;
+      const avant = b.colonnes || [];
+      const colonnes = Array.from({ length: k }, (_, j) => ({
+        id: avant[j]?.id || `c${j + 1}-${Math.random().toString(36).slice(2, 6)}`,
+        pointId: avant[j]?.pointId || (j % 2 === 0 ? base : pointAlterne(base)),
+      }));
+      return { ...b, colonnes };
+    }),
+  };
+}
+
+/** Le bloc redevient d'un seul tenant. */
+export function nePlusDiviser(projet, blocId) {
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) => {
+      if (b.id !== blocId) return b;
+      const { colonnes, ...reste } = b;
+      return reste;
+    }),
+  };
+}
+
+export function avecPointDeColonne(projet, blocId, colonneId, pointId) {
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) =>
+      b.id === blocId ? { ...b, colonnes: (b.colonnes || []).map((c) => (c.id === colonneId ? { ...c, pointId, mailles: undefined } : c)) } : b
+    ),
+  };
+}
+
+/** Largeur choisie pour une colonne (les autres se partagent le reste) ; undefined la libère. */
+export function avecLargeurColonne(projet, blocId, colonneId, mailles) {
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) =>
+      b.id === blocId ? { ...b, colonnes: (b.colonnes || []).map((c) => (c.id === colonneId ? { ...c, mailles } : c)) } : b
+    ),
+  };
+}
+
+/** Toutes les colonnes repartent à parts égales. */
+export function repartirEgalement(projet, blocId) {
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) =>
+      b.id === blocId ? { ...b, colonnes: (b.colonnes || []).map(({ mailles, ...c }) => c) } : b
+    ),
+  };
+}
+
+/**
+ * Colonne plus large ou plus étroite (sens +1 / −1) : passe au nombre de mailles voisin qui convient à son point
+ * et le fixe. Renvoie le projet inchangé si ce n'est pas possible (dernière colonne libre, motif, etc.).
+ * total : mailles du bloc dans le plan calculé ; actuelles : mailles de chaque colonne dans le plan.
+ */
+export function changerLargeurColonne(projet, blocId, colonneId, sens, { total, actuelles }) {
+  const bloc = projet.blocs.find((b) => b.id === blocId);
+  const j = bloc?.colonnes?.findIndex((c) => c.id === colonneId) ?? -1;
+  if (j < 0) return projet;
+  const point = pointParId(bloc.colonnes[j].pointId);
+  const m = point && maillesVoisines(point, actuelles[j], sens);
+  if (!m) return projet;
+  const colonnes = bloc.colonnes.map((c, i) => ({ point: pointParId(c.pointId), mailles: i === j ? m : c.mailles }));
+  if (!colonnes.some((c, i) => i !== j && !Number.isInteger(c.mailles))) return projet;
+  if (!repartirMailles(colonnes, total)) return projet;
+  return avecLargeurColonne(projet, blocId, colonneId, m);
+}
+
+/**
+ * Aperçu d'une découpe en n colonnes avant de la faire : { mailles: [...], egales } ou null.
+ * total : mailles actuelles du bloc.
+ */
+export function apercuDecoupe(projet, blocId, n, total) {
+  const essai = diviserBloc(projet, blocId, n).blocs.find((b) => b.id === blocId);
+  const colonnes = (essai?.colonnes || []).map((c) => ({ point: pointParId(c.pointId) }));
+  if (!colonnes.length || colonnes.some((c) => !c.point) || !total) return null;
+  const r = repartirMailles(colonnes, total);
+  return r ? { mailles: r, egales: r.every((m) => m === r[0]) } : null;
+}
+
+/**
+ * Pour des colonnes égales, combien de mailles faudrait-il au bloc (au-dessous et au-dessus) ?
+ * Renvoie { dessous, dessus } avec pour chacun { total, parColonne } (ou null).
+ */
+export function colonnesEgalesPossibles(bloc, total) {
+  const colonnes = (bloc?.colonnes || []).map((c) => ({ point: pointParId(c.pointId) }));
+  if (colonnes.length < COLONNES_MIN || colonnes.some((c) => !c.point)) return null;
+  const { dessous, dessus } = totauxEgaux(colonnes, total);
+  const part = (t) => (t === null ? null : { total: t, parColonne: t / colonnes.length });
+  return { dessous: part(dessous), dessus: part(dessus) };
+}
+
+// ---------------- Laines ----------------
+
+/** Les blocs qui peuvent prendre une autre laine : bordures et bandes (le corps garde la laine principale). */
+export const coloriable = (bloc) => ["bas", "haut", "bande"].includes(bloc?.zone);
+
+export function avecLaineDuBloc(projet, blocId, laineId) {
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) => {
+      if (b.id !== blocId) return b;
+      if (!laineId || laineId === projet.laineId) {
+        const { laineId: _, ...reste } = b;
+        return reste;
+      }
+      return { ...b, laineId };
+    }),
+  };
+}
+
+/** Le projet a-t-il des blocs d'une autre laine ? */
+export const plusieursLaines = (projet) => projet.blocs.some((b) => b.laineId && b.laineId !== projet.laineId);
+
 // ---------------- Aperçu et création du patron ----------------
 
 /**
@@ -358,10 +547,14 @@ export function etatCreationPatron(projet, calcul) {
       raison: "Pour créer le patron, il faut ton échantillon, ou au moins l'échantillon noté sur l'étiquette de ta laine : l'épaisseur seule ne suffit pas.",
     };
   }
+  const manques = (calcul.parLaine || [])
+    .filter((x) => x.suffit?.statut === "insuffisant")
+    .map((x) => ({ laineId: x.laineId, nom: x.laine.nom, metres: Math.ceil(x.suffit.manque) }));
   return {
     possible: true,
     approximatif: d.statut !== "mesuree",
     laineManque: calcul.laineSuffit?.statut === "insuffisant" ? Math.ceil(calcul.laineSuffit.manque) : 0,
+    manques,
   };
 }
 

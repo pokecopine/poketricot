@@ -5,7 +5,7 @@ import { useApp } from "../etat.js";
 import { naviguer, retour } from "../routeur.js";
 import { useProjet } from "../composants/etape.js";
 import { PatronDejaCree } from "./patron.js";
-import { zoneAvis, avecPointDuBloc, cheminEtape, avisPourBloc } from "../donnees/projets.js";
+import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBloc } from "../donnees/projets.js";
 import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
@@ -273,15 +273,34 @@ const AIDES_ZONES = {
   bande: "Une bande décorative dans la longueur de l'écharpe.",
 };
 
-export function ChoixPointDuBloc({ id, blocId }) {
+export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
   const { projet, laines, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<main class="ecran"><${EnTete} titre="Projet introuvable" secours="/" /></main>`;
   if (!projet) return null;
   if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
   const bloc = projet.blocs.find((b) => b.id === blocId);
   if (!bloc) return html`<main class="ecran"><${EnTete} titre="Bloc introuvable" secours=${cheminEtape(projet)} /></main>`;
-  const laine = laines.find((l) => l.id === projet.laineId);
+  const laine = laines.find((l) => l.id === (bloc.laineId || projet.laineId)) || laines.find((l) => l.id === projet.laineId);
   const nomZone = NOMS_DES_ZONES[bloc.zone];
+  const iColonne = colonneId ? (bloc.colonnes || []).findIndex((c) => c.id === colonneId) : -1;
+  if (iColonne >= 0) {
+    const c = bloc.colonnes[iColonne];
+    const retourBuilder = `/projet/${encodeURIComponent(projet.id)}/builder`;
+    return html`<${CataloguePoints} selection=${{
+      piece: projet.type,
+      zone: "corps",
+      couleur: laine?.couleur,
+      actuel: c.pointId,
+      avis: (p) => avisPourBloc(p, projet.type, "corps"),
+      titre: `Point : colonne ${iColonne + 1} ${bloc.zone === "corps" ? "du corps" : "de la bande"}`,
+      aide: "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
+      secours: retourBuilder,
+      choisir: async (pointId) => {
+        await modifier((p) => avecPointDeColonne(p, blocId, colonneId, pointId));
+        retour(retourBuilder);
+      },
+    }} />`;
+  }
   const selection = {
     piece: projet.type,
     zone: zoneAvis(bloc.zone),

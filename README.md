@@ -14,6 +14,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, écran de consultation | ✅ 91 points (5 lots) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu drapé, patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.5.3) ; reste l'essai 📱 |
+| E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |
 | E4 à E6 | Bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)

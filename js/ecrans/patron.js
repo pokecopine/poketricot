@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
-import { Encart, Fenetre, EnTete, BoutonRetour } from "../composants/base.js";
+import { Encart, Fenetre, EnTete, BoutonRetour, Pastille } from "../composants/base.js";
 import { DessinEcharpe } from "../composants/piece.js";
 import { ConfirmerSuppression } from "../composants/suppression.js";
 import { pointParId } from "../catalogue/points.js";
@@ -71,7 +71,7 @@ function Lignes({ rang, abreviations, grand = false }) {
   return html`<ul class=${"lignes-rang" + (grand ? " grand" : "")}>
     ${lignes.map((l) => html`<li class=${"ligne-" + l.zone}>
       ${l.etiquette && html`<span class="ligne-etiquette">${l.etiquette}</span>`}
-      <span>${l.texte}${l.texte.endsWith(".") ? "" : "."}</span>
+      <span>${l.couleur && html`<${Pastille} couleur=${l.couleur} taille=${14} />`}${l.texte}${l.texte.endsWith(".") ? "" : "."}</span>
     </li>`)}
   </ul>`;
 }
@@ -132,13 +132,15 @@ export function EcranPatron({ id }) {
       <div class="ecran-contenu">
         <div class="recap-patron">
           <div class="recap-dessin">
-            <${DessinEcharpe} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} orientation="verticale"
+            <${DessinEcharpe} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []} orientation="verticale"
               longueurVerticalePx=${170} prefixe="patron" echelleTexture=${0.3} libelle=${patron.resume} />
           </div>
           <div class="recap-texte">
             <strong>${formaterNombre(patron.dimensions.largeurCm, 0)} × ${formaterNombre(patron.dimensions.longueurCm, 0)} cm</strong>
             <span>Aiguilles ${formaterNombre(patron.aiguilles.tailleMm, 2)} mm${patron.aiguilles.cableCm ? `, câble ${formaterNombre(patron.aiguilles.cableCm, 0)} cm` : ""}, tricot à plat</span>
-            ${patron.laine && html`<span>${patron.laine.nom}${patron.metrage ? ` · environ ${patron.metrage.metres} m${patron.laineSuffit?.disponible ? ` sur ${patron.laineSuffit.disponible} m` : ""}` : ""}</span>`}
+            ${patron.laines?.length > 1
+              ? html`<span class="liste-laines">${patron.laines.map((l) => html`<span><${Pastille} couleur=${l.couleur} taille=${12} />${l.nom}${l.metres ? ` · environ ${l.metres} m` : ""}</span>`)}</span>`
+              : patron.laine && html`<span>${patron.laine.nom}${patron.metrage ? ` · environ ${patron.metrage.metres} m${patron.laineSuffit?.disponible ? ` sur ${patron.laineSuffit.disponible} m` : ""}` : ""}</span>`}
             <span>${patron.echantillon
               ? `Échantillon en ${minuscule(pointParId(patron.echantillon.pointId)?.nom || patron.echantillon.pointId)} : ${formaterNombre(patron.echantillon.maillesPour10cm)} mailles × ${formaterNombre(patron.echantillon.rangsPour10cm)} rangs = 10 cm`
               : patron.densiteCorps ? `Estimé : ${formaterNombre(patron.densiteCorps.mailles)} mailles × ${formaterNombre(patron.densiteCorps.rangs)} rangs = 10 cm` : ""}</span>
@@ -312,6 +314,8 @@ export function EcranSuivi({ id }) {
           <${Lignes} rang=${rang} abreviations=${ab} grand=${true} />
           <div class="puces carte-rang-reperes">
             <span class="etiquette">${rang.repere}</span>
+            ${rang.laineId && patron.laines?.length > 1 &&
+            html`<span class="etiquette etiquette-laine"><${Pastille} couleur=${patron.laines.find((l) => l.id === rang.laineId)?.couleur} taille=${12} />${patron.laines.find((l) => l.id === rang.laineId)?.nom}</span>`}
             <span class="etiquette">${rang.mailles} mailles</span>
             <span class="etiquette">≈ ${formaterNombre(rang.longueurCm, 0)} cm tricotés à la fin du rang</span>
           </div>

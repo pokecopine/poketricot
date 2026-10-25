@@ -44,8 +44,11 @@ export const rangsDuMotif = (point) => point.rangs.length;
  * Renvoie { rangs, repetitions, hauteurCm }.
  */
 export function rangsPourHauteur(point, hauteurCm, densite) {
-  const L = rangsDuMotif(point);
-  const mep = (point.miseEnPlace || []).length;
+  return rangsPourHauteurMotif({ L: rangsDuMotif(point), mep: (point.miseEnPlace || []).length }, hauteurCm, densite);
+}
+
+/** Même calcul pour un motif décrit par sa longueur L et ses rangs de mise en place (colonnes de plusieurs points). */
+export function rangsPourHauteurMotif({ L, mep = 0 }, hauteurCm, densite) {
   const ideal = (hauteurCm * densite.rangs) / 10 - mep;
   const repetitions = Math.max(1, Math.round(ideal / L));
   const rangs = mep + repetitions * L;
@@ -54,7 +57,7 @@ export function rangsPourHauteur(point, hauteurCm, densite) {
 
 /**
  * Cherche un même nombre de mailles qui convient à tous les points d'une liste de blocs
- * ({ point, densite }), en restant à ± tolérance de la largeur visée pour chacun.
+ * ({ point, densite, convient? }), en restant à ± tolérance de la largeur visée pour chacun.
  * Renvoie le nombre trouvé (le plus fidèle à la largeur), ou null.
  */
 export function largeurCommune(blocs, largeurCm, { tolerance = 0.05, mode = "plat", prioritaire = 0 } = {}) {
@@ -65,7 +68,7 @@ export function largeurCommune(blocs, largeurCm, { tolerance = 0.05, mode = "pla
   for (let n = bas; n <= haut; n++) {
     const ecarts = ideaux.map((i) => Math.abs(n / i - 1));
     if (ecarts.some((e) => e > tolerance + 1e-9)) continue;
-    if (!blocs.every((b) => maillesConviennent(b.point, n, mode))) continue;
+    if (!blocs.every((b) => (b.convient ? b.convient(n) : maillesConviennent(b.point, n, mode)))) continue;
     const score = [Math.max(...ecarts), ecarts[prioritaire]];
     if (!meilleur || score[0] < meilleur.score[0] - 1e-12 || (Math.abs(score[0] - meilleur.score[0]) < 1e-12 && score[1] < meilleur.score[1])) {
       meilleur = { n, score };

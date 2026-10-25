@@ -20,7 +20,7 @@ export function EtapeTaille({ id }) {
   const tailles = TAILLES_ECHARPE[t.public];
   const laine = laines.find((l) => l.id === projet.laineId);
   const aig = aiguilles.find((a) => a.id === projet.aiguillesId);
-  const calcul = calculerProjet({ projet, laine, aiguilles: aig, echantillons });
+  const calcul = calculerProjet({ projet, laine, aiguilles: aig, echantillons, laines });
 
   const majTaille = (patch) => modifier((p) => ({ ...p, taille: { ...p.taille, ...patch } }));
   const choisirPublic = (pub) => {

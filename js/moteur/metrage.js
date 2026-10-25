@@ -35,17 +35,42 @@ export function grammesParCm2Jersey(echantillon) {
   return g / (l * h) / (point?.consommation || 1);
 }
 
-/** Surfaces par bloc d'un plan d'écharpe (cm²) : blocs horizontaux sur la largeur du corps, bandes latérales sur toute la longueur. */
+/**
+ * Surfaces par bloc d'un plan d'écharpe (cm²) : blocs horizontaux sur la largeur du corps (colonne par colonne
+ * quand le bloc est coupé), bandes latérales sur toute la longueur.
+ * Chaque surface dit sa laine (laineId : null pour la laine principale) : les bandes latérales et les lisières
+ * prennent la laine du bloc qu'elles bordent, puisque la couleur change sur toute la largeur du rang.
+ */
 export function surfacesDuPlan(plan) {
   const surfaces = [];
-  const bandesCm = plan.bandesLaterales ? 2 * plan.bandesLaterales.largeurCm : 0;
+  const lisieres = (densite) => (2 * plan.lisieres.mailles * 10) / densite.mailles;
   for (const b of plan.blocs) {
+    const laineId = b.laineId || null;
+    if (b.colonnes) {
+      for (const c of b.colonnes) {
+        surfaces.push({ blocId: b.id, colonneId: c.id, nom: b.nom, pointId: c.pointId, laineId, cm2: c.largeurCm * b.hauteurCm });
+      }
+      if (plan.lisieres.mailles) {
+        surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.colonnes[0].pointId, laineId, cm2: lisieres(b.colonnes[0].densite) * b.hauteurCm });
+      }
+      continue;
+    }
     // Largeur du bloc : ses mailles de corps à sa propre densité, plus les lisières.
-    const largeur = (b.maillesCorps * 10) / b.densite.mailles + (2 * plan.lisieres.mailles * 10) / b.densite.mailles;
-    surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.pointId, cm2: largeur * b.hauteurCm });
+    const largeur = (b.maillesCorps * 10) / b.densite.mailles + lisieres(b.densite);
+    surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.pointId, laineId, cm2: largeur * b.hauteurCm });
   }
   if (plan.bandesLaterales) {
-    surfaces.push({ blocId: plan.bandesLaterales.blocId, nom: "bandes latérales", pointId: plan.bandesLaterales.pointId, cm2: bandesCm * plan.longueur.reelleCm });
+    const bandesCm = 2 * plan.bandesLaterales.largeurCm;
+    // Une seule surface par laine (une seule en tout quand l'écharpe est d'une seule laine).
+    const parLaine = new Map();
+    for (const b of plan.blocs) parLaine.set(b.laineId || null, (parLaine.get(b.laineId || null) || 0) + b.hauteurCm);
+    const total = [...parLaine.values()].reduce((t, h) => t + h, 0) || 1;
+    for (const [laineId, h] of parLaine) {
+      surfaces.push({
+        blocId: plan.bandesLaterales.blocId, nom: "bandes latérales", pointId: plan.bandesLaterales.pointId, laineId,
+        cm2: bandesCm * plan.longueur.reelleCm * (h / total),
+      });
+    }
   }
   return surfaces;
 }
@@ -80,7 +105,11 @@ export function metrageNecessaire({ plan, laine, echantillon, densiteJersey }) {
     return null;
   }
   const sansMarge = parBloc.reduce((t, b) => t + b.metres, 0);
-  return { metres: Math.ceil(sansMarge * (1 + MARGE)), metresSansMarge: sansMarge, methode, parBloc };
+  // Laine par laine : la longueur de fil dépend des mailles, pas de la marque (laines de même épaisseur).
+  const totaux = new Map();
+  for (const b of parBloc) totaux.set(b.laineId, (totaux.get(b.laineId) || 0) + b.metres);
+  const parLaine = [...totaux].map(([laineId, m]) => ({ laineId, metresSansMarge: m, metres: Math.ceil(m * (1 + MARGE)) }));
+  return { metres: Math.ceil(sansMarge * (1 + MARGE)), metresSansMarge: sansMarge, methode, parBloc, parLaine };
 }
 
 /**
