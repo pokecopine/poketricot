@@ -6,7 +6,7 @@
 // correspond exactement au relevé de l'inventaire ; les autres ne sont pas codés, faute de pouvoir
 // garantir la recette.
 //
-// NON CODÉS :
+// NON CODÉS dans ce lot (plusieurs ont été codés ensuite dans le lot E, d'après les articles lus le 25/10) :
 //   - Losange et diamant de riz (12, 44 rangs) : article inaccessible ; 44 rangs impossibles à vérifier ailleurs.
 //   - Point zig-zag en côtes (6, 12 rangs) : article inaccessible, pas de source sûre pour ces 12 rangs.
 //   - Point de nasse (pair, 4 rangs) : article inaccessible, aucune autre source trouvée.
