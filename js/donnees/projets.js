@@ -4,7 +4,8 @@
 import { PALETTE, EPAISSEURS, lireNombre, formaterNombre, metrageLaine, aiguillesEtiquette, texteAiguillesEtiquette } from "./reserve.js";
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { echantillonsCorrespondants, densitesDuProjet } from "../moteur/densite.js";
-import { planEcharpe } from "../moteur/plan.js";
+import { planEcharpe, MAILLES_MAX_BANDE_LATERALE } from "../moteur/plan.js";
+import { maillesMinimum } from "../moteur/simulateur.js";
 import { metrageNecessaire, comparerALaLaine } from "../moteur/metrage.js";
 import { densitePoint } from "../moteur/densite.js";
 import { nomCouleur } from "./couleur.js";
@@ -139,6 +140,20 @@ export function conseilAiguille(laine, tailleMm) {
 /** Zone d'avis d'un bloc : les bordures et les bandes latérales sont jugées comme des bordures. */
 export const zoneAvis = (zone) => (zone === "bas" || zone === "haut" || zone === "cotes" ? "bordure" : "corps");
 
+/**
+ * Avis sur un point pour un bloc : celui du catalogue (pièce et zone),
+ * et pour les bandes latérales, les motifs trop larges sont écartés.
+ */
+export function avisPourBloc(point, piece, zone) {
+  if (zone === "cotes") {
+    const min = maillesMinimum(point, "plat");
+    if (min > MAILLES_MAX_BANDE_LATERALE) {
+      return { avis: "deconseille", raison: `Motif trop large pour une bande latérale : il lui faut au moins ${min} mailles de chaque côté.` };
+    }
+  }
+  return avisPour(point, piece, zoneAvis(zone));
+}
+
 /** Avis sur le point principal pour la pièce : « Conseillé pour une écharpe. » ou la raison. */
 export function avisPointPrincipal(point, type) {
   const a = avisPour(point, type, "corps");
@@ -214,9 +229,19 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons }) {
 }
 
 /** Texte de l'accueil pour un projet en conception : « En conception · étape 3 sur 6 ». */
-export function texteEtat(projet) {
+export function texteEtat(projet, suivi = null) {
   if (projet.statut === "conception") return `En conception · étape ${projet.etape} sur 6`;
+  if (projet.statut === "patron") return texteSuivi(projet, suivi);
+  if (projet.statut === "termine") return "Terminé";
   return "";
+}
+
+/** Où aller quand on touche un projet sur l'accueil. */
+export function cheminProjet(projet, suivi = null) {
+  if (projet.statut === "conception") return cheminEtape(projet);
+  const id = encodeURIComponent(projet.id);
+  if (projet.statut === "patron" && suivi?.rangsFaits > 0) return `/projet/${id}/suivi`;
+  return `/projet/${id}/patron`;
 }
 
 /** Projets en cours, le dernier modifié d'abord. */
@@ -312,4 +337,40 @@ export function avecHauteurBloc(projet, blocId, hauteurCm) {
 
 export function avecLargeurBandes(projet, mailles) {
   return { ...projet, blocs: projet.blocs.map((b) => (b.zone === "cotes" ? { ...b, largeurMailles: borne(mailles, LIMITES_BLOCS.largeurMailles) } : b)) };
+}
+
+// ---------------- Aperçu et création du patron ----------------
+
+/**
+ * Peut-on créer le patron ? Renvoie { possible, raison, approximatif, laineManque }.
+ * - Le plan doit être vérifié (motifs justes, simulateur d'accord).
+ * - Il faut au moins l'échantillon de l'étiquette : une estimation d'après la seule épaisseur ne suffit pas.
+ * - Sans échantillon tricoté dans le point du corps, le patron est « approximatif » (décision du 24/10).
+ */
+export function etatCreationPatron(projet, calcul) {
+  if (!calcul) return { possible: false, raison: "L'outil ne peut pas encore calculer : il manque l'échantillon (étape 2)." };
+  if (!calcul.ok) return { possible: false, raison: calcul.erreurs[0]?.message || "Le plan ne tombe pas juste." };
+  const d = calcul.densites?.[projet.pointPrincipal];
+  if (!d) return { possible: false, raison: "Le point du corps n'a pas de densité." };
+  if (d.statut !== "mesuree" && d.origine === "epaisseur") {
+    return {
+      possible: false,
+      raison: "Pour créer le patron, il faut ton échantillon, ou au moins l'échantillon noté sur l'étiquette de ta laine : l'épaisseur seule ne suffit pas.",
+    };
+  }
+  return {
+    possible: true,
+    approximatif: d.statut !== "mesuree",
+    laineManque: calcul.laineSuffit?.statut === "insuffisant" ? Math.ceil(calcul.laineSuffit.manque) : 0,
+  };
+}
+
+/** Texte de l'accueil pour un projet dont le patron est créé : « Rang 42 sur 380 · 11 % ». */
+export function texteSuivi(projet, suivi) {
+  const total = projet.patron?.nbRangs || 0;
+  const fait = suivi?.rangsFaits || 0;
+  if (!total) return "Patron créé";
+  if (fait === 0) return `Patron prêt · ${total} rangs${projet.patron?.approximatif ? " · tailles approximatives" : ""}`;
+  if (fait >= total) return "Tous les rangs sont tricotés";
+  return `Rang ${fait + 1} sur ${total} · ${Math.floor((fait / total) * 100)} %`;
 }

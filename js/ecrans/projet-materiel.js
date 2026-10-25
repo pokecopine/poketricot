@@ -6,6 +6,7 @@ import { Encart, Pastille } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
+import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { etiquettesProprietes } from "../catalogue/fiche.js";
 import { trierLaines, trierAiguilles, titreAiguilles, lireNombre, formaterNombre } from "../donnees/reserve.js";
@@ -20,6 +21,7 @@ export function EtapeMateriel({ id }) {
   const { projet, laines, aiguilles, echantillons, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<${ProjetIntrouvable} />`;
   if (!projet) return null;
+  if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
 
   const listeLaines = trierLaines(laines.filter((l) => !l.archivee || l.id === projet.laineId));
   const listeAiguilles = trierAiguilles(aiguilles.filter((a) => !a.archivee || a.id === projet.aiguillesId));

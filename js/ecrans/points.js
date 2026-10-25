@@ -4,7 +4,8 @@ import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer, retour } from "../routeur.js";
 import { useProjet } from "../composants/etape.js";
-import { zoneAvis, avecPointDuBloc, cheminEtape } from "../donnees/projets.js";
+import { PatronDejaCree } from "./patron.js";
+import { zoneAvis, avecPointDuBloc, cheminEtape, avisPourBloc } from "../donnees/projets.js";
 import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
@@ -54,7 +55,7 @@ function Etiquettes({ point }) {
 
 /** Fiche résumée d'un point (comme dans la maquette « Choix des points »). */
 function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
-  const avis = piece ? avisPour(point, piece, zone) : { avis: "conseille" };
+  const avis = selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
   const choisi = selection && selection.actuel === point.id;
   return html`
     <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined}
@@ -99,7 +100,7 @@ export function CataloguePoints({ selection = null } = {}) {
   useEffect(() => {
     if (!selection) Object.assign(memoire, { piece: pieceLibre, recherche: rechercheLibre, couleur: couleurChoisie });
   }, [pieceLibre, rechercheLibre, couleurChoisie]);
-  const avis = (p) => avisPour(p, piece, zone).avis;
+  const avis = (p) => (selection?.avis ? selection.avis(p) : avisPour(p, piece, zone)).avis;
 
   const nomPiece = PIECES.find((p) => p.id === piece)?.nom.toLowerCase();
   const trouves = rechercherPoints(recherche);
@@ -276,6 +277,7 @@ export function ChoixPointDuBloc({ id, blocId }) {
   const { projet, laines, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<main class="ecran"><${EnTete} titre="Projet introuvable" secours="/" /></main>`;
   if (!projet) return null;
+  if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
   const bloc = projet.blocs.find((b) => b.id === blocId);
   if (!bloc) return html`<main class="ecran"><${EnTete} titre="Bloc introuvable" secours=${cheminEtape(projet)} /></main>`;
   const laine = laines.find((l) => l.id === projet.laineId);
@@ -285,6 +287,7 @@ export function ChoixPointDuBloc({ id, blocId }) {
     zone: zoneAvis(bloc.zone),
     couleur: laine?.couleur,
     actuel: bloc.pointId,
+    avis: (p) => avisPourBloc(p, projet.type, bloc.zone),
     titre: bloc.zone === "corps" ? "Point principal" : `Point : ${nomZone}`,
     aide: AIDES_ZONES[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),

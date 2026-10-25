@@ -48,24 +48,29 @@ export function geometrieEcharpe(projet, plan) {
   return { largeur, longueur, rects };
 }
 
-/** Motifs SVG (un par point utilisé), à l'échelle voulue. */
-function useMotifs(pointIds, couleur, echelle, prefixe) {
+/**
+ * Motifs SVG (un par point utilisé), à l'échelle voulue.
+ * echelle : un nombre, ou { x, y } pour respecter la vraie proportion des mailles.
+ */
+export function useMotifs(pointIds, couleur, echelle, prefixe, face = "endroit") {
   const cle = [...new Set(pointIds)].sort().join(",");
+  const ex = typeof echelle === "number" ? echelle : echelle.x;
+  const ey = typeof echelle === "number" ? echelle : echelle.y;
   return useMemo(() => {
     const motifs = {};
     for (const id of new Set(pointIds)) {
       const point = pointParId(id);
-      const t = point && tuileSVG(point, couleur);
+      const t = point && tuileSVG(point, couleur, { face });
       if (!t) continue;
       motifs[id] = {
         id: `${prefixe}-${id}`,
         url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(t.svg)}`,
-        l: t.largeur * echelle,
-        h: t.hauteur * echelle,
+        l: t.largeur * ex,
+        h: t.hauteur * ey,
       };
     }
     return motifs;
-  }, [cle, couleur, echelle, prefixe]);
+  }, [cle, couleur, ex, ey, prefixe, face]);
 }
 
 /**

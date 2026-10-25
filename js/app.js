@@ -16,6 +16,8 @@ import { EtapeMateriel } from "./ecrans/projet-materiel.js";
 import { EtapeTaille, EtapeBientot } from "./ecrans/projet-taille.js";
 import { ChoixPointDuBloc } from "./ecrans/points.js";
 import { EtapeBuilder } from "./ecrans/projet-builder.js";
+import { EtapeApercu } from "./ecrans/projet-apercu.js";
+import { EcranPatron, EcranSuivi } from "./ecrans/patron.js";
 import { Reglages } from "./ecrans/reglages.js";
 import { CataloguePoints, FichePoint } from "./ecrans/points.js";
 
@@ -30,7 +32,7 @@ function Ecran({ chemin }) {
     }
     return html`<${Reserve} onglet=${deuxieme} />`;
   }
-  if (premier === "reglages") return html`<${Reglages} />`;
+  if (premier === "reglages") return html`<${Reglages} apresProjet=${parametre(chemin, "sauvegarde") === "1"} />`;
   if (premier === "projet") {
     if (deuxieme === "nouveau") return html`<${NouveauProjet} />`;
     const id = deuxieme;
@@ -38,6 +40,9 @@ function Ecran({ chemin }) {
     if (troisieme === "materiel") return html`<${EtapeMateriel} key=${id} id=${id} />`;
     if (troisieme === "taille") return html`<${EtapeTaille} key=${id} id=${id} />`;
     if (troisieme === "builder") return html`<${EtapeBuilder} key=${id} id=${id} />`;
+    if (troisieme === "apercu") return html`<${EtapeApercu} key=${id} id=${id} />`;
+    if (troisieme === "patron") return html`<${EcranPatron} key=${id} id=${id} />`;
+    if (troisieme === "suivi") return html`<${EcranSuivi} key=${id} id=${id} />`;
     if (troisieme === "point") return html`<${ChoixPointDuBloc} key=${id + quatrieme} id=${id} blocId=${quatrieme} />`;
     return html`<${EtapeBientot} key=${id} id=${id} etape=${troisieme} />`;
   }
@@ -51,8 +56,9 @@ function Ecran({ chemin }) {
 // Vrai seulement quand Deborah a touché « Mettre à jour » : c'est le seul cas où l'on recharge.
 let miseAJourDemandee = false;
 
-function BandeauMiseAJour({ enAttente }) {
-  if (!enAttente) return null;
+function BandeauMiseAJour({ enAttente, chemin }) {
+  // Jamais pendant le suivi des rangs : on ne dérange pas le tricot.
+  if (!enAttente || /\/suivi(\?|$)/.test(chemin)) return null;
   const mettreAJour = () => {
     miseAJourDemandee = true;
     enAttente.postMessage({ type: "ACTIVER_NOUVELLE_VERSION" });
@@ -103,7 +109,7 @@ function App({ base, prefsInitiales }) {
     <${ContexteApp.Provider} value=${{ base, prefs, majPrefs, flash }}>
       <${Ecran} chemin=${chemin} />
       <${MessageFlash} message=${message} />
-      <${BandeauMiseAJour} enAttente=${versionEnAttente} />
+      <${BandeauMiseAJour} enAttente=${versionEnAttente} chemin=${chemin} />
     <//>`;
 }
 

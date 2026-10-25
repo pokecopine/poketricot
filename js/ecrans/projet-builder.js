@@ -9,12 +9,13 @@ import { BandeTexture } from "../composants/texture.js";
 import { DessinEcharpe } from "../composants/piece.js";
 import { IconePlus } from "../composants/icones.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
+import { PatronDejaCree } from "./patron.js";
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { etiquettesProprietes } from "../catalogue/fiche.js";
 import { formaterNombre, lireNombre } from "../donnees/reserve.js";
 import { nomAvecArticle } from "../moteur/dimensions.js";
 import {
-  cheminEtape, calculerProjet, zoneAvis, nomBloc, nomCourtBloc, blocsHorizontaux, blocLateral,
+  cheminEtape, calculerProjet, zoneAvis, avisPourBloc, nomBloc, nomCourtBloc, blocsHorizontaux, blocLateral,
   ajouterBloc, supprimerBloc, avecHauteurBloc, avecLargeurBandes, avecBandesLaterales, LIMITES_BLOCS,
 } from "../donnees/projets.js";
 
@@ -41,6 +42,7 @@ export function EtapeBuilder({ id }) {
 
   if (introuvable) return html`<${ProjetIntrouvable} />`;
   if (!projet) return null;
+  if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
 
   const choisir = (blocId) => {
     memoire[id] = blocId;
@@ -169,7 +171,7 @@ function BandeauEstimation({ projet, calcul, aiguilles }) {
 
 function ReglagesBloc({ projet, bloc, plan, calcul, modifier, surSuppression }) {
   const point = pointParId(bloc.pointId);
-  const avis = point ? avisPour(point, projet.type, zoneAvis(bloc.zone)) : null;
+  const avis = point ? avisPourBloc(point, projet.type, bloc.zone) : null;
   const pb = plan?.blocs.find((b) => b.id === bloc.id);
   const adresseChoix = `/projet/${encodeURIComponent(projet.id)}/point/${encodeURIComponent(bloc.id)}`;
   const supprimable = bloc.zone !== "corps";

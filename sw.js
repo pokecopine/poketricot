@@ -2,7 +2,7 @@
 // À chaque publication, changer VERSION (identique à js/version.js : un test le vérifie).
 // Tout nouveau fichier de l'application doit être ajouté à FICHIERS (un test le vérifie aussi).
 
-const VERSION = "0.4.3";
+const VERSION = "0.5.0";
 const CACHE = "createur-patrons-" + VERSION;
 
 const FICHIERS = [
@@ -32,6 +32,7 @@ const FICHIERS = [
   "js/composants/icones.js",
   "js/composants/nuancier.js",
   "js/composants/piece.js",
+  "js/composants/drape.js",
   "js/composants/texture.js",
   "js/catalogue/aides.js",
   "js/catalogue/fiche.js",
@@ -47,6 +48,7 @@ const FICHIERS = [
   "js/moteur/dimensions.js",
   "js/moteur/metrage.js",
   "js/moteur/plan.js",
+  "js/moteur/patron.js",
   "js/moteur/simulateur.js",
   "js/rendu/texture.js",
   "js/donnees/couleur.js",
@@ -62,6 +64,8 @@ const FICHIERS = [
   "js/ecrans/points.js",
   "js/ecrans/projet-materiel.js",
   "js/ecrans/projet-builder.js",
+  "js/ecrans/projet-apercu.js",
+  "js/ecrans/patron.js",
   "js/ecrans/projet-piece.js",
   "js/ecrans/projet-taille.js",
   "js/ecrans/reglages.js",

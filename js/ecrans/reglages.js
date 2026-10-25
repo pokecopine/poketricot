@@ -54,7 +54,7 @@ function estInstallee() {
   return window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone === true;
 }
 
-export function Reglages() {
+export function Reglages({ apresProjet = false } = {}) {
   const { base, prefs, majPrefs, flash } = useApp();
   const [stockage, setStockage] = useState(null);
   const [aImporter, setAImporter] = useState(null); // { sauvegarde, resume }
@@ -108,6 +108,7 @@ export function Reglages() {
     <main class="ecran">
       <${EnTete} titre="Réglages" secours="/" libelleRetour="Retour à l'accueil" />
       <div class="ecran-contenu">
+        ${apresProjet && html`<${Encart}>Ton écharpe est terminée : c'est le bon moment pour faire une sauvegarde de tes données.<//>`}
 
         <section class="carte-bloc" aria-labelledby="titre-sauvegarde">
           <h2 id="titre-sauvegarde">Sauvegarde</h2>

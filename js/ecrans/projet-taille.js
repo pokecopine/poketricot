@@ -4,6 +4,7 @@ import { naviguer } from "../routeur.js";
 import { Encart, Onglets } from "../composants/base.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
+import { PatronDejaCree } from "./patron.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { TAILLES_ECHARPE, LIMITES_ECHARPE, cheminEtape, calculerProjet, etapeParCle } from "../donnees/projets.js";
 
@@ -13,6 +14,7 @@ export function EtapeTaille({ id }) {
   const { projet, laines, aiguilles, echantillons, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<${ProjetIntrouvable} />`;
   if (!projet) return null;
+  if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
 
   const t = projet.taille;
   const tailles = TAILLES_ECHARPE[t.public];

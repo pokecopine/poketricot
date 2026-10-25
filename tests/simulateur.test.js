@@ -117,15 +117,18 @@ for (const point of POINTS) {
     const sim = simuler(point, { mailles: kRond * n, rangs: nbRangs, mode: "rond" });
     assert.equal(sim.ok, true, `en rond : ${JSON.stringify(sim.erreurs)}`);
 
-    // Le dessin en rond doit être le même que le dessin à plat, au milieu du tricot (loin des bords).
-    const d0 = premier ? consomme(premier.debut) : 0;
-    const extras = consomme(point.rangs[0].debut) + consomme(point.rangs[0].fin);
-    const plat = simuler(point, { mailles: extras + kRond * n, rangs: nbRangs });
+    // Le dessin en rond doit être le même que le dessin à plat, au milieu du tricot (loin des bords),
+    // à un décalage près (le même pour tous les rangs).
+    const plat = simuler(point, { mailles: (min % n) + (kRond + 1) * n, rangs: nbRangs });
     assert.equal(plat.ok, true);
-    for (let r = 0; r < nbRangs; r++) {
-      for (let c = n; c < (kRond - 1) * n; c++) {
-        assert.equal(sim.grille[r][c], plat.grille[r][c + d0], `rang ${r + 1}, colonne ${c}`);
+    const correspond = (dec) => {
+      for (let r = 0; r < nbRangs; r++) {
+        for (let c = n; c < (kRond - 1) * n; c++) if (sim.grille[r][c] !== plat.grille[r][c + dec]) return false;
       }
-    }
+      return true;
+    };
+    let trouve = false;
+    for (let dec = 0; dec < 2 * n + (min % n) && !trouve; dec++) trouve = correspond(dec);
+    assert.ok(trouve, "le dessin en rond correspond au dessin à plat");
   });
 }

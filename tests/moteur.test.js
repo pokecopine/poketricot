@@ -2,14 +2,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { POINTS, pointParId } from "../js/catalogue/points.js";
-import { maillesConviennent, largeurMotif, consomme, produit } from "../js/moteur/simulateur.js";
+import { maillesConviennent, largeurMotif, consomme, produit, maillesMinimum } from "../js/moteur/simulateur.js";
 import {
   densitePoint, densitesDuProjet, rapportAppris, densiteJerseyProvisoire, echantillonsCorrespondants,
 } from "../js/moteur/densite.js";
 import {
   maillesPourLargeur, rangsPourHauteur, largeurCommune, gestesDeTransition, nomAvecArticle,
 } from "../js/moteur/dimensions.js";
-import { planEcharpe, verifierPlan, retournerRang } from "../js/moteur/plan.js";
+import { planEcharpe, verifierPlan, retournerRang, MAILLES_MAX_BANDE_LATERALE } from "../js/moteur/plan.js";
 import { metrageNecessaire, comparerALaLaine, grammesParCm2Jersey, filParCm2Jersey } from "../js/moteur/metrage.js";
 
 const proche = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${b}`);
@@ -213,7 +213,9 @@ test("écharpe : chaque point du catalogue au corps, en bordure et en bande lat�
   for (const p of POINTS) {
     verifierStructure(planPour({ bas: "mousse", corps: p.id, cotes: "mousse" }));
     verifierStructure(planPour({ bas: p.id, corps: "riz", cotes: "mousse" }));
-    verifierStructure(planPour({ bas: "mousse", corps: "riz", cotes: p.id, largeurMailles: 5 }));
+    // Une bande latérale reste étroite : les points à grand motif n'y vont pas (le choix des points les écarte).
+    if (maillesMinimum(p) <= MAILLES_MAX_BANDE_LATERALE) verifierStructure(planPour({ bas: "mousse", corps: "riz", cotes: p.id, largeurMailles: 5 }));
+    else assert.equal(planPour({ bas: "mousse", corps: "riz", cotes: p.id, largeurMailles: 5 }).erreurs[0].nomBloc, "bandes latérales");
   }
 });
 

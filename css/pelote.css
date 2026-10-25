@@ -684,3 +684,77 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .choix-carte strong { font-size: 15px; }
 .choix-carte span { font-size: 12px; color: var(--texte-2); }
 .choix-carte[aria-pressed="true"] { border: 2px solid var(--accent); }
+
+/* ---------- Aperçu (étape 5) ---------- */
+.vitrine { position: relative; border-radius: 26px; background: #EAE0D0; overflow: hidden; padding: 4px 0; }
+.vitrine-etiquette { position: absolute; left: 14px; bottom: 14px; padding: 6px 12px; border-radius: 12px; background: rgba(255, 253, 248, 0.92); color: #2B2622; font-size: 13px; font-weight: 700; }
+.ligne-couleur { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.chiffres-cles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.chiffres-cles > div { padding: 10px; border-radius: 14px; background: var(--carte); display: flex; flex-direction: column; min-width: 0; }
+.chiffres-cles strong { font-family: var(--titre); font-size: 20px; font-weight: 600; white-space: nowrap; }
+.chiffres-cles span { font-size: 12px; color: var(--texte-2); }
+.verifs { list-style: none; margin: 0; padding: 12px 14px; border-radius: 18px; background: var(--sauge-fond); display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.verif { display: flex; gap: 8px; align-items: flex-start; }
+.verif svg { stroke: var(--sauge); flex: none; margin-top: 2px; }
+.verif-non { color: var(--brique); }
+.verif-non svg { stroke: var(--brique); }
+.ecran-pied-double { flex-direction: row; }
+.ecran-pied-double > .bouton-secondaire { flex: 1; }
+.ecran-pied-double > .bouton-principal { flex: 2; }
+
+/* ---------- Patron (étape 6) ---------- */
+.entete-fige { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--sauge-texte); font-weight: 700; }
+.entete-fige svg { stroke: var(--sauge-texte); flex: none; }
+.recap-patron { display: flex; gap: 14px; padding: 14px; border-radius: 22px; background: var(--carte); align-items: center; }
+.recap-dessin { flex: none; }
+.recap-dessin svg { margin: 0; }
+.recap-texte { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--texte-2); min-width: 0; }
+.recap-texte strong { font-family: var(--titre); font-size: 18px; font-weight: 600; color: var(--texte); }
+.etapes-patron { list-style: none; margin: 0; padding: 0; border-radius: 22px; background: var(--carte); overflow: hidden; }
+.etapes-patron > li + li { border-top: 1px solid var(--lin); }
+.etapes-patron summary { display: flex; gap: 12px; padding: 14px; cursor: pointer; list-style: none; align-items: flex-start; }
+.etapes-patron summary::-webkit-details-marker { display: none; }
+.etapes-patron summary::after { content: "▾"; margin-left: auto; color: var(--texte-2); transition: transform .15s; }
+.etapes-patron details[open] summary::after { transform: rotate(180deg); }
+.etape-numero { width: 28px; height: 28px; border-radius: 14px; background: var(--lin); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex: none; }
+.etape-texte { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.etape-texte span { font-size: 13px; color: var(--texte-2); }
+.etape-corps { padding: 0 14px 16px 54px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; }
+.etiquette-technique { padding: 5px 12px; min-height: 36px; border-radius: 12px; border: none; background: var(--sauge-fond); color: var(--sauge-texte); font-weight: 700; font-size: 13px; }
+.rangs-bloc { display: flex; flex-direction: column; gap: 10px; }
+.rang-court { padding: 10px 12px; border-radius: 14px; background: var(--fond); display: flex; flex-direction: column; gap: 6px; }
+.rang-court-titre { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.rang-court-titre span { color: var(--texte-2); font-size: 13px; }
+.repete { font-size: 14px; font-weight: 700; padding: 10px 12px; border-radius: 14px; border: 1px dashed var(--bordure-champ); }
+.lignes-rang { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.4; }
+.lignes-rang li { display: flex; flex-direction: column; }
+.lignes-rang .ligne-etiquette { font-size: 12px; font-weight: 700; color: var(--texte-2); }
+.lignes-rang .ligne-lisiere { color: var(--texte-2); }
+.lignes-rang.grand { font-size: 19px; gap: 10px; }
+.lignes-rang.grand .ligne-etiquette { font-size: 13px; }
+.lignes-rang.grand .ligne-lisiere { font-size: 15px; }
+.astuce { display: flex; gap: 10px; padding: 12px; border-radius: 14px; background: var(--sauge-fond); font-size: 14px; line-height: 1.45; }
+.astuce svg { stroke: var(--sauge); flex: none; margin-top: 2px; }
+.ecran-pied-pile > * { width: 100%; }
+
+/* ---------- Suivi des rangs ---------- */
+.suivi-entete { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.suivi-titre { font-size: 20px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.suivi-progression { display: flex; flex-direction: column; gap: 6px; }
+.suivi-plein { background: var(--accent); }
+.rang-fait { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--lin); color: var(--texte-2); font-size: 14px; }
+.rang-fait svg { stroke: var(--sauge); flex: none; }
+.carte-etape-suivi { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 20px; background: var(--carte); border: 1px solid var(--bordure); font-size: 16px; }
+.carte-rang { padding: 20px; border-radius: 24px; background: var(--carte); border: 2px solid var(--accent); display: flex; flex-direction: column; gap: 14px; }
+.carte-rang-titre { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.carte-rang-titre h2 { font-size: 30px; }
+.carte-rang-cote { font-size: 13px; font-weight: 700; color: var(--sauge-texte); }
+.carte-rang-reperes { gap: 6px; }
+.debut-bloc { align-self: flex-start; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 10px; background: var(--accent); color: var(--accent-texte); }
+.rang-suivant { padding: 14px; border-radius: 16px; border: 1px dashed var(--bordure-champ); display: flex; flex-direction: column; gap: 4px; font-size: 15px; color: var(--texte-2); }
+.rang-suivant-titre { font-size: 13px; font-weight: 700; }
+.suivi-pied { border-top: 1px solid var(--bordure); background: var(--fond); }
+.bouton-rang { min-height: 64px; border-radius: 32px; font-size: 19px; }
+.bouton-retour-rang { color: var(--texte-2); font-weight: 600; font-size: 15px; }
+.mini-jauge { display: block; height: 5px; border-radius: 3px; background: var(--lin); margin-top: 4px; overflow: hidden; }
+.mini-jauge span { display: block; height: 100%; background: var(--accent); }

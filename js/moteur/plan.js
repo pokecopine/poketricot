@@ -16,6 +16,9 @@ import {
   gestesDeTransition, explicationTransition, nomAvecArticle,
 } from "./dimensions.js";
 
+/** Au-delà, un motif est trop large pour des bandes latérales (quelques mailles de chaque côté). */
+export const MAILLES_MAX_BANDE_LATERALE = 12;
+
 export const ZONES_HORIZONTALES = ["bas", "corps", "bande", "haut"];
 
 export const NOMS_DES_ZONES = {
