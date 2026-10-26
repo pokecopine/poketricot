@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  tricoterRang, simuler, convertirEnRond, maillesConviennent, maillesLesPlusProches, maillesMinimum, consomme, produit, largeurMotif,
+  tricoterRang, simuler, convertirEnRond, maillesConviennent, maillesLesPlusProches, maillesMinimum, consomme, produit, largeurMotif, comptesVariables,
 } from "../js/moteur/simulateur.js";
 import { POINTS, pointParId } from "../js/catalogue/points.js";
 import { GESTES } from "../js/catalogue/gestes.js";
@@ -93,8 +93,10 @@ for (const point of POINTS) {
   test(`${point.nom} : se tricote juste à plat et en rond`, () => {
     const premier = point.rangs.find((r) => r.cote === "E");
     const n = largeurMotif(point);
-    // Chaque rang garde le nombre de mailles, et son motif tient un nombre entier de fois dans une répétition.
-    for (const r of [...(point.miseEnPlace || []), ...point.rangs]) {
+    // Chaque rang garde le nombre de mailles, et son motif tient un nombre entier de fois dans une répétition
+    // (sauf pour les points qui changent de nombre de mailles en cours de motif : la simulation fait foi).
+    const variable = comptesVariables(point);
+    for (const r of variable ? [] : [...(point.miseEnPlace || []), ...point.rangs]) {
       assert.equal(n % consomme(r.motif), 0, "largeur du motif");
       assert.equal(produit(r.motif), consomme(r.motif), "le motif garde le nombre de mailles");
     }
@@ -116,6 +118,7 @@ for (const point of POINTS) {
     const kRond = 5;
     const sim = simuler(point, { mailles: kRond * n, rangs: nbRangs, mode: "rond" });
     assert.equal(sim.ok, true, `en rond : ${JSON.stringify(sim.erreurs)}`);
+    if (variable) return;
 
     // Le dessin en rond doit être le même que le dessin à plat, au milieu du tricot (loin des bords),
     // à un décalage près (le même pour tous les rangs).

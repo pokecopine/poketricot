@@ -10,7 +10,7 @@
 
 import { pointParId } from "../catalogue/points.js";
 import { geste } from "../catalogue/gestes.js";
-import { consomme, produit, deplier, maillesLesPlusProches, maillesConviennent } from "./simulateur.js";
+import { consomme, produit, deplier, maillesLesPlusProches, maillesConviennent, comptesDesRangs, sortieRang } from "./simulateur.js";
 import {
   maillesPourLargeur, explicationAjustement, rangsPourHauteur, rangsPourHauteurMotif, largeurCommune,
   gestesDeTransition, explicationTransition, nomAvecArticle,
@@ -54,11 +54,14 @@ export function retournerRang(rang) {
 }
 
 /**
- * Prépare un point pour commencer sur un côté donné :
+ * Prépare un point pour commencer sur un côté donné, sur n mailles :
  * les rangs de mise en place sont retournés si besoin, et le motif démarre au premier rang du bon côté.
- * Renvoie { miseEnPlace, phase } ou { erreur }.
+ * Pour un point dont le nombre de mailles change, le motif doit aussi démarrer sur un rang qui prend n mailles ;
+ * s'il n'y en a pas de ce côté, un rang de jersey (endroit ou envers) est ajouté avant (ajoute = true).
+ * Renvoie { miseEnPlace, phase, comptes, ajoute } ou { erreur } ;
+ * comptes : mailles au début de chaque rang du motif (null quand n n'est pas donné).
  */
-export function preparerPoint(point, coteDepart) {
+export function preparerPoint(point, coteDepart, n = null) {
   const L = point.rangs.length;
   for (let i = 0; i < L; i++) {
     if (point.rangs[i].cote === point.rangs[(i + 1) % L].cote) {
@@ -73,8 +76,33 @@ export function preparerPoint(point, coteDepart) {
     miseEnPlace.push(rr);
     cote = autreCote(cote);
   }
-  const phase = point.rangs.findIndex((r) => r.cote === cote);
-  return { miseEnPlace, phase };
+  const comptes = n !== null ? comptesDesRangs({ rangs: point.rangs }, n)?.cycle || null : null;
+  const bonne = (i) => point.rangs[i].cote === cote && (!comptes || comptes[i] === n);
+  let phase = point.rangs.findIndex((r, i) => bonne(i));
+  let ajoute = false;
+  if (phase === -1 && comptes) {
+    miseEnPlace.push({ cote, debut: [], motif: [cote === "E" ? "end" : "env"], fin: [], neutre: true });
+    cote = autreCote(cote);
+    phase = point.rangs.findIndex((r, i) => bonne(i));
+    ajoute = true;
+  }
+  if (phase === -1) return { erreur: `${nomAvecArticle(point)} ne peut pas commencer sur ce rang` };
+  return { miseEnPlace, phase, comptes, ajoute };
+}
+
+/**
+ * Le rang t d'un point préparé (mise en place puis motif en boucle) et le nombre de mailles qu'il prend,
+ * pour un bloc de n mailles (au repos, entre deux motifs).
+ */
+export function rangPrepare(point, prep, t, n) {
+  const { miseEnPlace, phase, comptes } = prep;
+  if (t < miseEnPlace.length) {
+    let c = n;
+    for (let i = 0; i < t; i++) c = sortieRang(miseEnPlace[i], c) ?? c;
+    return { rang: miseEnPlace[t], entree: c };
+  }
+  const i = (phase + t - miseEnPlace.length) % point.rangs.length;
+  return { rang: point.rangs[i], entree: comptes ? comptes[i] : n, indice: i };
 }
 
 const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
@@ -274,23 +302,19 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   let cote = premierCote(infos.get(horizontaux[0].id).point);
   let suiteBande = null;
   if (bande) {
-    const p = preparerPoint(bande, cote);
+    const p = preparerPoint(bande, cote, nBande);
     if (p.erreur) return echec(p.erreur, lateral);
     suiteBande = p;
   }
-  const rangBande = (t) => {
-    const { miseEnPlace, phase } = suiteBande;
-    if (t < miseEnPlace.length) return miseEnPlace[t];
-    return bande.rangs[(phase + t - miseEnPlace.length) % bande.rangs.length];
-  };
+  const rangBande = (t) => rangPrepare(bande, suiteBande, t, nBande);
 
   const rangs = [];
   const segmentsDuRang = (c, corpsSegment) => {
     const t = rangs.length;
     const bandes = (zone) => {
       if (!bande) return [];
-      const r = rangBande(t);
-      return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, nBande) }];
+      const { rang: r, entree } = rangBande(t);
+      return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, entree) }];
     };
     const lisiere = (zone, code) => (nLisiere ? [{ zone, pointId: null, rang: null, lisiere: true, gestes: [code] }] : []);
     // Colonnes : sur un rang endroit, on part du bord droit (colonne 1) ; sur l'envers, de la dernière colonne.
@@ -330,8 +354,8 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     if (info.colonnes) {
       const rep = repartitions.get(b.id);
       const preps = [];
-      for (const c of info.colonnes) {
-        const pc = preparerPoint(c.point, cote);
+      for (const [j, c] of info.colonnes.entries()) {
+        const pc = preparerPoint(c.point, cote, rep[j]);
         if (pc.erreur) return echec(pc.erreur, b);
         preps.push(pc);
       }
@@ -339,10 +363,8 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       const H = hauteurs.get(b.id).rangs;
       for (let t = 0; t < H; t++) {
         const segments = info.colonnes.map((c, j) => {
-          const pc = preps[j];
-          const n = pc.miseEnPlace.length;
-          const r = t < n ? pc.miseEnPlace[t] : c.point.rangs[(pc.phase + t - n) % c.point.rangs.length];
-          return { zone: "corps", colonne: j + 1, colonneId: c.id, pointId: c.pointId, rang: r, gestes: deplier(r, rep[j]) || [] };
+          const { rang: r, entree } = rangPrepare(c.point, preps[j], t, rep[j]);
+          return { zone: "corps", colonne: j + 1, colonneId: c.id, pointId: c.pointId, rang: r, gestes: deplier(r, entree) || [] };
         });
         const enMiseEnPlace = t < mepMax;
         ajouterRang(
@@ -364,18 +386,22 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       });
       continue;
     }
-    const p = preparerPoint(point, cote);
+    const p = preparerPoint(point, cote, maillesCorps);
     if (p.erreur) return echec(p.erreur, b);
-    for (const r of p.miseEnPlace) {
-      ajouterRang({ blocId: b.id, laineId, type: "miseEnPlace", numeroMotif: null, rangsDuMotif: null }, { pointId: b.pointId, rang: r, gestes: deplier(r, maillesCorps) || [] }, hRang);
+    if (p.ajoute) {
+      explications.push(`1 rang ${p.miseEnPlace.at(-1).cote === "E" ? "endroit" : "envers"} avant ${nomAvecArticle(point)} (${NOMS_DES_ZONES[b.zone]}), pour que son motif commence sur le bon côté`);
     }
+    p.miseEnPlace.forEach((r, t) => {
+      const { entree } = rangPrepare(point, p, t, maillesCorps);
+      ajouterRang({ blocId: b.id, laineId, type: "miseEnPlace", numeroMotif: null, rangsDuMotif: null }, { pointId: b.pointId, rang: r, gestes: deplier(r, entree) || [] }, hRang);
+    });
     const L = point.rangs.length;
     const h = hauteurs.get(b.id);
     for (let r = 0; r < h.repetitions * L; r++) {
-      const rang = point.rangs[(p.phase + r) % L];
+      const { rang, entree } = rangPrepare(point, p, p.miseEnPlace.length + r, maillesCorps);
       ajouterRang(
         { blocId: b.id, laineId, type: "motif", numeroMotif: (r % L) + 1, rangsDuMotif: L },
-        { pointId: b.pointId, rang, gestes: deplier(rang, maillesCorps) || [] },
+        { pointId: b.pointId, rang, gestes: deplier(rang, entree) || [] },
         hRang,
       );
     }

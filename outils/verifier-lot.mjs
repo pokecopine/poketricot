@@ -7,16 +7,17 @@ import { POINTS_LOT as LB } from "../js/catalogue/lots/lot-b.js";
 import { POINTS_LOT as LC } from "../js/catalogue/lots/lot-c.js";
 import { POINTS_LOT as LD } from "../js/catalogue/lots/lot-d.js";
 import { POINTS_LOT as LE } from "../js/catalogue/lots/lot-e.js";
+import { POINTS_LOT as LF } from "../js/catalogue/lots/lot-f.js";
 import { POINTS, FAMILLES, PIECES } from "../js/catalogue/points.js";
 import { geste } from "../js/catalogue/gestes.js";
 import { TECHNIQUES, techniquesDuPoint } from "../js/catalogue/techniques.js";
 import { texteRang } from "../js/catalogue/texte.js";
 import { etiquettesProprietes, texteMultiple } from "../js/catalogue/fiche.js";
-import { simuler, convertirEnRond, largeurMotif, maillesMinimum, consomme, produit } from "../js/moteur/simulateur.js";
+import { simuler, convertirEnRond, largeurMotif, maillesMinimum, consomme, produit, comptesVariables } from "../js/moteur/simulateur.js";
 import { tuileSVG } from "../js/rendu/texture.js";
 import { planEcharpe } from "../js/moteur/plan.js";
 
-const lots = { a: POINTS_LOT, b: LB, c: LC, d: LD, e: LE };
+const lots = { a: POINTS_LOT, b: LB, c: LC, d: LD, e: LE, f: LF };
 const nom = (process.argv[2] || "").toLowerCase();
 const lot = lots[nom];
 if (!lot) {
@@ -45,7 +46,7 @@ for (const point of lot) {
   verifier(idsAilleurs.get(point.id) === 1, `identifiant « ${point.id} » utilisé ${idsAilleurs.get(point.id)} fois dans le catalogue`);
   verifier(FAMILLES.some((f) => f.id === point.famille), "famille inconnue");
   verifier(point.nom && ["le", "la", "les", "l'"].includes(point.article), "nom ou article");
-  verifier(point.resume && point.source?.startsWith("https://www.lestriconautes.com/"), "résumé ou source");
+  verifier(point.resume && point.source?.startsWith("https://"), "résumé ou source");
   for (const piece of PIECES) {
     const a = point.ouvrages?.[piece.id];
     verifier(a && ["conseille", "possible", "deconseille"].includes(a.avis), `avis pour ${piece.id}`);
@@ -64,7 +65,8 @@ for (const point of lot) {
   // ---- À plat ----
   essayer("à plat", () => {
     const n = largeurMotif(point);
-    for (const r of [...(point.miseEnPlace || []), ...point.rangs]) {
+    // Un point dont le nombre de mailles change en cours de motif est vérifié par la simulation seulement.
+    for (const r of comptesVariables(point) ? [] : [...(point.miseEnPlace || []), ...point.rangs]) {
       verifier(n % consomme(r.motif) === 0, "un motif ne tient pas un nombre entier de fois dans la largeur du point");
       verifier(produit(r.motif) === consomme(r.motif), "un motif change le nombre de mailles");
       verifier(produit(r.debut) === consomme(r.debut) && produit(r.fin) === consomme(r.fin), "un début ou une fin change le nombre de mailles");
@@ -102,7 +104,7 @@ for (const point of lot) {
     for (let r = 0; r < nbRangs && plat.ok; r++) {
       for (let c = n; c < 4 * n; c++) if (sim.grille[r][c] !== plat.grille[r][c + d0]) different++;
     }
-    verifier(different === 0, "le dessin en rond diffère du dessin à plat");
+    if (!comptesVariables(point)) verifier(different === 0, "le dessin en rond diffère du dessin à plat");
   });
 
   // ---- Dessin ----

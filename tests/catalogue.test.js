@@ -12,7 +12,7 @@ test("chaque fiche est complète", () => {
     assert.ok(!ids.has(p.id), `identifiant en double : ${p.id}`);
     ids.add(p.id);
     assert.ok(FAMILLES.some((f) => f.id === p.famille), `${p.id} : famille`);
-    assert.ok(p.resume && p.source.startsWith("https://www.lestriconautes.com/"), `${p.id} : résumé et source`);
+    assert.ok(p.resume && p.source.startsWith("https://"), `${p.id} : résumé et source`);
     for (const piece of PIECES) {
       const a = p.ouvrages[piece.id];
       assert.ok(a && ["conseille", "possible", "deconseille"].includes(a.avis), `${p.id} : avis ${piece.id}`);

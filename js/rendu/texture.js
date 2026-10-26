@@ -81,22 +81,29 @@ export function grilleMotif(point, { face = "endroit" } = {}) {
   return grille.map((rang) => [...rang].reverse().map(aspectVuDeLEnvers));
 }
 
+/**
+ * Un rang ramené à w mailles pour le dessin : quand le point change de nombre de mailles en cours de motif,
+ * les rangs plus courts (ou plus longs) sont étirés pour garder une grille rectangulaire.
+ */
+const ajuster = (rang, w) => (rang.length === w ? rang : Array.from({ length: w }, (_, i) => rang[Math.floor((i * rang.length) / w)]));
+
 /** Une répétition du motif vue de l'endroit : en rond si le point s'y prête, sinon découpée au milieu d'un tricot à plat. */
 function grilleEndroit(point) {
   const largeur = largeurMotif(point);
   const rond = convertirEnRond(point);
   if (rond.ok) {
     const sim = simuler({ ...point, rond: { mode: "manuel", rangs: rond.rangs } }, { mailles: largeur, rangs: rond.rangs.length, mode: "rond" });
-    if (sim.ok) return sim.grille;
+    if (sim.ok) return sim.grille.map((r) => ajuster(r, largeur));
   }
   // À plat : 3 répétitions, on garde celle du milieu (loin des mailles du début et de la fin).
   const r0 = point.rangs[0];
   const extras = consomme(r0.debut) + consomme(r0.fin);
   const premier = point.rangs.find((r) => r.cote === "E");
   const d0 = premier ? consomme(premier.debut) : 0;
-  const sim = simuler({ ...point, miseEnPlace: [] }, { mailles: extras + 3 * largeur, rangs: point.rangs.length });
+  const total = extras + 3 * largeur;
+  const sim = simuler({ ...point, miseEnPlace: [] }, { mailles: total, rangs: point.rangs.length });
   if (!sim.ok) return null;
-  return sim.grille.map((rang) => rang.slice(d0 + largeur, d0 + 2 * largeur));
+  return sim.grille.map((rang) => ajuster(rang, total).slice(d0 + largeur, d0 + 2 * largeur));
 }
 
 /**

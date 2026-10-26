@@ -22,6 +22,43 @@ export function repetitions(rang, n) {
   return n >= 1 && Number.isInteger(k) && k >= 0 ? k : null;
 }
 
+/** Mailles sur l'aiguille après un rang commencé sur n mailles ; null si ça ne tombe pas juste. */
+export function sortieRang(rang, n) {
+  const k = repetitions(rang, n);
+  if (k === null) return null;
+  return produit(rang.debut) + k * produit(rang.motif) + produit(rang.fin);
+}
+
+/**
+ * Mailles sur l'aiguille au début de chaque rang : la mise en place, puis un tour du motif, en partant de n.
+ * Certains points changent de nombre de mailles au milieu du motif (un rang diminue, un autre augmente).
+ * Renvoie { mep: [...], cycle: [...], debutCycle, fin } ou null si un rang ne tombe pas juste.
+ */
+export function comptesDesRangs(recette, n) {
+  let c = n;
+  const mep = [];
+  for (const r of recette.miseEnPlace || []) {
+    if (repetitions(r, c) === null) return null;
+    mep.push(c);
+    c = sortieRang(r, c);
+  }
+  const debutCycle = c;
+  const cycle = [];
+  for (const r of recette.rangs) {
+    if (repetitions(r, c) === null) return null;
+    cycle.push(c);
+    c = sortieRang(r, c);
+  }
+  return { mep, cycle, debutCycle, fin: c };
+}
+
+/** Le point change-t-il de nombre de mailles au milieu du motif ? */
+export function comptesVariables(point) {
+  return [...(point.miseEnPlace || []), ...point.rangs].some(
+    (r) => produit(r.debut) !== consomme(r.debut) || produit(r.motif) !== consomme(r.motif) || produit(r.fin) !== consomme(r.fin)
+  );
+}
+
 /** Développe un rang en liste complète de gestes pour n mailles. */
 export function deplier(rang, n) {
   const k = repetitions(rang, n);
@@ -170,9 +207,11 @@ export function convertirEnRond(point) {
 export function maillesConviennent(point, n, mode = "plat") {
   const recette = mode === "rond" ? convertirEnRond(point) : { ok: true, rangs: point.rangs, miseEnPlace: point.miseEnPlace };
   if (!recette.ok) return false;
-  const ks = [...(recette.miseEnPlace || []), ...recette.rangs].map((r) => repetitions(r, n));
-  // Chaque rang doit tomber juste, et le motif doit apparaître au moins une fois.
-  return ks.every((k) => k !== null) && recette.rangs.some((r) => repetitions(r, n) >= 1);
+  // Chaque rang doit tomber juste sur les mailles qu'il trouve, le motif doit revenir au nombre de départ,
+  // et apparaître au moins une fois.
+  const c = comptesDesRangs(recette, n);
+  if (!c || c.debutCycle !== n || c.fin !== n) return false;
+  return recette.rangs.some((r, i) => repetitions(r, c.cycle[i]) >= 1);
 }
 
 /** Nombre de mailles le plus proche de `cible` qui convient au point (à égalité, le plus petit). */
@@ -192,8 +231,15 @@ export function maillesMinimum(point, mode = "plat") {
 
 const pgcd = (a, b) => (b === 0 ? a : pgcd(b, a % b));
 
-/** Largeur d'une répétition complète du point (plus petit multiple commun des motifs de ses rangs). */
+/**
+ * Largeur d'une répétition complète du point (plus petit multiple commun des motifs de ses rangs).
+ * Pour un point dont le nombre de mailles change, c'est l'écart entre deux nombres de mailles qui conviennent.
+ */
 export function largeurMotif(point) {
+  if (comptesVariables(point)) {
+    const premier = maillesMinimum(point);
+    if (premier !== null) for (let n = premier + 1; n <= premier + 200; n++) if (maillesConviennent(point, n)) return n - premier;
+  }
   return point.rangs.reduce((l, r) => {
     const m = consomme(r.motif);
     return (l * m) / pgcd(l, m);

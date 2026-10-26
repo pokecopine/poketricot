@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { POINTS, pointParId } from "../js/catalogue/points.js";
-import { maillesConviennent, largeurMotif, consomme, produit, maillesMinimum } from "../js/moteur/simulateur.js";
+import { maillesConviennent, largeurMotif, consomme, produit, maillesMinimum, comptesVariables } from "../js/moteur/simulateur.js";
 import {
   densitePoint, densitesDuProjet, rapportAppris, densiteJerseyProvisoire, echantillonsCorrespondants,
 } from "../js/moteur/densite.js";
@@ -168,8 +168,9 @@ function verifierStructure(r) {
     const rang = plan.rangs[i];
     assert.equal(grille[i].length, rang.mailles, `rang ${rang.numero}`);
     if (i > 0) assert.notEqual(rang.cote, plan.rangs[i - 1].cote);
-    // Les bandes latérales et les lisières ne bougent jamais.
-    for (const s of rang.segments.filter((s) => s.zone !== "corps")) {
+    // Les lisières ne bougent jamais ; les bandes latérales non plus, sauf si leur point change de nombre de mailles.
+    const bandeVariable = plan.bandesLaterales && comptesVariables(pointParId(plan.bandesLaterales.pointId));
+    for (const s of rang.segments.filter((s) => s.zone !== "corps" && !(bandeVariable && s.zone.startsWith("bande")))) {
       const attendu = s.zone.startsWith("bord") ? plan.lisieres.mailles : plan.bandesLaterales.mailles;
       assert.equal(consomme(s.gestes), attendu);
       assert.equal(produit(s.gestes), attendu);
