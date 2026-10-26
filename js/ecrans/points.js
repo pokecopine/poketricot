@@ -109,24 +109,11 @@ function MarquesPoint({ point, classe = "marques-point" }) {
   return html`<div class=${classe}>${bouton(MARQUES.favoris, IconeCoeur)}${bouton(MARQUES.aTester, IconeEprouvette)}</div>`;
 }
 
-// Maquette temporaire : ?carte=A|B|C (à retirer après le choix de Deborah).
-const DISPOSITION = (globalThis.location?.search.match(/carte=([ABC])/) || [])[1] || "A";
-
-/** Dessin du point et sa vignette en échantillon 3D, avant d'ouvrir la fiche. */
+/** Dessin du point et sa vignette en échantillon 3D, côte à côte, avant d'ouvrir la fiche. */
 function VisuelCarte({ point, couleur }) {
-  if (DISPOSITION === "B")
-    return html`<span class="carte-visuel carte-visuel-B">
-      <${BandeTexture} point=${point} couleur=${couleur} hauteur=${112} />
-      <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${112} />
-    </span>`;
-  if (DISPOSITION === "C")
-    return html`<span class="carte-visuel carte-visuel-C">
-      <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${150} />
-      <${BandeTexture} point=${point} couleur=${couleur} hauteur=${44} />
-    </span>`;
-  return html`<span class="carte-visuel carte-visuel-A">
-    <${BandeTexture} point=${point} couleur=${couleur} hauteur=${84} />
-    <${Vignette3D} point=${point} couleur=${couleur} largeur="84px" hauteur=${84} />
+  return html`<span class="carte-visuel">
+    <${BandeTexture} point=${point} couleur=${couleur} hauteur=${112} />
+    <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${112} />
   </span>`;
 }
 
