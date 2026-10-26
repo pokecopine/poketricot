@@ -5,20 +5,55 @@
 //   - structure : chaque point avec ses voisins directs (le tissu ne s'étire presque pas) ;
 //   - cisaillement : les diagonales (le tissu ne se déforme pas en losange) ;
 //   - flexion : les voisins à deux pas, plus souples (le tissu plie, sans se froisser comme du papier).
-// L'écharpe est posée sur une barre ronde (un cylindre le long de x) ; le sol l'arrête si elle descend jusque-là.
+// Le tissu touche des obstacles (une barre, un buste de couture) et ne passe pas à travers lui-même :
+// deux points du tissu qui ne sont pas voisins dans la grille restent à distance (l'épaisseur de l'écharpe).
 //
-// Unités : centimètres et secondes. Repère : x le long de la barre (la largeur de l'écharpe), y vers le haut,
-// z vers celui qui regarde. Dans la grille, j va de 0 à nx − 1 sur la largeur, k de 0 à ny − 1 sur la longueur
+// Unités : centimètres et secondes. Repère : y vers le haut, z vers celui qui regarde.
+// Dans la grille, j va de 0 à nx − 1 sur la largeur, k de 0 à ny − 1 sur la longueur
 // (k = 0 : le bas de l'écharpe, là où on a monté les mailles).
 
 export const GRAVITE = -981;
 
+/**
+ * Le buste de couture (cm) : l'origine est à la base du cou, au milieu.
+ * Les mêmes formes servent au dessin et aux collisions.
+ */
+export const BUSTE = {
+  cou: { type: "cylindreY", cx: 0, cz: -1, rayon: 5.8, y0: -6, y1: 15 },
+  // La base du cou s'évase en pente douce vers les épaules (le trapèze) : l'écharpe s'y pose.
+  nuque: { type: "ellipsoide", c: [0, -2.5, -1.2], r: [10, 5.5, 9] },
+  epaules: { type: "ellipsoide", c: [0, -9, -1.2], r: [20, 9.5, 11.5] },
+  torse: { type: "ellipsoide", c: [0, -31, -1], r: [16.5, 26, 12] },
+};
+
+/**
+ * Silhouette du buste pour le dessin : à chaque hauteur y, une section ovale (demi-largeur rx, demi-profondeur rz,
+ * centre cz) qui réunit en douceur les ovales des formes de collision (union lissée). Renvoie null hors du buste.
+ */
+export function sectionDuBuste(y, lissage = 6) {
+  let sx = 0;
+  let sz = 0;
+  let cz = 0;
+  let poids = 0;
+  for (const e of [BUSTE.nuque, BUSTE.epaules, BUSTE.torse]) {
+    const t = (y - e.c[1]) / e.r[1];
+    if (Math.abs(t) >= 1) continue;
+    const f = Math.sqrt(1 - t * t);
+    sx += (e.r[0] * f) ** lissage;
+    sz += (e.r[2] * f) ** lissage;
+    cz += e.c[2] * f;
+    poids += f;
+  }
+  if (!poids) return null;
+  return { rx: sx ** (1 / lissage), rz: sz ** (1 / lissage), cz: cz / poids };
+}
+
 export class Tissu {
   /**
    * largeur, longueur : taille de l'écharpe (cm) ; pas : écart visé entre deux points (cm).
-   * options : { barre: { rayon }, sol (y du sol), epaisseur (cm), raideurFlexion }
+   * options : { epaisseur (cm), raideurFlexion, autoCollision (distance minimale entre deux couches, cm) }
    */
-  constructor({ largeur, longueur, pas = 2, barre = { rayon: 2.2 }, sol = -400, epaisseur = 0.5, raideurFlexion = 0.12 }) {
+  constructor({ largeur, longueur, pas = 2, epaisseur = 0.5, raideurFlexion = 0.12, autoCollision = 1.4 }) {
     this.largeur = largeur;
     this.longueur = longueur;
     this.nx = Math.max(3, Math.round(largeur / pas) + 1);
@@ -29,10 +64,14 @@ export class Tissu {
     this.pos = new Float32Array(this.n * 3);
     this.prec = new Float32Array(this.n * 3);
     this.tenu = new Int8Array(this.n); // 1 : le point suit le doigt
-    this.barre = barre;
-    this.sol = sol;
+    this.obstacles = [];
+    this.sol = -1e6;
     this.epaisseur = epaisseur;
+    this.distanceCouches = autoCollision;
     this.contact = new Uint8Array(this.n);
+    // Frottement de la laine sur ses appuis (réglé pour qu'une écharpe tienne autour du cou sans glisser) :
+    this.glisse = 0.25; // part du mouvement qu'un point posé sur un appui garde au-delà de l'accroche
+    this.accroche = 2; // en dessous de ce déplacement par pas (cm), un point posé ne glisse pas
 
     const liens = [];
     const ajouter = (a, b, raideur) => liens.push([a, b, raideur]);
@@ -69,19 +108,36 @@ export class Tissu {
     return [i % this.nx, Math.floor(i / this.nx)];
   }
 
+  /** Place chaque rang k : centre C, direction de la largeur W (unitaire), resserrement f de la largeur. */
+  placer(rang) {
+    for (let k = 0; k < this.ny; k++) {
+      const { C, W, f } = rang(k * this.dy, k);
+      for (let j = 0; j < this.nx; j++) {
+        const i = this.indice(j, k);
+        const w = (j * this.dx - this.largeur / 2) * f;
+        // Un tout petit désordre, pour que les plis ne soient pas parfaitement réguliers.
+        const bruit = Math.sin(j * 1.7 + k * 0.37) * 0.15;
+        const p = [C[0] + W[0] * w + bruit * 0.3, C[1] + W[1] * w, C[2] + W[2] * w + bruit];
+        this.pos.set(p, i * 3);
+        this.prec.set(p, i * 3);
+      }
+    }
+  }
+
   /**
-   * Pose l'écharpe à cheval sur la barre : le milieu (décalé de `decalage`, en fraction de la longueur) sur le dessus,
-   * un pan devant, un pan derrière. `fronce` resserre la largeur sur la barre (elle s'étale en descendant) :
-   * c'est ce qui fait naître les plis.
+   * Pose l'écharpe à cheval sur une barre ronde (le long de x, à l'origine) : le milieu (décalé de `decalage`,
+   * en fraction de la longueur) sur le dessus, un pan devant, un pan derrière. `fronce` resserre la largeur
+   * sur la barre (elle s'étale en descendant) : c'est ce qui fait naître les plis.
    */
-  poserSurLaBarre({ decalage = 0.06, fronce = 0.72 } = {}) {
-    const R = this.barre.rayon + this.epaisseur;
+  poserSurLaBarre({ rayon = 2.2, decalage = 0.06, fronce = 0.72 } = {}) {
+    this.obstacles = [{ type: "barre", rayon }];
+    const R = rayon + this.epaisseur;
     const milieu = this.longueur * (0.5 + decalage);
     // Rang posé sur le dessus de la barre : il retient les deux pans (voir attacher()).
     this.kAncre = Math.round(milieu / this.dy);
     const quart = (Math.PI * R) / 2;
-    for (let k = 0; k < this.ny; k++) {
-      const d = k * this.dy - milieu; // > 0 : vers le haut de l'écharpe (pan de derrière)
+    this.placer((v) => {
+      const d = v - milieu; // > 0 : vers le haut de l'écharpe (pan de derrière)
       let y;
       let z;
       if (Math.abs(d) <= quart) {
@@ -94,70 +150,55 @@ export class Tissu {
       }
       // Fronce sur la barre, qui se relâche sur 30 cm.
       const f = fronce + (1 - fronce) * Math.min(1, Math.max(0, -y) / 30);
-      for (let j = 0; j < this.nx; j++) {
-        const i = this.indice(j, k);
-        const x = (j * this.dx - this.largeur / 2) * f;
-        // Un tout petit désordre, pour que les plis ne soient pas parfaitement réguliers.
-        const bruit = Math.sin(j * 1.7 + k * 0.37) * 0.15;
-        this.pos.set([x, y, z + bruit], i * 3);
-        this.prec.set([x, y, z + bruit], i * 3);
-      }
-    }
+      return { C: [0, y, z], W: [1, 0, 0], f };
+    });
   }
 
   /**
-   * Pose l'écharpe en vague au-dessus de la table : elle tombe, et le bord intérieur de chaque courbe,
-   * trop long pour la place qu'il a, se soulève en plis. Pas de barre dans ce cas.
+   * Pose l'écharpe autour du cou d'un buste de couture : le milieu derrière la nuque, la largeur debout
+   * et resserrée autour du cou (comme une écharpe qu'on vient d'enrouler), puis les deux pans passent devant
+   * en se couchant peu à peu et tombent sur la poitrine.
    */
-  poserSurLaTable({ hauteur = 20, amplitude = 0.19, vagues = 1.25 } = {}) {
-    this.barre = null;
-    this.kAncre = undefined;
-    this.sol = 0;
-    // La ligne du milieu de l'écharpe suit une sinusoïde dans le plan de la table (x, z), longueur conservée.
-    const N = this.ny;
-    const A = this.longueur * amplitude;
-    const centre = [];
-    let s = 0;
-    let t = 0;
-    let prec = [0, 0];
-    const longueurCourbe = [];
-    for (let i = 0; i <= 2000; i++) {
-      t = i / 2000;
-      const p = [A * Math.sin(2 * Math.PI * vagues * t), t];
-      if (i > 0) s += Math.hypot(p[0] - prec[0], (p[1] - prec[1]) * this.longueur);
-      longueurCourbe.push([s, p]);
-      prec = p;
-    }
-    const total = s;
-    let idx = 0;
-    for (let k = 0; k < N; k++) {
-      const cible = (k / (N - 1)) * total;
-      while (idx < longueurCourbe.length - 2 && longueurCourbe[idx + 1][0] < cible) idx++;
-      const [x, tt] = longueurCourbe[idx][1];
-      const [x2, t2] = longueurCourbe[Math.min(idx + 1, longueurCourbe.length - 1)][1];
-      const tx = x2 - x;
-      const tz = (t2 - tt) * this.longueur;
-      const l = Math.hypot(tx, tz) || 1;
-      centre.push([x, (tt - 0.5) * this.longueur * 0.92, -tz / l, tx / l]);
-    }
-    // L'écharpe centrée sur la table.
-    const moyenne = centre.reduce((t, c) => t + c[0], 0) / N;
-    for (let k = 0; k < N; k++) {
-      const [cx0, cz, nx, nz] = centre[k];
-      const cx = cx0 - moyenne;
-      for (let j = 0; j < this.nx; j++) {
-        const i = this.indice(j, k);
-        const w = j * this.dx - this.largeur / 2;
-        const bruit = Math.sin(j * 2.1 + k * 0.53) * 0.4;
-        const p = [cx + nx * w, hauteur + bruit + (j % 2) * 0.3, cz + nz * w];
-        this.pos.set(p, i * 3);
-        this.prec.set(p, i * 3);
+  poserAutourDuCou({ decalage = 0.04, fronce = 0.5 } = {}) {
+    const { cou } = BUSTE;
+    this.obstacles = Object.values(BUSTE);
+    const Rw = cou.rayon + this.epaisseur + 0.8; // l'écharpe autour du cou
+    // Assez haut pour que le bas de l'écharpe ne touche pas encore la base du cou : elle s'y pose en tombant.
+    const y0 = BUSTE.nuque.c[1] + BUSTE.nuque.r[1] + this.epaisseur + (this.largeur * fronce) / 2 + 0.5;
+    const milieu = this.longueur * (0.5 + decalage);
+    this.kAncre = Math.round(milieu / this.dy);
+    const arc = (Math.PI / 2) * Rw;
+    const devant = 15; // z des pans devant la poitrine
+    const ecart = 11.5; // x du milieu des pans
+    const fin = [ecart, y0 - 14, devant];
+    const passage = Math.hypot(ecart - Rw, fin[1] - y0, devant - cou.cz);
+    const lisse = (x) => x * x * (3 - 2 * x);
+    this.placer((v) => {
+      const d = v - milieu;
+      const s = d >= 0 ? 1 : -1;
+      const a = Math.abs(d);
+      if (a <= arc) {
+        const t = d / Rw;
+        return { C: [Rw * Math.sin(t), y0, cou.cz - Rw * Math.cos(t)], W: [0, 1, 0], f: fronce };
       }
-    }
+      if (a <= arc + passage) {
+        const t = (a - arc) / passage;
+        const u = lisse(t);
+        const W = [s * u, 1 - u, 0];
+        const l = Math.hypot(W[0], W[1]);
+        return {
+          C: [s * (Rw + (ecart - Rw) * t), y0 + (fin[1] - y0) * t, cou.cz + (devant - cou.cz) * t],
+          W: [W[0] / l, W[1] / l, 0],
+          f: fronce + (0.8 - fronce) * t,
+        };
+      }
+      const descente = a - arc - passage;
+      return { C: [s * ecart, fin[1] - descente, devant], W: [s, 0, 0], f: 0.8 + 0.2 * Math.min(1, descente / 25) };
+    });
   }
 
   /** Un pas de simulation. */
-  pas(dt = 1 / 60, { iterations = 20, amortissement = 0.02 } = {}) {
+  pas(dt = 1 / 60, { iterations = 16, amortissement = 0.02 } = {}) {
     const p = this.pos;
     const q = this.prec;
     const g = GRAVITE * dt * dt;
@@ -170,12 +211,19 @@ export class Tissu {
         p[o + c] += v + (c === 1 ? g : 0);
       }
     }
+    // Un point qui touche un appui à un moment du pas compte comme posé (pour le frottement).
+    this.contact.fill(0);
     for (let it = 0; it < iterations; it++) {
       this.contraindre();
       this.attacher();
+      // Les couches du tissu s'écartent l'une de l'autre (un peu moins souvent : c'est le calcul le plus long).
+      if (it % 4 === 3) this.separerLesCouches();
       this.collisions();
     }
     this.frottement();
+    // Le frottement fige les points posés : on sépare encore les couches qui se touchent, puis on repousse des appuis.
+    this.separerLesCouches();
+    this.collisions();
   }
 
   contraindre() {
@@ -185,18 +233,16 @@ export class Tissu {
     const L = this.liensL;
     const R = this.liensR;
     for (let c = 0; c < A.length; c++) {
+      const ta = this.tenu[A[c]];
+      const tb = this.tenu[B[c]];
+      if (ta && tb) continue;
       const a = A[c] * 3;
       const b = B[c] * 3;
       const dx = p[b] - p[a];
       const dy = p[b + 1] - p[a + 1];
       const dz = p[b + 2] - p[a + 2];
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1e-6;
-      // Les liens de flexion ne résistent qu'à la compression partielle : le tissu peut plier.
-      const ecart = (d - L[c]) / d;
-      const ta = this.tenu[A[c]];
-      const tb = this.tenu[B[c]];
-      if (ta && tb) continue;
-      const k = R[c] * (ta || tb ? 1 : 0.5) * ecart;
+      const k = R[c] * (ta || tb ? 1 : 0.5) * ((d - L[c]) / d);
       if (!ta) {
         p[a] += dx * k;
         p[a + 1] += dy * k;
@@ -211,7 +257,7 @@ export class Tissu {
   }
 
   /**
-   * Attaches longues : un point ne peut pas être plus loin du rang posé sur la barre (même colonne) que la longueur
+   * Attaches longues : un point ne peut pas être plus loin du rang posé sur l'appui (même colonne) que la longueur
    * de tissu qui les sépare. Cela empêche une longue écharpe de s'étirer sous son poids, sans calcul coûteux.
    */
   attacher() {
@@ -238,34 +284,163 @@ export class Tissu {
     }
   }
 
-  collisions() {
+  /**
+   * Le tissu ne passe pas à travers lui-même : deux points qui ne sont pas voisins dans la grille
+   * (plus de 2 pas d'écart) restent à `distanceCouches` l'un de l'autre. Recherche par cases (grille de hachage).
+   */
+  separerLesCouches() {
+    const r = this.distanceCouches;
+    if (!r) return;
     const p = this.pos;
-    const R = this.barre ? this.barre.rayon + this.epaisseur : 0;
-    for (let i = 0; i < this.n; i++) {
-      const o = i * 3;
-      const y = p[o + 1];
-      const z = p[o + 2];
-      const d = Math.hypot(y, z);
-      this.contact[i] = 0;
-      if (this.barre && d < R) {
-        const f = R / (d || 1e-6);
-        p[o + 1] = y * f;
-        p[o + 2] = z * f;
-        this.contact[i] = 1;
-      }
-      if (p[o + 1] < this.sol + this.epaisseur) {
-        p[o + 1] = this.sol + this.epaisseur;
-        this.contact[i] = 1;
+    const n = this.n;
+    // Table de hachage sans allocation : têtes de liste par case, puis « suivant » par point.
+    const TAILLE = 4096;
+    if (!this.tetes) {
+      this.tetes = new Int32Array(TAILLE);
+      this.suivant = new Int32Array(n);
+      this.cellule = new Int32Array(n * 3);
+    }
+    const tetes = this.tetes;
+    const suivant = this.suivant;
+    const cellule = this.cellule;
+    tetes.fill(-1);
+    const cle = (x, y, z) => (((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) >>> 0) & (TAILLE - 1);
+    for (let i = 0; i < n; i++) {
+      const cx = Math.floor(p[i * 3] / r);
+      const cy = Math.floor(p[i * 3 + 1] / r);
+      const cz = Math.floor(p[i * 3 + 2] / r);
+      cellule[i * 3] = cx;
+      cellule[i * 3 + 1] = cy;
+      cellule[i * 3 + 2] = cz;
+      const k = cle(cx, cy, cz);
+      suivant[i] = tetes[k];
+      tetes[k] = i;
+    }
+    const r2 = r * r;
+    const nx = this.nx;
+    const tenu = this.tenu;
+    for (let i = 0; i < n; i++) {
+      const ji = i % nx;
+      const ki = (i - ji) / nx;
+      const cx = cellule[i * 3];
+      const cy = cellule[i * 3 + 1];
+      const cz = cellule[i * 3 + 2];
+      for (let ax = -1; ax <= 1; ax++) {
+        for (let ay = -1; ay <= 1; ay++) {
+          for (let az = -1; az <= 1; az++) {
+            for (let m = tetes[cle(cx + ax, cy + ay, cz + az)]; m !== -1; m = suivant[m]) {
+              if (m <= i) continue;
+              // Deux cases différentes peuvent tomber sur la même entrée de la table : on vérifie la vraie case.
+              if (cellule[m * 3] !== cx + ax || cellule[m * 3 + 1] !== cy + ay || cellule[m * 3 + 2] !== cz + az) continue;
+              const jm = m % nx;
+              const km = (m - jm) / nx;
+              if (Math.abs(jm - ji) <= 2 && Math.abs(km - ki) <= 2) continue;
+              const a = i * 3;
+              const b = m * 3;
+              const dx = p[b] - p[a];
+              const dy = p[b + 1] - p[a + 1];
+              const dz = p[b + 2] - p[a + 2];
+              const d2 = dx * dx + dy * dy + dz * dz;
+              if (d2 >= r2 || d2 < 1e-12) continue;
+              const d = Math.sqrt(d2);
+              const k = ((r - d) / d) * 0.5;
+              const tA = tenu[i];
+              const tB = tenu[m];
+              if (!tA) {
+                const f = k * (tB ? 2 : 1);
+                p[a] -= dx * f;
+                p[a + 1] -= dy * f;
+                p[a + 2] -= dz * f;
+              }
+              if (!tB) {
+                const f = k * (tA ? 2 : 1);
+                p[b] += dx * f;
+                p[b + 1] += dy * f;
+                p[b + 2] += dz * f;
+              }
+            }
+          }
+        }
       }
     }
   }
 
-  /** Sur la barre et au sol, la laine accroche : elle glisse très peu. */
+  /** Écarte un point d'un obstacle ; renvoie vrai s'il le touchait. */
+  repousser(o, p, i) {
+    const e = this.epaisseur;
+    const x = p[i];
+    const y = p[i + 1];
+    const z = p[i + 2];
+    if (o.type === "barre") {
+      const R = o.rayon + e;
+      const d = Math.hypot(y, z);
+      if (d >= R) return false;
+      const f = R / (d || 1e-6);
+      p[i + 1] = y * f;
+      p[i + 2] = z * f;
+      return true;
+    }
+    if (o.type === "cylindreY") {
+      if (y < o.y0 || y > o.y1) return false;
+      const R = o.rayon + e;
+      const dx = x - o.cx;
+      const dz = z - o.cz;
+      const d = Math.hypot(dx, dz);
+      if (d >= R) return false;
+      const f = R / (d || 1e-6);
+      p[i] = o.cx + dx * f;
+      p[i + 2] = o.cz + dz * f;
+      return true;
+    }
+    if (o.type === "ellipsoide") {
+      const qx = (x - o.c[0]) / (o.r[0] + e);
+      const qy = (y - o.c[1]) / (o.r[1] + e);
+      const qz = (z - o.c[2]) / (o.r[2] + e);
+      const l = Math.hypot(qx, qy, qz);
+      if (l >= 1) return false;
+      const f = 1 / (l || 1e-6);
+      p[i] = o.c[0] + qx * f * (o.r[0] + e);
+      p[i + 1] = o.c[1] + qy * f * (o.r[1] + e);
+      p[i + 2] = o.c[2] + qz * f * (o.r[2] + e);
+      return true;
+    }
+    return false;
+  }
+
+  collisions() {
+    const p = this.pos;
+    for (let i = 0; i < this.n; i++) {
+      const o = i * 3;
+      let touche = 0;
+      for (const ob of this.obstacles) if (this.repousser(ob, p, o)) touche = 1;
+      if (p[o + 1] < this.sol + this.epaisseur) {
+        p[o + 1] = this.sol + this.epaisseur;
+        touche = 1;
+      }
+      if (touche) this.contact[i] = 1;
+    }
+  }
+
+  /**
+   * Sur les appuis, la laine accroche (frottement statique) : un point qui touche un appui ne fait qu'une petite
+   * partie du chemin qu'il voudrait faire. Sans cela, l'écharpe glisserait autour du cou comme une corde sur une poulie.
+   */
   frottement() {
+    const p = this.pos;
+    const q = this.prec;
     for (let i = 0; i < this.n; i++) {
       if (!this.contact[i] || this.tenu[i]) continue;
       const o = i * 3;
-      for (let c = 0; c < 3; c++) this.prec[o + c] += (this.pos[o + c] - this.prec[o + c]) * 0.85;
+      // Frottement de Coulomb simplifié : un petit glissement est annulé, un grand est seulement freiné.
+      const dx = p[o] - q[o];
+      const dy = p[o + 1] - q[o + 1];
+      const dz = p[o + 2] - q[o + 2];
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const garde = d <= this.accroche ? 0 : ((d - this.accroche) / d) * this.glisse;
+      p[o] = q[o] + dx * garde;
+      p[o + 1] = q[o + 1] + dy * garde;
+      p[o + 2] = q[o + 2] + dz * garde;
+      for (const ob of this.obstacles) this.repousser(ob, p, o);
     }
   }
 

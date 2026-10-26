@@ -1,4 +1,4 @@
-// L'écharpe finie en 3D, drapée sur une barre en bois, avec une physique de tissu légère.
+// L'écharpe finie en 3D, sur une barre en bois ou autour du cou d'un buste de couturière, avec une physique de tissu légère.
 // Chaque bloc (bordure, corps, bande, colonne, bandes latérales) est habillé des textures cuites de son point
 // (cuisson depuis le tricot 3D), à l'échelle de l'échantillon, dans la couleur de sa laine.
 // On tourne autour d'un doigt, on zoome en pinçant ; on attrape l'écharpe du doigt pour la faire bouger.
@@ -8,7 +8,7 @@ import { html } from "../html.js";
 import { pointParId } from "../catalogue/points.js";
 import { geometrieEcharpe, couleurDeLaine } from "./piece.js";
 import { nuancesLaine } from "../donnees/couleur.js";
-import { Tissu } from "../rendu/tissu.js";
+import { Tissu, BUSTE, sectionDuBuste } from "../rendu/tissu.js";
 import { cuire, liberer } from "../rendu/cuisson.js";
 
 let chargement = null;
@@ -56,7 +56,7 @@ function grilleDuRect(THREE, rect, largeur, tuile) {
  * entree : { projet, plan, couleur, laines, densites, face, hauteur }
  * densites : { [pointId]: { mailles, rangs } } pour 10 cm (celles du calcul du projet).
  */
-/** pose : "barre" (drapée sur une barre en bois) ou "table" (posée en vague, avec ses plis). */
+/** pose : "barre" (drapée sur une barre en bois) ou "cou" (autour du cou d'un buste de couturière). */
 export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, face = "endroit", pose = "barre", hauteur = 460 }) {
   const boite = useRef(null);
   const commandes = useRef(null);
@@ -85,16 +85,19 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         boite.current.appendChild(renderer.domElement);
         renderer.domElement.setAttribute("role", "img");
-        renderer.domElement.setAttribute("aria-label", "L'écharpe finie en 3D, drapée sur une barre en bois. Glisse un doigt pour tourner autour, attrape l'écharpe pour la faire bouger.");
+        renderer.domElement.setAttribute(
+          "aria-label",
+          `L'écharpe finie en 3D, ${pose === "cou" ? "autour du cou d'un buste de couturière" : "drapée sur une barre en bois"}. Glisse un doigt pour tourner autour, pince pour zoomer, attrape l'écharpe pour la faire bouger.`
+        );
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color("#EAE0D0");
         const camera = new THREE.PerspectiveCamera(34, largeurPx / hauteur, 1, 2000);
 
         // ---- Le tissu ----
-        const surTable = pose === "table";
-        const tissu = new Tissu({ largeur: geo.largeur, longueur: geo.longueur, pas: 2, sol: -geo.longueur * 0.62 - 12 });
-        if (surTable) tissu.poserSurLaTable();
+        const auCou = pose === "cou";
+        const tissu = new Tissu({ largeur: geo.largeur, longueur: geo.longueur, pas: 2 });
+        if (auCou) tissu.poserAutourDuCou();
         else tissu.poserSurLaBarre();
 
         // ---- Matières : une par point, laine et face ----
@@ -157,37 +160,86 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         // ---- La barre en bois, le sol, la lumière ----
         const bois = new THREE.MeshStandardMaterial({ color: "#A8794F", roughness: 0.55 });
         const boisFonce = new THREE.MeshStandardMaterial({ color: "#8E6440", roughness: 0.6 });
-        const longueurBarre = geo.largeur * 2.6 + 20;
-        const rayonBarre = 2.2;
-        const barre = new THREE.Mesh(new THREE.CylinderGeometry(rayonBarre, rayonBarre, longueurBarre, 32), bois);
-        const boule = new THREE.SphereGeometry(rayonBarre * 1.5, 24, 16);
-        if (!surTable) {
-          barre.rotation.z = Math.PI / 2;
-          barre.castShadow = barre.receiveShadow = true;
-          scene.add(barre);
-          for (const s of [-1, 1]) {
+        const aJeter = [bois, boisFonce];
+        const ajouter = (geometrie, materiau, reglages = {}) => {
+          const m = new THREE.Mesh(geometrie, materiau);
+          m.castShadow = m.receiveShadow = true;
+          Object.assign(m.position, reglages.position || {});
+          if (reglages.echelle) m.scale.set(...reglages.echelle);
+          if (reglages.rotation) Object.assign(m.rotation, reglages.rotation);
+          scene.add(m);
+          aJeter.push(geometrie);
+          return m;
+        };
+        if (auCou) {
+          // Buste de couturière : toile de lin écrue, pied en bois. Un peu plus petit que les formes de collision,
+          // pour que l'écharpe (qui a une épaisseur) le touche sans s'y enfoncer.
+          const toile = new THREE.MeshStandardMaterial({ color: "#E6D9C3", roughness: 0.95 });
+          aJeter.push(toile);
+          // Le buste d'une seule pièce : des sections ovales empilées, de la base du cou au bas du torse.
+          const haut = BUSTE.nuque.c[1] + BUSTE.nuque.r[1] - 0.05;
+          const bas = BUSTE.torse.c[1] - BUSTE.torse.r[1] * 0.85;
+          const etages = 70;
+          const tours = 48;
+          const sommets = [];
+          for (let a = 0; a <= etages; a++) {
+            const y = haut + ((bas - haut) * a) / etages;
+            const s = sectionDuBuste(y) || { rx: 0.1, rz: 0.1, cz: -1 };
+            for (let b = 0; b <= tours; b++) {
+              const t = (2 * Math.PI * b) / tours;
+              sommets.push(Math.sin(t) * (s.rx - 0.3), y, s.cz + Math.cos(t) * (s.rz - 0.3));
+            }
+          }
+          const faces = [];
+          for (let a = 0; a < etages; a++) {
+            for (let b = 0; b < tours; b++) {
+              const i = a * (tours + 1) + b;
+              faces.push(i, i + tours + 1, i + 1, i + 1, i + tours + 1, i + tours + 2);
+            }
+          }
+          const corps = new THREE.BufferGeometry();
+          corps.setAttribute("position", new THREE.Float32BufferAttribute(sommets, 3));
+          corps.setIndex(faces);
+          corps.computeVertexNormals();
+          ajouter(corps, toile);
+          // Le dessous, fermé.
+          const dessous = sectionDuBuste(bas) || { rx: 10, rz: 8, cz: -1 };
+          ajouter(new THREE.CircleGeometry(1, 48), toile, {
+            position: { x: 0, y: bas, z: dessous.cz }, echelle: [dessous.rx - 0.3, dessous.rz - 0.3, 1], rotation: { x: Math.PI / 2 },
+          });
+          // Le dessus des épaules, fermé autour du cou.
+          const dessus = sectionDuBuste(haut) || { rx: 6, rz: 6, cz: -1 };
+          ajouter(new THREE.CircleGeometry(1, 48), toile, {
+            position: { x: 0, y: haut, z: dessus.cz }, echelle: [dessus.rx, dessus.rz, 1], rotation: { x: -Math.PI / 2 },
+          });
+          const { cou } = BUSTE;
+          ajouter(new THREE.CylinderGeometry(cou.rayon - 0.2, cou.rayon - 0.2, cou.y1 - cou.y0, 40), toile, {
+            position: { x: cou.cx, y: (cou.y0 + cou.y1) / 2, z: cou.cz },
+          });
+          // Le bouchon en bois sur le cou, et le pied.
+          ajouter(new THREE.CylinderGeometry(cou.rayon * 0.75, cou.rayon - 0.2, 2.2, 40), bois, {
+            position: { x: cou.cx, y: cou.y1 + 1.1, z: cou.cz },
+          });
+          const basTorse = BUSTE.torse.c[1] - BUSTE.torse.r[1];
+          ajouter(new THREE.CylinderGeometry(1.4, 1.4, 60, 20), boisFonce, { position: { x: 0, y: basTorse - 28, z: BUSTE.torse.c[2] } });
+        } else {
+          const longueurBarre = geo.largeur * 2.6 + 20;
+          const rayonBarre = tissu.obstacles[0].rayon;
+          ajouter(new THREE.CylinderGeometry(rayonBarre, rayonBarre, longueurBarre, 32), bois, { rotation: { z: Math.PI / 2 } });
+          const boule = new THREE.SphereGeometry(rayonBarre * 1.5, 24, 16);
+          aJeter.push(boule);
+          for (const sx of [-1, 1]) {
             const b = new THREE.Mesh(boule, boisFonce);
-            b.position.x = (s * longueurBarre) / 2;
+            b.position.x = (sx * longueurBarre) / 2;
             scene.add(b);
           }
         }
-        // Le sol (sous la barre, il ne reçoit que l'ombre) ou la table en bois clair.
-        const sol = new THREE.Mesh(
-          new THREE.PlaneGeometry(4000, 4000),
-          surTable ? new THREE.MeshStandardMaterial({ color: "#D9C3A5", roughness: 0.85 }) : new THREE.ShadowMaterial({ opacity: 0.12 })
-        );
-        sol.rotation.x = -Math.PI / 2;
-        sol.position.y = tissu.sol;
-        sol.receiveShadow = true;
-        // Sous la barre, le sol est loin : on ne le montre pas (sa ligne d'horizon coupait l'image).
-        if (surTable) scene.add(sol);
 
         scene.add(new THREE.HemisphereLight("#FFF7EC", "#8C7A66", 0.85));
         const soleil = new THREE.DirectionalLight("#FFF1DE", 2.6);
         soleil.position.set(-60, 90, 110);
         soleil.castShadow = true;
         soleil.shadow.mapSize.set(2048, 2048);
-        if (surTable) soleil.position.set(-50, 140, 60);
         const portee = geo.longueur * 0.45 + 20;
         Object.assign(soleil.shadow.camera, { left: -portee, right: portee, top: portee, bottom: -portee * 1.2, near: 10, far: 500 });
         soleil.shadow.bias = -0.0005;
@@ -197,19 +249,21 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         scene.add(contre);
 
         // ---- Caméra et commandes ----
-        const centre = surTable ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(0, -geo.longueur * 0.24, 0);
+        const centre = auCou ? new THREE.Vector3(0, -geo.longueur * 0.2, 0) : new THREE.Vector3(0, -geo.longueur * 0.24, 0);
         const controles = new OrbitControls(camera, renderer.domElement);
         controles.enableDamping = true;
         controles.dampingFactor = 0.12;
         controles.enablePan = false;
         controles.target.copy(centre);
         controles.minDistance = geo.longueur * 0.25;
+        // On ne passe ni au-dessus ni en dessous : on tourne autour, comme dans une vitrine.
+        controles.minPolarAngle = Math.PI * 0.18;
+        controles.maxPolarAngle = Math.PI * 0.68;
         controles.maxDistance = geo.longueur * 2.2;
         const viser = (f) => {
           const d = geo.longueur * 1.05;
           const s = f === "envers" ? -1 : 1;
-          // Sur la table, on regarde d'en haut, de biais ; l'envers : on passe sous la table… donc de l'autre côté.
-          if (surTable) camera.position.set(d * 0.3, s * d * 0.95, d * 0.7);
+          if (auCou) camera.position.set(s * d * 0.22, centre.y + d * 0.08, s * d * 0.97);
           else camera.position.set(s * d * 0.35, centre.y + d * 0.12, s * d * 0.92);
           controles.update();
         };
@@ -222,40 +276,65 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         const point3d = new THREE.Vector3();
         let tenu = -1;
         let repos = 0;
+        // Doigts posés sur l'image : avec deux doigts, on zoome (on n'attrape jamais l'écharpe).
+        const doigts = new Map();
+        let premierDoigt = null; // l'appui qui a attrapé l'écharpe (pour le rendre aux commandes de zoom)
         const versSouris = (e) => {
           const r = renderer.domElement.getBoundingClientRect();
           souris.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
           rayon.setFromCamera(souris, camera);
         };
-        const surAppui = (e) => {
-          if (e.pointerType === "touch" && !e.isPrimary) return;
-          versSouris(e);
-          const touche = rayon.intersectObjects(groupe.children, false)[0];
-          if (!touche) return;
-          tenu = tissu.plusProche(touche.point.toArray());
-          plan3d.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), touche.point);
-          controles.enabled = false;
-          renderer.domElement.setPointerCapture?.(e.pointerId);
-          repos = 0;
-        };
-        const surGlisse = (e) => {
-          if (tenu < 0) return;
-          versSouris(e);
-          if (rayon.ray.intersectPlane(plan3d, point3d)) tissu.tenir(tenu, point3d.toArray());
-          repos = 0;
-        };
-        const surLache = () => {
-          if (tenu < 0) return;
+        const relacher = () => {
           tenu = -1;
           tissu.lacher();
           controles.enabled = true;
           repos = 0;
         };
+        const surAppui = (e) => {
+          if (e.__rejoue) return; // appui renvoyé aux commandes (voir plus bas)
+          doigts.set(e.pointerId, e);
+          if (doigts.size > 1) {
+            // Deuxième doigt : on relâche l'écharpe et on rend le premier doigt aux commandes, pour qu'elles zooment.
+            if (tenu >= 0 && premierDoigt) {
+              relacher();
+              const copie = new PointerEvent("pointerdown", {
+                pointerId: premierDoigt.pointerId, pointerType: premierDoigt.pointerType, isPrimary: true,
+                clientX: premierDoigt.clientX, clientY: premierDoigt.clientY, bubbles: true, cancelable: true,
+              });
+              copie.__rejoue = true;
+              toile.dispatchEvent(copie);
+            }
+            premierDoigt = null;
+            return;
+          }
+          versSouris(e);
+          const touche = rayon.intersectObjects(groupe.children, false)[0];
+          if (!touche) return;
+          // Un seul doigt sur l'écharpe : on l'attrape, les commandes ne voient pas cet appui.
+          e.stopImmediatePropagation();
+          tenu = tissu.plusProche(touche.point.toArray());
+          premierDoigt = e;
+          plan3d.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), touche.point);
+          controles.enabled = false;
+          repos = 0;
+        };
+        const surGlisse = (e) => {
+          if (doigts.has(e.pointerId)) doigts.set(e.pointerId, e);
+          if (tenu < 0 || doigts.size > 1) return;
+          versSouris(e);
+          if (rayon.ray.intersectPlane(plan3d, point3d)) tissu.tenir(tenu, point3d.toArray());
+          repos = 0;
+        };
+        const surLache = (e) => {
+          doigts.delete(e.pointerId);
+          if (premierDoigt && e.pointerId === premierDoigt.pointerId) premierDoigt = null;
+          if (tenu >= 0 && doigts.size === 0) relacher();
+        };
         const toile = renderer.domElement;
         toile.addEventListener("pointerdown", surAppui, { capture: true });
         toile.addEventListener("pointermove", surGlisse);
-        toile.addEventListener("pointerup", surLache);
-        toile.addEventListener("pointercancel", surLache);
+        window.addEventListener("pointerup", surLache);
+        window.addEventListener("pointercancel", surLache);
 
         // ---- Boucle : la physique ne tourne que tant que l'écharpe bouge ----
         let enCours = true;
@@ -276,12 +355,24 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
           }
           requestAnimationFrame(boucle);
         };
-        // Sur la barre, l'écharpe se pose avant d'être montrée ; sur la table, on la voit tomber.
-        for (let s = 0; s < (surTable ? 10 : 120); s++) tissu.pas(1 / 60);
-        majMaillage();
-        requestAnimationFrame(boucle);
+        // L'écharpe se pose avant d'être montrée : par petites tranches, pour ne pas figer le téléphone.
+        let poses = 0;
+        const POSE = auCou ? 180 : 120;
+        const installer = () => {
+          if (!enCours) return;
+          const debut = performance.now();
+          while (poses < POSE && performance.now() - debut < 14) {
+            tissu.pas(1 / 60);
+            poses++;
+          }
+          if (poses < POSE) return requestAnimationFrame(installer);
+          majMaillage();
+          renderer.render(scene, camera);
+          setEtat("pret");
+          requestAnimationFrame(boucle);
+        };
+        requestAnimationFrame(installer);
         commandes.current = { viser: (f) => { viser(f); aDessiner = true; } };
-        setEtat("pret");
 
         const surTaille = () => {
           const l = boite.current?.clientWidth;
@@ -298,17 +389,12 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
           window.removeEventListener("resize", surTaille);
           toile.removeEventListener("pointerdown", surAppui, { capture: true });
           toile.removeEventListener("pointermove", surGlisse);
-          toile.removeEventListener("pointerup", surLache);
-          toile.removeEventListener("pointercancel", surLache);
+          window.removeEventListener("pointerup", surLache);
+          window.removeEventListener("pointercancel", surLache);
           controles.dispose();
           morceaux.forEach((m) => m.geometrie.dispose());
           for (const m of materiaux.values()) m.dispose();
-          barre.geometry.dispose();
-          sol.material.dispose();
-          boule.dispose();
-          bois.dispose();
-          boisFonce.dispose();
-          sol.geometry.dispose();
+          aJeter.forEach((x) => x.dispose());
           liberer(renderer);
           renderer.dispose();
           renderer.forceContextLoss?.();
