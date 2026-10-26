@@ -109,3 +109,50 @@ test("tissu : un point tenu suit le doigt, puis se relâche", () => {
   t.pas(1 / 60);
   assert.equal(t.tenu[i], 0);
 });
+
+test("tissu : accrochée à la barre, l'écharpe tirée vers le bas ne tombe pas", () => {
+  const t = new Tissu({ largeur: 20, longueur: 160, pas: 2.5 });
+  t.poserSurLaBarre();
+  for (let s = 0; s < 300; s++) t.pas(1 / 60);
+  const n = t.epinglerAncre(4);
+  assert.ok(n >= t.nx * 3);
+  const avant = Float32Array.from(t.pos);
+  // On tire fort le bas du pan de devant, loin vers le bas et vers l'avant, puis on lâche.
+  const i = t.plusProche([0, -90, 3]);
+  assert.equal(t.epingle[i], 0);
+  for (let s = 0; s < 90; s++) {
+    t.tenir(i, [0, -150 - s, 40]);
+    t.pas(1 / 60);
+  }
+  t.lacher();
+  for (let s = 0; s < 300; s++) t.pas(1 / 60);
+  for (let m = 0; m < t.n; m++) {
+    if (!t.epingle[m]) continue;
+    assert.equal(t.tenu[m], 1);
+    assert.deepEqual([...t.pos.slice(m * 3, m * 3 + 3)], [...avant.slice(m * 3, m * 3 + 3)]);
+  }
+  // Les deux pans pendent toujours de part et d'autre de la barre.
+  const haut = t.indice(5, t.ny - 1) * 3;
+  assert.ok(t.pos[haut + 1] < -40 && t.pos[haut + 2] < 0, "le pan de derrière est passé devant");
+  // Un point accroché ne se laisse pas attraper.
+  t.tenir(t.indice(5, t.kAncre), [0, 50, 0]);
+  assert.ok(t.pos[t.indice(5, t.kAncre) * 3 + 1] < 10);
+});
+
+test("tissu : accrochée à la nuque, l'écharpe tirée ne glisse pas du cou", () => {
+  const t = new Tissu({ largeur: 20, longueur: 160, pas: 2.5 });
+  t.poserAutourDuCou();
+  for (let s = 0; s < 300; s++) t.pas(1 / 60);
+  t.epinglerAncre(6);
+  const ancre = t.indice(5, t.kAncre) * 3;
+  const y0 = t.pos[ancre + 1];
+  const i = t.plusProche([11.5, -40, 15]);
+  for (let s = 0; s < 90; s++) {
+    t.tenir(i, [30, -120, 60]);
+    t.pas(1 / 60);
+  }
+  t.lacher();
+  for (let s = 0; s < 200; s++) t.pas(1 / 60);
+  assert.equal(t.pos[ancre + 1], y0);
+  assert.ok(Math.abs(t.pos[ancre] - BUSTE.cou.cx) < BUSTE.cou.rayon + 3, "la nuque a quitté le cou");
+});

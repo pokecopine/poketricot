@@ -1,13 +1,15 @@
 // « Cuisson » des textures d'un point : on tricote en 3D une répétition du motif (avec une maille de voisinage
 // tout autour, pour que la texture se raccorde sans couture), puis on la photographie de face :
 //   - une carte des normales (le relief de chaque maille, pour la lumière) ;
-//   - une carte « ombre et jours » : rouge = creux et bosses (ombre de contact), vert = présence du fil
+//   - une carte « ombre et jours » : rouge = ombre de contact (le fil caché par ses voisins, et la profondeur),
+//     vert = présence du fil
 //     (les jours entre les mailles deviennent transparents).
 // Ces textures habillent ensuite une écharpe entière, à l'échelle de l'échantillon, sans dessiner chaque fil.
 // La couleur de la laine n'entre pas dans la cuisson : la même cuisson sert pour toutes les laines.
 
 import { grilleMotif } from "./texture.js";
 import { cheminDuFil, MODELE } from "./fil3d.js";
+import { occlusionDesSommets } from "./occlusion.js";
 
 /** Grille d'une répétition entourée d'une maille et d'un rang de voisinage (le motif continue). */
 export function grilleAvecVoisinage(motif) {
@@ -25,11 +27,14 @@ export function tailleMotif(point) {
 }
 
 const SOMMET = `
+attribute float ao;
 varying vec3 vNormale;
 varying vec3 vPos;
+varying float vAo;
 void main() {
   vNormale = normalize(normalMatrix * normal);
   vPos = position;
+  vAo = ao;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 
@@ -43,11 +48,13 @@ void main() {
 
 const OMBRE = `
 varying vec3 vPos;
+varying float vAo;
 uniform float sens;
 uniform float profondeur;
 void main() {
   float h = clamp((vPos.z * sens + profondeur) / (2.0 * profondeur), 0.0, 1.0);
-  gl_FragColor = vec4(0.38 + 0.62 * h, 1.0, 0.0, 1.0);
+  // Ombre de contact du fil (occlusion), adoucie par la profondeur : ce qui est au fond est un peu plus sombre.
+  gl_FragColor = vec4(vAo * (0.6 + 0.4 * h), 1.0, 0.0, 1.0);
 }`;
 
 const caches = new WeakMap();
@@ -70,6 +77,9 @@ export function cuire(THREE, renderer, point, face = "endroit") {
   const { points } = cheminDuFil(grilleAvecVoisinage(motif));
   const courbe = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
   const geometrie = new THREE.TubeGeometry(courbe, points.length * 2, MODELE.rayon, 10, false);
+  // Ombre de contact de chaque sommet, calculée sur le fil (vue de l'endroit ou de l'envers, le calcul est le même).
+  const ao = occlusionDesSommets(geometrie.attributes.position.array, geometrie.attributes.normal.array, points, MODELE.rayon, { force: 0.7, plancher: 0.15 });
+  geometrie.setAttribute("ao", new THREE.BufferAttribute(ao, 1));
 
   const largeurU = W;
   const hauteurU = H * MODELE.pas;

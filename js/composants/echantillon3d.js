@@ -8,6 +8,7 @@ import { grilleMotif } from "../rendu/texture.js";
 import { grilleEchantillon, cheminDuFil, rendu3dFidele, MODELE } from "../rendu/fil3d.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 import { occlusionDesSommets } from "../rendu/occlusion.js";
+import { lineaire, couleursDuFil, environnement, libererEnvironnement } from "../rendu/lumiere.js";
 import { comptesVariables } from "../moteur/simulateur.js";
 
 /** Prépare la scène (pure, sans dessin) : chemins des brins et taille de l'échantillon. */
@@ -31,9 +32,11 @@ export function preparerEchantillon(point, taille = {}) {
 /** Chargé une seule fois. */
 let chargement = null;
 export const chargerThree = () =>
-  (chargement ||= Promise.all([import("../../vendor/three/three.module.min.js"), import("../../vendor/three/OrbitControls.js")]).then(
-    ([THREE, { OrbitControls }]) => ({ THREE, OrbitControls })
-  ));
+  (chargement ||= Promise.all([
+    import("../../vendor/three/three.module.min.js"),
+    import("../../vendor/three/OrbitControls.js"),
+    import("../../vendor/three/RoomEnvironment.js"),
+  ]).then(([THREE, { OrbitControls }, { RoomEnvironment }]) => ({ THREE, OrbitControls, RoomEnvironment })));
 
 /** Texture de la table : une toile de lin claire, fils fins réguliers. */
 function textureTable(THREE) {
@@ -67,17 +70,22 @@ export function cadrer(camera, prep, face, table, recul = 1.9) {
 
 /**
  * La scène d'un échantillon (lumières, toile de lin, fil), partagée par la fiche et les vignettes du catalogue.
- * Le relief vient de trois choses : une lumière principale rasante, des ombres portées nettes,
- * et les ombres de contact du fil (occlusion), calculées une fois par sommet.
+ * Le relief et les nuances viennent de quatre choses : une lumière principale rasante avec des ombres nettes,
+ * une lumière d'environnement (éclairage indirect, reflets doux), les ombres de contact du fil (occlusion)
+ * et les interréflexions (les creux prennent la couleur de la laine) ; plus une légère nuance le long du fil.
+ * outils : { THREE, RoomEnvironment } ; renderer : le moteur de rendu (pour la lumière d'environnement).
  */
-export function monterScene(THREE, prep, couleur, { ombres = 2048 } = {}) {
+export function monterScene({ THREE, RoomEnvironment }, renderer, prep, couleur, { ombres = 2048 } = {}) {
   const s = new THREE.Scene();
   s.background = new THREE.Color("#EDE4D6");
-
-  // Peu de lumière d'ambiance (sinon les creux se remplissent et le tricot paraît plat).
-  s.add(new THREE.HemisphereLight("#FFF7EC", "#6E5D4C", 0.42));
+  // Éclairage indirect : une pièce claire tout autour (le fil reçoit de la lumière de toutes les directions).
+  if (RoomEnvironment) {
+    s.environment = environnement(THREE, RoomEnvironment, renderer);
+    s.environmentIntensity = 0.22;
+  }
+  s.add(new THREE.HemisphereLight("#FFF7EC", "#6E5D4C", 0.12));
   // Lumière de fenêtre, rasante, venant d'en haut à gauche.
-  const soleil = new THREE.DirectionalLight("#FFF1DE", 3.4);
+  const soleil = new THREE.DirectionalLight("#FFF1DE", 3.2);
   soleil.position.set(-19, 17, 12);
   soleil.castShadow = true;
   soleil.shadow.mapSize.set(ombres, ombres);
@@ -87,42 +95,34 @@ export function monterScene(THREE, prep, couleur, { ombres = 2048 } = {}) {
   soleil.shadow.normalBias = 0.02;
   soleil.shadow.radius = 2.5;
   s.add(soleil);
-  // Un léger rebond de lumière en face, pour ne pas boucher les ombres.
-  const rebond = new THREE.DirectionalLight("#FFE9D2", 0.35);
-  rebond.position.set(18, -8, 14);
-  s.add(rebond);
-  const contre = new THREE.DirectionalLight("#FFFFFF", 0.5);
+  const contre = new THREE.DirectionalLight("#FFFFFF", 0.4);
   contre.position.set(12, -6, -20);
   s.add(contre);
 
   // La table, sous l'échantillon (on la voit à l'endroit ; elle passe derrière quand on regarde l'envers).
-  const table = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ map: textureTable(THREE), roughness: 1 }));
+  const table = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ map: textureTable(THREE), color: "#FFF6E8", roughness: 1, envMapIntensity: 0.5 }));
   table.position.z = -MODELE.D - MODELE.rayon * 1.6;
   table.receiveShadow = true;
   s.add(table);
 
-  // Le fil : un tube lisse et rond, assombri dans les creux.
+  // Le fil : un tube lisse et rond ; ses sommets portent l'ombre de contact, teintée par les rebonds, et ses nuances.
   const n = nuancesLaine(couleur);
   const base = new THREE.Color(n.maille);
+  const teinteLaine = lineaire(n.maille);
   const geometries = [];
   const materiaux = [];
+  const TOURS = 12;
   prep.brins.forEach((brin) => {
     const courbe = new THREE.CatmullRomCurve3(brin.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
-    const g = new THREE.TubeGeometry(courbe, brin.length * 2, MODELE.rayon, 12, false);
-    const ao = occlusionDesSommets(g.attributes.position.array, g.attributes.normal.array, brin, MODELE.rayon);
-    const teintes = new Float32Array(ao.length * 3);
-    // Les creux tirent un peu vers le brun chaud (comme la laine dans l'ombre), pas vers le gris.
-    for (let i = 0; i < ao.length; i++) {
-      const a = ao[i];
-      teintes[i * 3] = a;
-      teintes[i * 3 + 1] = a * (0.94 + 0.06 * a);
-      teintes[i * 3 + 2] = a * (0.88 + 0.12 * a);
-    }
+    const segments = brin.length * 2;
+    const g = new THREE.TubeGeometry(courbe, segments, MODELE.rayon, TOURS, false);
+    const ao = occlusionDesSommets(g.attributes.position.array, g.attributes.normal.array, brin, MODELE.rayon, { force: 0.7, plancher: 0.15 });
+    const teintes = couleursDuFil(ao, teinteLaine, { tours: TOURS + 1, segmentsParMaille: MODELE.points * 2 });
     g.setAttribute("color", new THREE.BufferAttribute(teintes, 3));
-    // Matière « tissu » mate, avec un léger voile de lumière (sheen), comme une laine douce.
+    // Matière « tissu » mate, avec un léger voile de lumière (sheen) qui suit la lumière d'environnement.
     const m = new THREE.MeshPhysicalMaterial({
-      color: base, vertexColors: true, roughness: 0.78, metalness: 0,
-      sheen: 0.5, sheenRoughness: 0.55, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.3),
+      color: base, vertexColors: true, roughness: 0.74, metalness: 0,
+      sheen: 0.55, sheenRoughness: 0.5, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.35),
     });
     const mesh = new THREE.Mesh(g, m);
     mesh.castShadow = true;
@@ -158,7 +158,8 @@ export function Echantillon3D({ point, couleur, face = "endroit", hauteur = 320 
     let nettoyer = () => {};
     setEtat("chargement");
     chargerThree()
-      .then(({ THREE, OrbitControls }) => {
+      .then((outils) => {
+        const { THREE, OrbitControls } = outils;
         if (annule || !boite.current) return;
         const prep = preparerEchantillon(point);
         if (!prep) return setEtat("impossible");
@@ -182,7 +183,7 @@ export function Echantillon3D({ point, couleur, face = "endroit", hauteur = 320 
         renderer.domElement.setAttribute("role", "img");
         renderer.domElement.setAttribute("aria-label", `Échantillon en 3D : ${point.nom}, ${prep.mailles} mailles sur ${prep.rangs} rangs`);
 
-        const { scene: s, table, liberer } = monterScene(THREE, prep, couleur);
+        const { scene: s, table, liberer } = monterScene(outils, renderer, prep, couleur);
         const camera = new THREE.PerspectiveCamera(32, largeurPx / hauteur, 0.1, 400);
 
         const controles = new OrbitControls(camera, renderer.domElement);
@@ -227,6 +228,7 @@ export function Echantillon3D({ point, couleur, face = "endroit", hauteur = 320 
           window.removeEventListener("resize", surTaille);
           controles.dispose();
           liberer();
+          libererEnvironnement(renderer);
           renderer.dispose();
           renderer.forceContextLoss?.();
           renderer.domElement.remove();

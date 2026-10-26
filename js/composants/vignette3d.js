@@ -34,11 +34,12 @@ function obtenirMoteur(THREE) {
 
 /** Photographie un point (appelé par la file, un à la fois). */
 async function photographier(point, couleur) {
-  const { THREE } = await chargerThree();
+  const outils = await chargerThree();
+  const { THREE } = outils;
   const prep = preparerEchantillon(point, TAILLE_ECHANTILLON);
   if (!prep) return null;
   const { renderer, camera } = obtenirMoteur(THREE);
-  const { scene, table, liberer } = monterScene(THREE, prep, couleur, { ombres: 1024 });
+  const { scene, table, liberer } = monterScene(outils, renderer, prep, couleur, { ombres: 1024 });
   // Cadré serré : la vignette montre la texture, pas les bords de l'échantillon.
   cadrer(camera, prep, "endroit", table, 1.25);
   renderer.render(scene, camera);

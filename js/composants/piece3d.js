@@ -10,12 +10,8 @@ import { geometrieEcharpe, couleurDeLaine } from "./piece.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 import { Tissu, BUSTE, sectionDuBuste } from "../rendu/tissu.js";
 import { cuire, liberer } from "../rendu/cuisson.js";
-
-let chargement = null;
-const chargerThree = () =>
-  (chargement ||= Promise.all([import("../../vendor/three/three.module.min.js"), import("../../vendor/three/OrbitControls.js")]).then(
-    ([THREE, { OrbitControls }]) => ({ THREE, OrbitControls })
-  ));
+import { lineaire, REBOND, environnement, libererEnvironnement } from "../rendu/lumiere.js";
+import { chargerThree } from "./echantillon3d.js";
 
 /** Une grille de triangles pour un rectangle du tissu (cm), qui suivra la simulation. */
 function grilleDuRect(THREE, rect, largeur, tuile) {
@@ -67,7 +63,8 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
     let nettoyer = () => {};
     setEtat("chargement");
     chargerThree()
-      .then(({ THREE, OrbitControls }) => {
+      .then((outils) => {
+        const { THREE, OrbitControls } = outils;
         if (annule || !boite.current) return;
         const geo = geometrieEcharpe(projet, plan);
         const largeurPx = boite.current.clientWidth || 340;
@@ -109,14 +106,27 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
           const t = point && cuire(THREE, renderer, point, cote);
           const base = new THREE.Color(nuancesLaine(teinte).maille);
           const m = new THREE.MeshPhysicalMaterial({
-            color: base, roughness: 0.8, metalness: 0,
-            sheen: 0.6, sheenRoughness: 0.5, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.35),
+            color: base, roughness: 0.78, metalness: 0,
+            sheen: 0.55, sheenRoughness: 0.5, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.35),
             side: cote === "envers" ? THREE.BackSide : THREE.FrontSide,
             alphaTest: 0.5,
           });
           if (t) {
+            // Relief (normales cuites), ombre de contact (canal rouge) et jours (canal vert).
             Object.assign(m, { normalMap: t.normales, aoMap: t.ombre, aoMapIntensity: 1, alphaMap: t.ombre });
-            m.normalScale.set(1, 1);
+            m.normalScale.set(1.3, 1.3);
+            // L'ombre de contact assombrit aussi la lumière directe, et les creux prennent la couleur de la laine
+            // (interréflexions) : même calcul que l'échantillon (teinteDuCreux).
+            const lin = lineaire(nuancesLaine(teinte).maille);
+            const max = Math.max(...lin, 1e-3);
+            m.onBeforeCompile = (shader) => {
+              shader.uniforms.teinteRebond = { value: new THREE.Vector3(...lin.map((c) => (c / max) * REBOND)) };
+              shader.fragmentShader = "uniform vec3 teinteRebond;\n" + shader.fragmentShader.replace(
+                "#include <color_fragment>",
+                "#include <color_fragment>\n#ifdef USE_AOMAP\n  float creux = texture2D( aoMap, vAoMapUv ).r;\n  diffuseColor.rgb *= creux + ( 1.0 - creux ) * teinteRebond;\n#endif"
+              );
+            };
+            m.customProgramCacheKey = () => "piece3d-creux";
           }
           materiaux.set(cle, m);
           return m;
@@ -235,7 +245,10 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
           }
         }
 
-        scene.add(new THREE.HemisphereLight("#FFF7EC", "#8C7A66", 0.85));
+        // Éclairage indirect : une pièce claire tout autour (reflets doux, ombres qui ne sont jamais noires).
+        scene.environment = environnement(THREE, outils.RoomEnvironment, renderer);
+        scene.environmentIntensity = 0.3;
+        scene.add(new THREE.HemisphereLight("#FFF7EC", "#8C7A66", 0.3));
         const soleil = new THREE.DirectionalLight("#FFF1DE", 2.6);
         soleil.position.set(-60, 90, 110);
         soleil.castShadow = true;
@@ -366,6 +379,9 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
             poses++;
           }
           if (poses < POSE) return requestAnimationFrame(installer);
+          // Une fois posée, l'écharpe est accrochée à son appui (milieu sur la barre, nuque au cou) :
+          // on peut tirer les pans, elle ne tombe plus.
+          tissu.epinglerAncre(auCou ? 6 : 4);
           majMaillage();
           renderer.render(scene, camera);
           setEtat("pret");
@@ -396,6 +412,7 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
           for (const m of materiaux.values()) m.dispose();
           aJeter.forEach((x) => x.dispose());
           liberer(renderer);
+          libererEnvironnement(renderer);
           renderer.dispose();
           renderer.forceContextLoss?.();
           toile.remove();

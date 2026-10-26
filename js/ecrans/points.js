@@ -186,16 +186,14 @@ export function CataloguePoints({ selection = null } = {}) {
     familles = [{ id: "resultats", titre: "Résultats", points: trouves, ouverte: true }];
   } else {
     const adaptes = (p) => !piece || avis(p) !== "deconseille";
-    // Catalogue en consultation : tout est fermé, on ouvre la famille qu'on veut.
-    // Choix d'un point pour un bloc : la famille du point actuel est ouverte.
-    const familleOuverte = selection ? pointParId(selection.actuel)?.famille || FAMILLES[0].id : null;
+    // Tout est fermé au départ (catalogue comme choix d'un point pour un projet) : on ouvre la famille qu'on veut.
     familles = FAMILLES.map((f) => ({
       id: f.id,
       titre: f.nom,
       points: POINTS.filter((p) => p.famille === f.id && adaptes(p))
         // Les points conseillés pour la pièce (et la zone) en premier.
         .sort((a, b) => (piece ? (avis(a) === "conseille" ? 0 : 1) - (avis(b) === "conseille" ? 0 : 1) : 0)),
-      ouverte: f.id === familleOuverte,
+      ouverte: false,
     }));
     // Mes points favoris et ceux à tester, en tête : ils restent aussi dans leur famille d'origine.
     const conseillesDabord = (liste) =>
@@ -204,7 +202,7 @@ export function CataloguePoints({ selection = null } = {}) {
       { m: MARQUES.favoris, icone: IconeCoeur({ plein: true, taille: 18 }) },
       { m: MARQUES.aTester, icone: IconeEprouvette({ plein: true, taille: 18 }) },
     ].map(({ m, icone }) => ({
-      id: m.cle, titre: m.titre, icone, ouverte: !!selection, classe: "famille-" + m.cle,
+      id: m.cle, titre: m.titre, icone, ouverte: false, classe: "famille-" + m.cle,
       points: conseillesDabord(pointsMarques(prefs, m.cle).map(pointParId)),
     }));
     familles = [...marques, ...familles];

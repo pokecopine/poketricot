@@ -63,7 +63,8 @@ export class Tissu {
     this.n = this.nx * this.ny;
     this.pos = new Float32Array(this.n * 3);
     this.prec = new Float32Array(this.n * 3);
-    this.tenu = new Int8Array(this.n); // 1 : le point suit le doigt
+    this.tenu = new Int8Array(this.n); // 1 : le point ne bouge pas tout seul (il suit le doigt, ou il est épinglé)
+    this.epingle = new Int8Array(this.n); // 1 : le point est accroché à son appui (milieu sur la barre, nuque au cou)
     this.obstacles = [];
     this.sol = -1e6;
     this.epaisseur = epaisseur;
@@ -454,11 +455,33 @@ export class Tissu {
     return e / this.n;
   }
 
-  /** Le point le plus proche d'une position. */
+  /**
+   * Accroche l'écharpe à son appui, là où elle repose : les rangs à moins de `demiLargeur` cm du rang posé
+   * (le milieu sur la barre, la partie derrière la nuque au cou) ne bougent plus. On l'appelle une fois
+   * l'écharpe posée ; quand on la tire, elle ne peut plus tomber de son appui.
+   */
+  epinglerAncre(demiLargeur) {
+    if (this.kAncre === undefined) return 0;
+    const r = Math.max(0, Math.round(demiLargeur / this.dy));
+    let n = 0;
+    for (let k = Math.max(0, this.kAncre - r); k <= Math.min(this.ny - 1, this.kAncre + r); k++) {
+      for (let j = 0; j < this.nx; j++) {
+        const i = this.indice(j, k);
+        this.epingle[i] = 1;
+        this.tenu[i] = 1;
+        this.prec.set(this.pos.subarray(i * 3, i * 3 + 3), i * 3);
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** Le point le plus proche d'une position (jamais un point accroché : il ne se laisse pas attraper). */
   plusProche([x, y, z]) {
     let meilleur = -1;
     let dmin = Infinity;
     for (let i = 0; i < this.n; i++) {
+      if (this.epingle[i]) continue;
       const o = i * 3;
       const d = (this.pos[o] - x) ** 2 + (this.pos[o + 1] - y) ** 2 + (this.pos[o + 2] - z) ** 2;
       if (d < dmin) {
@@ -471,13 +494,14 @@ export class Tissu {
 
   /** Le doigt tient le point i et l'amène en `cible` ; lacher() le rend libre. */
   tenir(i, cible) {
+    if (i < 0 || this.epingle[i]) return;
     this.tenu[i] = 1;
     this.pos.set(cible, i * 3);
     this.prec.set(cible, i * 3);
   }
 
   lacher() {
-    this.tenu.fill(0);
+    this.tenu.set(this.epingle);
   }
 
   /**

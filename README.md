@@ -11,7 +11,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Étape | Contenu | État |
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
-| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil lisse, tournable, ombres de contact), écran de consultation (dessin et vignette 3D sur chaque carte, recherche par nom et par critères), favoris et points à tester | ✅ 98 points (0.10.0) (6 lots, dont les 7 points de De Rerum Natura) |
+| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil lisse, tournable, ombres de contact, éclairage indirect et nuances), écran de consultation (dessin et vignette 3D sur chaque carte, recherche par nom et par critères), favoris et points à tester | ✅ 98 points (0.11.0) (6 lots, dont les 7 points de De Rerum Natura) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu en 3D (sur une barre ou autour du cou, physique de tissu), patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.9.1) ; reste l'essai 📱 |
 | E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |
@@ -25,7 +25,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 
 ## Pour le développement
 
-- Aucune compilation : HTML, CSS et JavaScript en modules, avec [Preact](https://preactjs.com/) et [htm](https://github.com/developit/htm) copiés dans `vendor/`, et [Three.js](https://threejs.org/) dans `vendor/three/` (chargé seulement pour les vues 3D).
+- Aucune compilation : HTML, CSS et JavaScript en modules, avec [Preact](https://preactjs.com/) et [htm](https://github.com/developit/htm) copiés dans `vendor/`, et [Three.js](https://threejs.org/) dans `vendor/three/` avec ses commandes de caméra et sa pièce d'éclairage `RoomEnvironment` (chargé seulement pour les vues 3D).
 - Lancer en local : `npm run serve`, puis ouvrir http://localhost:8080.
 - Tests : `npm install` puis `npm test`.
 - Chaque envoi sur `main` lance les tests ; s'ils passent, GitHub Pages publie le site (voir `.github/workflows/publier.yml`).
@@ -45,7 +45,7 @@ js/donnees/           base de données, réserve, sauvegarde, couleurs
 js/catalogue/         gestes, points (première fournée + lots/), critères de recherche, techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
                       plan de l'écharpe et sa vérification, métrage, générateur du patron et suivi
-js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), cuisson des textures, simulation de tissu
+js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu
 tests/                tests automatiques
 ```
 
