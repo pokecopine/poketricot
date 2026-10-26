@@ -6,6 +6,7 @@ import { naviguer } from "../routeur.js";
 import { Encart, Onglets, Fenetre, Pastille } from "../composants/base.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { EcharpeDrapee } from "../composants/drape.js";
+import { Piece3D } from "../composants/piece3d.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
@@ -29,6 +30,8 @@ export function EtapeApercu({ id }) {
   const { base, flash } = useApp();
   const { projet, laines, aiguilles, echantillons, introuvable, modifier } = useProjet(id);
   const [face, setFace] = useState("endroit");
+  const [vue, setVue] = useState("3d");
+  const [pose, setPose] = useState("barre");
   const [confirmer, setConfirmer] = useState(false);
   const [enCours, setEnCours] = useState(false);
   const laine = projet && laines.find((l) => l.id === projet.laineId);
@@ -78,14 +81,21 @@ export function EtapeApercu({ id }) {
     <main class="ecran">
       <${EnTeteEtape} titre="Ton écharpe, terminée" numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
-        <div class="vitrine">
+        ${plan &&
+        html`<${Onglets} libelle="Vue de l'écharpe" valeur=${vue} surChoix=${setVue}
+          choix=${[{ valeur: "3d", libelle: "En 3D" }, { valeur: "dessin", libelle: "Dessin" }]} />`}
+        ${plan && vue === "3d"
+          ? html`<${Piece3D} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose=${pose} />
+            <${Onglets} libelle="Où poser l'écharpe" valeur=${pose} surChoix=${setPose}
+              choix=${[{ valeur: "barre", libelle: "Sur une barre" }, { valeur: "table", libelle: "Sur la table" }]} />`
+          : html`<div class="vitrine">
           <${EcharpeDrapee} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densite=${dCorps} face=${face}
             pointLoupe=${projet.pointPrincipal}
             libelle=${`Illustration de l'écharpe terminée, drapée sur une barre en bois : ${projet.blocs.filter((b) => b.zone !== "cotes").map((b) => `${b.zone === "corps" ? "corps" : b.zone === "bande" ? "bande" : "bordure"} en ${b.colonnes?.length >= 2 ? `colonnes (${b.colonnes.map((c) => minuscule(pointParId(c.pointId)?.nom || "")).join(", ")})` : minuscule(pointParId(b.pointId)?.nom || "")}${b.laineId && b.laineId !== projet.laineId ? ` dans la laine « ${laines.find((l) => l.id === b.laineId)?.nom || ""} »` : ""}`).join(", ")}. La loupe grossit le corps trois fois.`} />
           <span class="vitrine-etiquette">
             ${plan ? `${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm` : `${projet.taille.largeurCm} × ${projet.taille.longueurCm} cm`}${corps ? ` · ${minuscule(corps.nom)}` : ""}
           </span>
-        </div>
+        </div>`}
 
         ${corps && !corps.proprietes.reversible &&
         html`<${Onglets} libelle="Côté de l'écharpe" valeur=${face} surChoix=${setFace}
