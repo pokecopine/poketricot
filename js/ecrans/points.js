@@ -1,5 +1,5 @@
 // Catalogue de points : liste par familles (écran 6, en consultation) et fiche détaillée d'un point.
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer, retour } from "../routeur.js";
@@ -10,6 +10,7 @@ import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
 import { Echantillon3D } from "../composants/echantillon3d.js";
+import { Vignette3D } from "../composants/vignette3d.js";
 import { IconeChevron, IconeCoeur, IconeEprouvette } from "../composants/icones.js";
 import { MARQUES, pointsMarques, estMarque, basculerMarque } from "../donnees/marques.js";
 import { POINTS, FAMILLES, PIECES, pointParId, rechercherPoints, avisPour } from "../catalogue/points.js";
@@ -17,11 +18,12 @@ import { etiquettesProprietes, texteConsommation, texteDensite, texteMultiple, t
 import { texteRang, texteCote } from "../catalogue/texte.js";
 import { TECHNIQUES, techniquesDuPoint } from "../catalogue/techniques.js";
 import { convertirEnRond } from "../moteur/simulateur.js";
+import { CRITERES, filtrerParCriteres } from "../catalogue/criteres.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 
 // Choix gardés pendant la visite (liste → fiche → retour).
-const memoire = { piece: null, couleur: null, recherche: "" };
+const memoire = { piece: null, couleur: null, recherche: "", criteres: [] };
 
 /** Couleurs proposées : celles des laines de la réserve, sinon terracotta. */
 function useCouleurs() {
@@ -33,19 +35,43 @@ function useCouleurs() {
   return laines;
 }
 
+/** Menu déroulant des couleurs : la pastille de la laine choisie reste visible, et chaque choix a la sienne. */
 function ChoixCouleur({ laines, couleur, surChoix }) {
+  const [ouvert, setOuvert] = useState(false);
+  const boite = useRef(null);
+  useEffect(() => {
+    if (!ouvert) return;
+    const dehors = (e) => !boite.current?.contains(e.target) && setOuvert(false);
+    const echap = (e) => e.key === "Escape" && setOuvert(false);
+    document.addEventListener("pointerdown", dehors);
+    document.addEventListener("keydown", echap);
+    return () => {
+      document.removeEventListener("pointerdown", dehors);
+      document.removeEventListener("keydown", echap);
+    };
+  }, [ouvert]);
   if (laines.length === 0) {
     return html`<p class="note">Les textures sont dessinées en terracotta ; ajoute des laines à ta réserve pour les voir dans tes couleurs.</p>`;
   }
+  const actuelle = laines.find((l) => l.couleur === couleur) || laines[0];
+  const pastille = (c) => html`<span class="pastille-couleur" style=${`background:${c}`} aria-hidden="true"></span>`;
   return html`
-    <div class="puces" role="group" aria-label="Voir les textures dans la couleur de…">
-      ${laines.map(
-        (l) => html`<button type="button" class="puce" aria-pressed=${String(l.couleur === couleur)}
-          style="display:flex;align-items:center;gap:8px" onClick=${() => surChoix(l.couleur)}>
-          <span style=${`width:18px;height:18px;border-radius:9px;background:${l.couleur};box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)`} aria-hidden="true"></span>
-          ${l.nom}
-        </button>`
-      )}
+    <div class="choix-couleur" ref=${boite}>
+      <button type="button" class="choix-couleur-bouton" aria-haspopup="listbox" aria-expanded=${String(ouvert)}
+        aria-label=${`Couleur des textures : ${actuelle.nom}`} onClick=${() => setOuvert(!ouvert)}>
+        ${pastille(actuelle.couleur)}<span class="choix-couleur-nom">${actuelle.nom}</span>
+        <span class="choix-couleur-fleche" aria-hidden="true">▾</span>
+      </button>
+      ${ouvert &&
+      html`<ul class="choix-couleur-liste" role="listbox" aria-label="Voir les textures dans la couleur de…">
+        ${laines.map(
+          (l) => html`<li role="option" aria-selected=${String(l.id === actuelle.id)}>
+            <button type="button" onClick=${() => { surChoix(l.couleur); setOuvert(false); }}>
+              ${pastille(l.couleur)}<span>${l.nom}</span>${l.id === actuelle.id && html`<span class="choix-couleur-coche" aria-hidden="true">✓</span>`}
+            </button>
+          </li>`
+        )}
+      </ul>`}
     </div>`;
 }
 
@@ -83,6 +109,27 @@ function MarquesPoint({ point, classe = "marques-point" }) {
   return html`<div class=${classe}>${bouton(MARQUES.favoris, IconeCoeur)}${bouton(MARQUES.aTester, IconeEprouvette)}</div>`;
 }
 
+// Maquette temporaire : ?carte=A|B|C (à retirer après le choix de Deborah).
+const DISPOSITION = (globalThis.location?.search.match(/carte=([ABC])/) || [])[1] || "A";
+
+/** Dessin du point et sa vignette en échantillon 3D, avant d'ouvrir la fiche. */
+function VisuelCarte({ point, couleur }) {
+  if (DISPOSITION === "B")
+    return html`<span class="carte-visuel carte-visuel-B">
+      <${BandeTexture} point=${point} couleur=${couleur} hauteur=${112} />
+      <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${112} />
+    </span>`;
+  if (DISPOSITION === "C")
+    return html`<span class="carte-visuel carte-visuel-C">
+      <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${150} />
+      <${BandeTexture} point=${point} couleur=${couleur} hauteur=${44} />
+    </span>`;
+  return html`<span class="carte-visuel carte-visuel-A">
+    <${BandeTexture} point=${point} couleur=${couleur} hauteur=${84} />
+    <${Vignette3D} point=${point} couleur=${couleur} largeur="84px" hauteur=${84} />
+  </span>`;
+}
+
 /** Fiche résumée d'un point (comme dans la maquette « Choix des points »). */
 function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
   const avis = selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
@@ -91,7 +138,7 @@ function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
     <div class=${"carte-point-cadre" + (choisi ? " carte-point-choisie" : "")}>
       <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined}
         onClick=${() => (selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
-        <${BandeTexture} point=${point} couleur=${couleur} hauteur=${64} />
+        <${VisuelCarte} point=${point} couleur=${couleur} />
         <span class="carte-point-corps">
           <span class="carte-point-titre">
             <span>${point.nom}</span>${choisi ? html`<span class="badge">Choisi</span>` : selection ? null : IconeChevron()}
@@ -132,24 +179,29 @@ export function CataloguePoints({ selection = null } = {}) {
   const [rechercheLibre, setRecherche] = useState(memoire.recherche);
   const [rechercheSelection, setRechercheSelection] = useState("");
   const [couleurChoisie, setCouleur] = useState(memoire.couleur);
+  const [criteres, setCriteres] = useState(selection ? [] : memoire.criteres);
+  const basculerCritere = (id) => setCriteres((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const piece = selection ? selection.piece : pieceLibre;
   const zone = selection ? selection.zone : "corps";
   const recherche = selection ? rechercheSelection : rechercheLibre;
   const couleur = selection?.couleur || couleurChoisie || laines[0]?.couleur || COULEUR_PAR_DEFAUT;
 
   useEffect(() => {
-    if (!selection) Object.assign(memoire, { piece: pieceLibre, recherche: rechercheLibre, couleur: couleurChoisie });
-  }, [pieceLibre, rechercheLibre, couleurChoisie]);
+    if (!selection) Object.assign(memoire, { piece: pieceLibre, recherche: rechercheLibre, couleur: couleurChoisie, criteres });
+  }, [pieceLibre, rechercheLibre, couleurChoisie, criteres]);
   const avis = (p) => (selection?.avis ? selection.avis(p) : avisPour(p, piece, zone)).avis;
 
   const nomPiece = PIECES.find((p) => p.id === piece)?.nom.toLowerCase();
-  const trouves = rechercherPoints(recherche);
+  const filtre = recherche.trim() || criteres.length > 0;
+  const trouves = filtrerParCriteres(rechercherPoints(recherche), criteres);
   let familles;
-  if (recherche.trim()) {
-    familles = [{ id: "resultats", titre: `Résultats (${trouves.length})`, points: trouves, ouverte: true }];
+  if (filtre) {
+    familles = [{ id: "resultats", titre: "Résultats", points: trouves, ouverte: true }];
   } else {
     const adaptes = (p) => !piece || avis(p) !== "deconseille";
-    const familleOuverte = selection ? pointParId(selection.actuel)?.famille || FAMILLES[0].id : FAMILLES[0].id;
+    // Catalogue en consultation : tout est fermé, on ouvre la famille qu'on veut.
+    // Choix d'un point pour un bloc : la famille du point actuel est ouverte.
+    const familleOuverte = selection ? pointParId(selection.actuel)?.famille || FAMILLES[0].id : null;
     familles = FAMILLES.map((f) => ({
       id: f.id,
       titre: f.nom,
@@ -165,7 +217,7 @@ export function CataloguePoints({ selection = null } = {}) {
       { m: MARQUES.favoris, icone: IconeCoeur({ plein: true, taille: 18 }) },
       { m: MARQUES.aTester, icone: IconeEprouvette({ plein: true, taille: 18 }) },
     ].map(({ m, icone }) => ({
-      id: m.cle, titre: m.titre, icone, ouverte: true, classe: "famille-" + m.cle,
+      id: m.cle, titre: m.titre, icone, ouverte: !!selection, classe: "famille-" + m.cle,
       points: conseillesDabord(pointsMarques(prefs, m.cle).map(pointParId)),
     }));
     familles = [...marques, ...familles];
@@ -191,6 +243,14 @@ export function CataloguePoints({ selection = null } = {}) {
           <input type="search" placeholder="Rechercher : riz, côtes, torsade…" value=${recherche}
             onInput=${(e) => (selection ? setRechercheSelection : setRecherche)(e.currentTarget.value)} />
         </label>
+        <div class="puces criteres" role="group" aria-label="Critères">
+          ${CRITERES.map(
+            (c) => html`<button type="button" class="puce puce-critere" aria-pressed=${String(criteres.includes(c.id))}
+              title=${c.aide || c.libelle} onClick=${() => basculerCritere(c.id)}>${c.libelle}</button>`
+          )}
+          ${criteres.length > 0 && html`<button type="button" class="puce-effacer" onClick=${() => setCriteres([])}>Effacer</button>`}
+        </div>
+        ${criteres.includes("grandMotif") && html`<p class="note">Grand motif : ${CRITERES.find((c) => c.id === "grandMotif").aide}.</p>`}
         ${selection && html`<p class="note">${selection.aide}</p>`}
 
         ${!selection && html`<span class="note" style="font-weight:700">Pour quelle pièce ?</span>`}
@@ -205,12 +265,13 @@ export function CataloguePoints({ selection = null } = {}) {
         <${ChoixCouleur} laines=${laines} couleur=${couleur} surChoix=${setCouleur} />`}
 
         ${familles.map(
-          (f) => html`<${Famille} key=${f.id + (piece || "") + recherche} titre=${f.titre} points=${f.points} icone=${f.icone} classe=${f.classe}
+          (f) => html`<${Famille} key=${f.id + (piece || "") + recherche + criteres.join()} titre=${f.titre} points=${f.points} icone=${f.icone} classe=${f.classe}
             couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} />`
         )}
-        ${!recherche.trim() && !pointsMarques(prefs, "favoris").length && !pointsMarques(prefs, "aTester").length &&
+        ${!filtre && !pointsMarques(prefs, "favoris").length && !pointsMarques(prefs, "aTester").length &&
         html`<p class="note astuce-marques">Touche le ${IconeCoeur({ taille: 15 })} d'un point pour le garder dans « Mes points favoris », ou l'${IconeEprouvette({ taille: 15 })} pour le mettre dans « À tester en priorité ».</p>`}
-        ${recherche.trim() && trouves.length === 0 && html`<p class="note">Aucun point ne porte ce nom pour l'instant.</p>`}
+        ${filtre && trouves.length === 0 &&
+        html`<p class="note">${criteres.length ? "Aucun point ne remplit tous ces critères" + (recherche.trim() ? " avec ce nom" : "") + " : décoche un critère." : "Aucun point ne porte ce nom pour l'instant."}</p>`}
 
         <p class="note">Catalogue : ${POINTS.length} points. D'autres arrivent ensuite.</p>
       </div>

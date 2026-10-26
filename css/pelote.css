@@ -834,3 +834,46 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .echantillon-3d-scene { position: relative; border-radius: 20px; overflow: hidden; background: #E9DFCF; touch-action: none; }
 .echantillon-3d-scene canvas { display: block; width: 100%; height: 100%; }
 .echantillon-3d-attente { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; color: #6B5F55; font-size: 14px; font-weight: 600; }
+
+/* Carte d'un point : dessin et vignette en échantillon 3D. */
+.carte-visuel { display: flex; width: 100%; gap: 2px; background: var(--bordure); }
+.carte-visuel-B > *, .carte-visuel-B > .vignette-3d { flex: 1 1 0; min-width: 0; }
+.carte-visuel-C { flex-direction: column; }
+.vignette-3d { position: relative; display: block; flex: none; overflow: hidden; background: #EDE4D6; }
+.vignette-3d img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vignette-3d-attente {
+  position: absolute; inset: 0;
+  background: linear-gradient(100deg, #EDE4D6 30%, #F6F0E6 50%, #EDE4D6 70%) 0 0 / 200% 100%;
+  animation: vignette-attente 1.4s linear infinite;
+}
+@keyframes vignette-attente { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .vignette-3d-attente { animation: none; } }
+.carte-point-cadre:has(.carte-visuel-A) .marques-point { right: 94px; }
+
+/* Critères de recherche */
+.criteres { gap: 6px; }
+.puce-critere { min-height: 36px; padding: 0 12px; font-size: 14px; }
+.puce-effacer { min-height: 36px; padding: 0 8px; border: none; background: none; color: var(--lien); font-weight: 700; font-size: 14px; }
+
+/* Menu déroulant des couleurs */
+.choix-couleur { position: relative; }
+.choix-couleur-bouton {
+  width: 100%; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px;
+  border-radius: 14px; border: 1px solid var(--bordure); background: var(--carte); color: inherit; font: inherit; font-weight: 600; text-align: left;
+}
+.choix-couleur-nom { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.choix-couleur-fleche { color: var(--texte-2); transition: transform .15s; }
+.choix-couleur-bouton[aria-expanded="true"] .choix-couleur-fleche { transform: rotate(180deg); }
+.pastille-couleur { flex: none; width: 22px; height: 22px; border-radius: 11px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.choix-couleur-liste {
+  position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 6px; list-style: none;
+  max-height: 300px; overflow-y: auto; border-radius: 14px; background: var(--carte); border: 1px solid var(--bordure);
+  box-shadow: 0 8px 24px rgba(43, 38, 34, 0.18);
+}
+.choix-couleur-liste button {
+  width: 100%; min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  border: none; border-radius: 10px; background: none; color: inherit; font: inherit; text-align: left;
+}
+.choix-couleur-liste [aria-selected="true"] button { background: var(--lin); font-weight: 700; }
+.choix-couleur-liste button span:nth-child(2) { flex: 1; }
+.choix-couleur-coche { color: var(--accent); font-weight: 700; }
