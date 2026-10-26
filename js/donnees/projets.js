@@ -138,8 +138,8 @@ export function conseilAiguille(laine, tailleMm) {
   };
 }
 
-/** Zone d'avis d'un bloc : les bordures et les bandes latérales sont jugées comme des bordures. */
-export const zoneAvis = (zone) => (zone === "bas" || zone === "haut" || zone === "cotes" ? "bordure" : "corps");
+/** Zone d'avis d'un bloc : bordures du haut et du bas, bandes latérales (« cotes », avis propre depuis 0.13.0), corps. */
+export const zoneAvis = (zone) => (zone === "bas" || zone === "haut" ? "bordure" : zone === "cotes" ? "cotes" : "corps");
 
 /**
  * Avis sur un point pour un bloc : celui du catalogue (pièce et zone),

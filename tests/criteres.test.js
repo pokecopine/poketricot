@@ -29,3 +29,8 @@ test("grand motif : 12 mailles ou plus", () => {
   assert.ok(grands.every((p) => largeurMotif(p) >= 12));
   assert.ok(!grands.includes(pointParId("riz")));
 });
+
+test("pour les côtés : mousse, riz, blé et sable", () => {
+  const ids = filtrerParCriteres(POINTS, ["cotes"]).map((p) => p.id).sort();
+  assert.deepEqual(ids, ["ble", "mousse", "riz", "sable"]);
+});

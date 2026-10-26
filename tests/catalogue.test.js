@@ -73,3 +73,15 @@ test("chaque point se dessine, à l'endroit et à l'envers", () => {
   // Torsade : le croisement est bien présent.
   assert.ok(grilleMotif(pointParId("torsade-gauche")).flat().includes("brinG+"));
 });
+
+test("avis sur les côtés, séparé de l'avis en bordure (0.13.0)", async () => {
+  const { avisCotes } = await import("../js/catalogue/cotes.js");
+  for (const id of ["mousse", "riz", "ble", "sable"]) assert.equal(avisCotes(pointParId(id)).avis, "conseille", id);
+  for (const id of ["cotes-1-1", "cotes-2-2"]) assert.equal(avisCotes(pointParId(id)).avis, "possible", id);
+  assert.equal(avisCotes(pointParId("jersey")).avis, "deconseille");
+  assert.ok(POINTS.every((p) => ["conseille", "possible", "deconseille"].includes(avisCotes(p).avis) && avisCotes(p).raison));
+  // Les côtes 1/1 restent conseillées en bordure, mais seulement possibles sur les côtés.
+  assert.equal(avisPour(pointParId("cotes-1-1"), "echarpe", "bordure").avis, "conseille");
+  assert.equal(avisPour(pointParId("cotes-1-1"), "echarpe", "cotes").avis, "possible");
+  assert.equal(avisPour(pointParId("riz"), "echarpe", "cotes").avis, "conseille");
+});

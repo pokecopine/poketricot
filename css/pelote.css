@@ -558,16 +558,23 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
   border: none;
   color: inherit;
 }
-/* Cœur et éprouvette, posés sur la texture, en haut à droite. */
-.marques-point { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+/* Cœur et éprouvette, sur la ligne du nom, à droite (0.13.0) : la carte garde 88 px pour eux à côté du titre. */
+.marques-point { position: absolute; top: 116px; right: 6px; display: flex; gap: 0; }
 .marque {
   width: 44px; height: 44px; border-radius: 22px; border: none; display: grid; place-items: center;
-  background: rgba(255, 253, 248, 0.92); color: #6B5F55; box-shadow: 0 1px 3px rgba(43, 38, 34, 0.25);
+  background: transparent; color: var(--texte-2);
 }
-.marque-favoris[aria-pressed="true"] { color: #B4532A; }
-.marque-aTester[aria-pressed="true"] { color: #3E5644; }
+.marque:active { background: var(--lin); }
+.carte-point-titre { padding-right: 84px; }
+.carte-point-titre > span:first-child { min-width: 0; }
+.carte-point-chevron { display: inline-block; white-space: nowrap; margin-left: 4px; vertical-align: -3px; }
+.carte-point-chevron svg { display: inline; }
+.ecran-entete-ligne .ecran-titre { flex: 1; min-width: 0; }
+.ecran-entete-actions { flex: none; display: flex; margin-right: -8px; }
+.marques-titre { position: static; }
+.marque-favoris[aria-pressed="true"] { color: var(--accent); }
+.marque-aTester[aria-pressed="true"] { color: var(--sauge); }
 .fiche-texture { position: relative; }
-.fiche-texture .marques-point { top: 12px; right: 12px; }
 .carte-point-lien {
   display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 14px;
   border-top: 1px solid var(--bordure); font-size: 14px; font-weight: 700; color: var(--lien);
@@ -578,7 +585,7 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .astuce-marques svg { vertical-align: -2px; }
 .carte-point-corps { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px 14px; }
 .carte-point-titre {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: flex-start; gap: 6px; align-items: center;
   font-family: var(--titre); font-size: 19px; font-weight: 600;
 }
 

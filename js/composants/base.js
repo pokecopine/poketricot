@@ -13,13 +13,14 @@ export function BoutonRetour({ libelle = "Retour", secours = "/", fermer = false
 }
 
 /** En-tête d'un écran simple : bouton retour + titre. */
-export function EnTete({ titre, secours = "/", fermer = false, libelleRetour, children }) {
+export function EnTete({ titre, secours = "/", fermer = false, libelleRetour, actions = null, children }) {
   return html`
     <header class="ecran-entete">
       <div class="ecran-entete-ligne">
         <${BoutonRetour} secours=${secours} fermer=${fermer}
           libelle=${libelleRetour || (fermer ? "Fermer" : "Retour")} />
         <h1 class="ecran-titre">${titre}</h1>
+        ${actions && html`<div class="ecran-entete-actions">${actions}</div>`}
       </div>
       ${children}
     </header>`;

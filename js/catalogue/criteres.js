@@ -1,5 +1,6 @@
 // Recherche par critères dans le catalogue (en plus du nom) : chaque critère coché réduit la liste.
 import { largeurMotif } from "../moteur/simulateur.js";
+import { avisCotes } from "./cotes.js";
 
 /** Un motif de 12 mailles ou plus demande de la largeur pour se voir en entier. */
 export const SEUIL_GRAND_MOTIF = 12;
@@ -9,6 +10,7 @@ export const CRITERES = [
   { id: "neRoulePas", libelle: "Ne roule pas", garde: (p) => !p.proprietes.roule },
   { id: "elastique", libelle: "Élastique", garde: (p) => p.proprietes.elasticite >= 2 },
   { id: "chaud", libelle: "Chaud / épais", garde: (p) => p.proprietes.chaleur >= 3 },
+  { id: "cotes", libelle: "Pour les côtés", aide: "tient les bords d'une écharpe et ne roule pas", garde: (p) => avisCotes(p).avis === "conseille" },
   { id: "ajoure", libelle: "Ajouré", garde: (p) => p.famille === "ajoures" },
   {
     id: "grandMotif",

@@ -42,7 +42,7 @@ js/app.js             démarrage et navigation
 js/ecrans/            un fichier par écran (projet-*.js : étapes 1 à 5 ; patron.js : patron figé et suivi)
 js/composants/        éléments réutilisables (dont echantillon3d.js et vignette3d.js : photos 3D du catalogue)
 js/donnees/           base de données, réserve, sauvegarde, couleurs
-js/catalogue/         gestes, points (première fournée + lots/), critères de recherche, techniques, consignes écrites
+js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), critères de recherche, techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
                       plan de l'écharpe et sa vérification, métrage, générateur du patron et suivi
 js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu

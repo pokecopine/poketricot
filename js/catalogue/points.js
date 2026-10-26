@@ -12,6 +12,7 @@
 // avis : "conseille" | "possible" | "deconseille", avec une raison d'une phrase quand ce n'est pas conseillé.
 
 import { TRICONAUTES, E, V, fois, ok, possible, deconseille } from "./aides.js";
+import { avisCotes } from "./cotes.js";
 import { POINTS_LOT as LOT_A } from "./lots/lot-a.js";
 import { POINTS_LOT as LOT_B } from "./lots/lot-b.js";
 import { POINTS_LOT as LOT_C } from "./lots/lot-c.js";
@@ -363,8 +364,8 @@ export function rechercherPoints(texte, points = POINTS) {
 /** Avis du point pour une pièce et une zone (« corps » par défaut). */
 export function avisPour(point, piece, zone = "corps") {
   const avisPiece = piece ? point.ouvrages[piece] || { avis: "possible" } : { avis: "conseille" };
-  if (zone === "bordure") {
-    const avisZone = point.zones?.bordure || { avis: "possible" };
+  if (zone === "bordure" || zone === "cotes") {
+    const avisZone = zone === "cotes" ? avisCotes(point) : point.zones?.bordure || { avis: "possible" };
     const ordre = { conseille: 0, possible: 1, deconseille: 2 };
     return ordre[avisZone.avis] > ordre[avisPiece.avis] ? avisZone : avisPiece;
   }

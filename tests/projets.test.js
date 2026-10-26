@@ -69,7 +69,8 @@ test("le point principal et le corps vont ensemble", () => {
   const r = avecPointDuBloc(q, "bas", "riz");
   assert.equal(r.blocs.find((b) => b.id === "bas").pointId, "riz");
   assert.equal(r.pointPrincipal, "ble");
-  assert.equal(zoneAvis("cotes"), "bordure");
+  assert.equal(zoneAvis("cotes"), "cotes");
+  assert.equal(zoneAvis("bas"), "bordure");
   assert.equal(zoneAvis("corps"), "corps");
 });
 

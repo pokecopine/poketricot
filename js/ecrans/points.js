@@ -19,6 +19,7 @@ import { texteRang, texteCote } from "../catalogue/texte.js";
 import { TECHNIQUES, techniquesDuPoint } from "../catalogue/techniques.js";
 import { convertirEnRond } from "../moteur/simulateur.js";
 import { CRITERES, filtrerParCriteres } from "../catalogue/criteres.js";
+import { avisCotes } from "../catalogue/cotes.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 
@@ -91,7 +92,7 @@ export function nomSource(url) {
   }
 }
 
-/** Cœur (favori) et éprouvette (à tester) d'un point : boutons à cocher. */
+/** Cœur (favori) et éprouvette (à tester) d'un point : boutons à cocher, à côté du nom (0.13.0). */
 function MarquesPoint({ point, classe = "marques-point" }) {
   const { prefs, majPrefs, flash } = useApp();
   const bouton = (marque, Icone) => {
@@ -128,7 +129,7 @@ function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
         <${VisuelCarte} point=${point} couleur=${couleur} />
         <span class="carte-point-corps">
           <span class="carte-point-titre">
-            <span>${point.nom}</span>${choisi ? html`<span class="badge">Choisi</span>` : selection ? null : IconeChevron()}
+            <span class="carte-point-nom">${point.nom}${!choisi && !selection ? html`<span class="carte-point-chevron">${IconeChevron()}</span>` : null}</span>${choisi && html`<span class="badge">Choisi</span>`}
           </span>
           <${Etiquettes} point=${point} />
           <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
@@ -206,6 +207,13 @@ export function CataloguePoints({ selection = null } = {}) {
       points: conseillesDabord(pointsMarques(prefs, m.cle).map(pointParId)),
     }));
     familles = [...marques, ...familles];
+    // Choix du point des bandes latérales : les points qui tiennent les bords, en tête et ouverts (0.13.0).
+    if (zone === "cotes") {
+      familles.unshift({
+        id: "pour-cotes", titre: "Conseillés pour les côtés", ouverte: true, classe: "famille-cotes",
+        points: POINTS.filter((p) => avis(p) === "conseille"),
+      });
+    }
     if (piece) {
       familles.push({
         id: "peu-adaptes",
@@ -236,6 +244,7 @@ export function CataloguePoints({ selection = null } = {}) {
           ${criteres.length > 0 && html`<button type="button" class="puce-effacer" onClick=${() => setCriteres([])}>Effacer</button>`}
         </div>
         ${criteres.includes("grandMotif") && html`<p class="note">Grand motif : ${CRITERES.find((c) => c.id === "grandMotif").aide}.</p>`}
+        ${criteres.includes("cotes") && html`<p class="note">Pour les côtés : ${CRITERES.find((c) => c.id === "cotes").aide}.</p>`}
         ${selection && html`<p class="note">${selection.aide}</p>`}
 
         ${!selection && html`<span class="note" style="font-weight:700">Pour quelle pièce ?</span>`}
@@ -309,7 +318,8 @@ export function FichePoint({ id }) {
 
   return html`
     <main class="ecran">
-      <${EnTete} titre=${point.nom} secours="/points" libelleRetour="Retour au catalogue" />
+      <${EnTete} titre=${point.nom} secours="/points" libelleRetour="Retour au catalogue"
+        actions=${html`<${MarquesPoint} point=${point} classe="marques-point marques-titre" />`} />
       <div class="ecran-contenu">
         <${Onglets} libelle="Vue du point" valeur=${vue} surChoix=${choisirVue}
           choix=${[{ valeur: "schema", libelle: "Schéma" }, { valeur: "3d", libelle: "Échantillon en 3D" }]} />
@@ -317,7 +327,6 @@ export function FichePoint({ id }) {
           ${vue === "3d"
             ? html`<${Echantillon3D} key=${point.id} point=${point} couleur=${couleur} face=${face} hauteur=${330} />`
             : html`<${BandeTexture} point=${point} couleur=${couleur} hauteur=${190} face=${face} echelle=${1.5} rayon=${20} />`}
-          <${MarquesPoint} point=${point} />
         </div>
         <${Onglets} libelle="Côté du tricot" valeur=${face}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]}
@@ -341,8 +350,15 @@ export function FichePoint({ id }) {
             ${point.zones?.bordure &&
             html`<li>
               <span class=${"avis avis-" + point.zones.bordure.avis}>${{ conseille: "Conseillé", possible: "Possible", deconseille: "Peu adapté" }[point.zones.bordure.avis]}</span>
-              <span><strong>En bordure</strong>${point.zones.bordure.raison ? html` — ${point.zones.bordure.raison}` : ""}</span>
+              <span><strong>En bordure (haut et bas)</strong>${point.zones.bordure.raison ? html` — ${point.zones.bordure.raison}` : ""}</span>
             </li>`}
+            ${(() => {
+              const a = avisCotes(point);
+              return html`<li>
+                <span class=${"avis avis-" + a.avis}>${{ conseille: "Conseillé", possible: "Possible", deconseille: "Peu adapté" }[a.avis]}</span>
+                <span><strong>Sur les côtés</strong>${a.raison ? html` — ${a.raison}` : ""}</span>
+              </li>`;
+            })()}
           </ul>
           <p class="note">${texteConsommation(point)}. ${texteDensite(point)} Ces chiffres sont des estimations : ton échantillon fera foi.</p>
           ${point.avertissements?.laineFloue && html`<${Encart}>${point.avertissements.laineFloue}<//>`}
@@ -380,7 +396,7 @@ const AIDES_ZONES = {
   corps: "Le point du corps est aussi le point de ton échantillon.",
   bas: "La bordure du bas empêche l'écharpe de rouler : les points qui ne roulent pas sont proposés d'abord.",
   haut: "La bordure du haut empêche l'écharpe de rouler : les points qui ne roulent pas sont proposés d'abord.",
-  cotes: "Les bandes latérales bordent l'écharpe sur toute sa longueur : les points qui ne roulent pas sont proposés d'abord.",
+  cotes: "Les bandes latérales bordent l'écharpe sur toute sa longueur : les points qui tiennent les bords et ne roulent pas sont proposés en tête.",
   bande: "Une bande décorative dans la longueur de l'écharpe.",
 };
 
