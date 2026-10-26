@@ -9,6 +9,7 @@ import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBlo
 import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
+import { Echantillon3D } from "../composants/echantillon3d.js";
 import { IconeChevron, IconeCoeur, IconeEprouvette } from "../composants/icones.js";
 import { MARQUES, pointsMarques, estMarque, basculerMarque } from "../donnees/marques.js";
 import { POINTS, FAMILLES, PIECES, pointParId, rechercherPoints, avisPour } from "../catalogue/points.js";
@@ -246,6 +247,11 @@ export function FichePoint({ id }) {
   const point = pointParId(id);
   const [face, setFace] = useState("endroit");
   const [mode, setMode] = useState("plat");
+  const [vue, setVue] = useState(memoire.vue || "schema");
+  const choisirVue = (v) => {
+    memoire.vue = v;
+    setVue(v);
+  };
   const [couleurChoisie, setCouleur] = useState(memoire.couleur);
   const couleur = couleurChoisie || laines[0]?.couleur || COULEUR_PAR_DEFAUT;
 
@@ -259,8 +265,12 @@ export function FichePoint({ id }) {
     <main class="ecran">
       <${EnTete} titre=${point.nom} secours="/points" libelleRetour="Retour au catalogue" />
       <div class="ecran-contenu">
+        <${Onglets} libelle="Vue du point" valeur=${vue} surChoix=${choisirVue}
+          choix=${[{ valeur: "schema", libelle: "Schéma" }, { valeur: "3d", libelle: "Échantillon en 3D" }]} />
         <div class="fiche-texture">
-          <${BandeTexture} point=${point} couleur=${couleur} hauteur=${190} face=${face} echelle=${1.5} rayon=${20} />
+          ${vue === "3d"
+            ? html`<${Echantillon3D} key=${point.id} point=${point} couleur=${couleur} face=${face} hauteur=${330} />`
+            : html`<${BandeTexture} point=${point} couleur=${couleur} hauteur=${190} face=${face} echelle=${1.5} rayon=${20} />`}
           <${MarquesPoint} point=${point} />
         </div>
         <${Onglets} libelle="Côté du tricot" valeur=${face}

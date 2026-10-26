@@ -11,7 +11,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Étape | Contenu | État |
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
-| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, écran de consultation, favoris et points à tester | ✅ 98 points (6 lots, dont les 7 points de De Rerum Natura) |
+| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil retors, tournable), écran de consultation, favoris et points à tester | ✅ 98 points (6 lots, dont les 7 points de De Rerum Natura) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu drapé, patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.5.3) ; reste l'essai 📱 |
 | E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |
@@ -53,4 +53,5 @@ tests/                tests automatiques
 
 - Polices Fraunces et Nunito : SIL Open Font License 1.1.
 - Preact et htm : licence MIT (voir `vendor/`).
+- Three.js 0.168 (rendu 3D des échantillons) : licence MIT (voir `vendor/three/`).
 - Les points de tricot s'appuient sur les articles des [Triconautes](https://www.lestriconautes.com/) et du blog [De Rerum Natura](https://blog.dererumnatura.fr/) : seuls les noms et la structure des points sont repris, avec un lien vers chaque article ; aucun texte ni image de ces sites n'est reproduit.

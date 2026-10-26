@@ -828,3 +828,9 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .bouton-supprimer { flex: none; width: 44px; border: none; border-radius: 16px; background: transparent; color: var(--texte-2); display: flex; align-items: center; justify-content: center; }
 .bouton-supprimer:hover, .bouton-supprimer:focus-visible { background: var(--brique-fond); color: var(--brique); }
 .etiquette-laine { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Échantillon en 3D */
+.echantillon-3d { display: flex; flex-direction: column; gap: 8px; }
+.echantillon-3d-scene { position: relative; border-radius: 20px; overflow: hidden; background: #E9DFCF; touch-action: none; }
+.echantillon-3d-scene canvas { display: block; width: 100%; height: 100%; }
+.echantillon-3d-attente { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; color: #6B5F55; font-size: 14px; font-weight: 600; }
