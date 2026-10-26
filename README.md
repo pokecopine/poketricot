@@ -11,7 +11,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Étape | Contenu | État |
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
-| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil lisse, tournable, ombres de contact, éclairage indirect et nuances), écran de consultation (dessin et vignette 3D sur chaque carte, recherche par nom et par critères), favoris et points à tester | ✅ 98 points (0.11.0) (6 lots, dont les 7 points de De Rerum Natura) |
+| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil lisse, tournable, ombres de contact, éclairage indirect et nuances), écran de consultation (dessin et vignette 3D sur chaque carte, recherche par nom et par critères), favoris et points à tester | ✅ 103 points (0.12.0) (7 lots, dont les 7 points de De Rerum Natura et le point d'étoile) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu en 3D (sur une barre ou autour du cou, physique de tissu), patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.9.1) ; reste l'essai 📱 |
 | E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |

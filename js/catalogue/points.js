@@ -18,6 +18,7 @@ import { POINTS_LOT as LOT_C } from "./lots/lot-c.js";
 import { POINTS_LOT as LOT_D } from "./lots/lot-d.js";
 import { POINTS_LOT as LOT_E } from "./lots/lot-e.js";
 import { POINTS_LOT as LOT_F } from "./lots/lot-f.js";
+import { POINTS_LOT as LOT_G } from "./lots/lot-g.js";
 
 export const FAMILLES = [
   { id: "bases", nom: "Bases" },
@@ -345,7 +346,7 @@ export const POINTS = [
 ];
 
 // Deuxième fournée : les autres points de l'inventaire, par lots.
-POINTS.push(...LOT_A, ...LOT_B, ...LOT_C, ...LOT_D, ...LOT_E, ...LOT_F);
+POINTS.push(...LOT_A, ...LOT_B, ...LOT_C, ...LOT_D, ...LOT_E, ...LOT_F, ...LOT_G);
 
 export function pointParId(id) {
   return POINTS.find((p) => p.id === id) || null;
