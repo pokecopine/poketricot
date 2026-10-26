@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { grilleMotif } from "../rendu/texture.js";
-import { grilleEchantillon, cheminDuFil, brinsDuFil, rendu3dFidele, MODELE } from "../rendu/fil3d.js";
+import { grilleEchantillon, cheminDuFil, rendu3dFidele, MODELE } from "../rendu/fil3d.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 import { comptesVariables } from "../moteur/simulateur.js";
 
@@ -16,7 +16,8 @@ export function preparerEchantillon(point) {
   const grille = grilleEchantillon(motif);
   const fil = cheminDuFil(grille);
   return {
-    brins: brinsDuFil(fil.points),
+    // Un seul fil lisse (les brins retors donnaient une texture brouillonne).
+    brins: [fil.points],
     largeur: fil.largeur,
     hauteur: fil.hauteur,
     // Un point dont le nombre de mailles change (diminutions et augmentations) n'est qu'approché.
@@ -51,29 +52,6 @@ function textureTable(THREE) {
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(10, 10);
   t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
-/** Petite texture de fibres pour le relief du fil (carte de rugosité / de relief). */
-function textureFibres(THREE) {
-  const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 256;
-  const g = c.getContext("2d");
-  g.fillStyle = "#808080";
-  g.fillRect(0, 0, 64, 256);
-  for (let i = 0; i < 500; i++) {
-    const x = Math.random() * 64;
-    const y = Math.random() * 256;
-    g.strokeStyle = `rgba(${Math.random() < 0.5 ? "0,0,0" : "255,255,255"},${0.15 + Math.random() * 0.25})`;
-    g.lineWidth = 0.6 + Math.random();
-    g.beginPath();
-    g.moveTo(x, y);
-    g.lineTo(x + 3 + Math.random() * 6, y + 8 + Math.random() * 18);
-    g.stroke();
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
 
@@ -145,22 +123,19 @@ export function Echantillon3D({ point, couleur, face = "endroit", hauteur = 320 
         table.receiveShadow = true;
         s.add(table);
 
-        // Le fil : un tube par brin, chaque brin d'une nuance à peine différente.
+        // Le fil : un tube lisse et rond.
         const n = nuancesLaine(couleur);
         const base = new THREE.Color(n.maille);
-        const fibres = textureFibres(THREE);
-        fibres.repeat.set(1, 40);
         const groupe = new THREE.Group();
         const geometries = [];
         const materiaux = [];
-        prep.brins.forEach((brin, k) => {
+        prep.brins.forEach((brin) => {
           const courbe = new THREE.CatmullRomCurve3(brin.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
-          const g = new THREE.TubeGeometry(courbe, brin.length, MODELE.rayon * 0.62, 7, false);
-          const teinte = base.clone().offsetHSL(0, 0, (k - 1) * 0.025);
-          // Matière « tissu » : un léger voile de lumière sur les fibres (sheen), comme la laine.
+          const g = new THREE.TubeGeometry(courbe, brin.length * 2, MODELE.rayon, 12, false);
+          // Matière « tissu » mate, avec un léger voile de lumière (sheen), comme une laine douce.
           const m = new THREE.MeshPhysicalMaterial({
-            color: teinte, roughness: 0.9, metalness: 0, roughnessMap: fibres, bumpMap: fibres, bumpScale: 0.12,
-            sheen: 1, sheenRoughness: 0.6, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.45),
+            color: base, roughness: 0.75, metalness: 0,
+            sheen: 0.6, sheenRoughness: 0.5, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.35),
           });
           const mesh = new THREE.Mesh(g, m);
           mesh.castShadow = true;
@@ -218,7 +193,6 @@ export function Echantillon3D({ point, couleur, face = "endroit", hauteur = 320 
           controles.dispose();
           geometries.forEach((g) => g.dispose());
           materiaux.forEach((m) => m.dispose());
-          fibres.dispose();
           table.geometry.dispose();
           table.material.map.dispose();
           table.material.dispose();
