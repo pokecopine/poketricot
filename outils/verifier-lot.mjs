@@ -8,6 +8,7 @@ import { POINTS_LOT as LC } from "../js/catalogue/lots/lot-c.js";
 import { POINTS_LOT as LD } from "../js/catalogue/lots/lot-d.js";
 import { POINTS_LOT as LE } from "../js/catalogue/lots/lot-e.js";
 import { POINTS_LOT as LF } from "../js/catalogue/lots/lot-f.js";
+import { POINTS_LOT as LG } from "../js/catalogue/lots/lot-g.js";
 import { POINTS, FAMILLES, PIECES } from "../js/catalogue/points.js";
 import { geste } from "../js/catalogue/gestes.js";
 import { TECHNIQUES, techniquesDuPoint } from "../js/catalogue/techniques.js";
@@ -17,7 +18,7 @@ import { simuler, convertirEnRond, largeurMotif, maillesMinimum, consomme, produ
 import { tuileSVG } from "../js/rendu/texture.js";
 import { planEcharpe } from "../js/moteur/plan.js";
 
-const lots = { a: POINTS_LOT, b: LB, c: LC, d: LD, e: LE, f: LF };
+const lots = { a: POINTS_LOT, b: LB, c: LC, d: LD, e: LE, f: LF, g: LG };
 const nom = (process.argv[2] || "").toLowerCase();
 const lot = lots[nom];
 if (!lot) {
