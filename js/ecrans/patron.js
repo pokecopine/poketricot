@@ -330,7 +330,8 @@ export function EcranSuivi({ id }) {
           <${Lignes} rang=${rang} abreviations=${ab} grand=${true} />
           <div class="puces carte-rang-reperes">
             <span class="etiquette">${rang.repere}</span>
-            ${rang.laineId && patron.laines?.length > 1 &&
+            ${rang.intarsia && html`<span class="etiquette">Intarsia : une petite pelote par colonne</span>`}
+            ${!rang.intarsia && rang.laineId && patron.laines?.length > 1 &&
             html`<span class="etiquette etiquette-laine"><${Pastille} couleur=${patron.laines.find((l) => l.id === rang.laineId)?.couleur} taille=${12} />${patron.laines.find((l) => l.id === rang.laineId)?.nom}</span>`}
             <span class="etiquette">${rang.mailles} mailles</span>
             <span class="etiquette">≈ ${formaterNombre(rang.longueurCm, 0)} cm tricotés à la fin du ${mots.rang}</span>

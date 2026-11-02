@@ -891,3 +891,32 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .choix-couleur-liste [aria-selected="true"] button { background: var(--lin); font-weight: 700; }
 .choix-couleur-liste button span:nth-child(2) { flex: 1; }
 .choix-couleur-coche { color: var(--accent); font-weight: 700; }
+
+/* ---- E3c : laines du projet, sections, intarsia (0.16.0) ---- */
+.laine-projet { cursor: default; }
+.laine-projet .bouton-lien { flex: none; min-height: 44px; padding: 0 4px; }
+.sous-liste { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 18px; background: var(--lin); }
+.pastille-colonne {
+  flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; padding: 0; border-radius: 22px;
+}
+.pastille-colonne span { width: 28px; height: 28px; border-radius: 14px; border: 2px solid var(--texte); }
+.pastille-colonne:active { background: var(--lin); }
+.menu-laines { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-radius: 16px; background: var(--lin); }
+.menu-laines button {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 12px 4px 6px; border-radius: 22px;
+  border: 1px solid var(--bordure); background: var(--carte); color: inherit; font: inherit; font-size: 14px;
+}
+.menu-laines button[aria-pressed="true"] { border: 2px solid var(--accent); font-weight: 700; }
+.choix-laines-bloc { display: flex; flex-wrap: wrap; gap: 8px; }
+.choix-laines-bloc button {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 14px 4px 6px; border-radius: 22px;
+  border: 1px solid var(--bordure); background: var(--carte); color: inherit; font: inherit; font-size: 14px;
+}
+.choix-laines-bloc button[aria-pressed="true"] { border: 2px solid var(--texte); font-weight: 700; }
+.encart-intarsia strong { display: block; }
+.diviser-corps { display: flex; flex-direction: column; gap: 10px; }
+.ligne-pastille-colonne { display: inline-block; width: 14px; height: 14px; border-radius: 7px; border: 1px solid var(--texte); vertical-align: -2px; margin-right: 6px; }
+.colonne { flex-wrap: wrap; }
+.colonne:has(.pastille-colonne) { padding-left: 2px; gap: 4px; }
+.colonne:has(.pastille-colonne) .colonne-point { gap: 8px; }
+.colonne:has(.pastille-colonne) .colonne-point > div { flex-basis: 40px; }

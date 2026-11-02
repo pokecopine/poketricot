@@ -46,6 +46,11 @@ export const TECHNIQUES_PATRON = {
     explication:
       "La laine qui ne sert pas reste attachée et attend au bord du tricot. Tous les 2 rangs, au début du rang, passe le fil du rang par-dessus le fil en attente avant de glisser la lisière : il monte ainsi le long du bord, sans boucle. Ne tire pas dessus, pour que le bord ne fronce pas. Quand le patron le dit, reprends-la : elle est déjà au bon endroit.",
   },
+  intarsia: {
+    titre: "Changer de couleur en intarsia (croiser les fils)",
+    explication:
+      "Chaque colonne a sa propre petite pelote, qui pend sur l'envers. Tricote les mailles d'une colonne avec sa pelote. En arrivant à la colonne suivante, lâche le fil, prends celui de la nouvelle couleur en le faisant passer par-dessous l'ancien, puis tricote : les deux fils se croisent et le tricot ne s'ouvre pas entre les deux colonnes. Fais-le à chaque changement de couleur, sur l'endroit comme sur l'envers. Ne tire pas trop sur la 1re maille de la nouvelle couleur. Les pelotes s'emmêlent un peu en tournant le travail : démêle-les de temps en temps.",
+  },
   joindre: {
     titre: "Joindre en rond",
     explication:
@@ -122,9 +127,10 @@ export function decrireGestes(gestes, { abreviations = false } = {}) {
 
 const NOMS_SEGMENTS = { bandeD: "Bande latérale", bandeG: "Bande latérale", corps: null };
 
-/** Étiquette d'une colonne : « Colonne 2 · point de riz ». */
-function etiquetteColonne(s) {
+/** Étiquette d'une colonne : « Colonne 2 · point de riz » ; en intarsia, « Col. 2 · jersey · Mérinos écru ». */
+function etiquetteColonne(s, laine = null) {
   const p = pointParId(s.pointId);
+  if (laine) return `Col. ${s.colonne}${p ? ` · ${minuscule(p.nom)}` : ""} · ${laine.nom}`;
   return `Colonne ${s.colonne}${p ? ` · ${minuscule(p.nom)}` : ""}`;
 }
 
@@ -132,7 +138,7 @@ function etiquetteColonne(s) {
  * Lignes d'un rang du plan, dans l'ordre où on tricote.
  * Les zones voisines tricotées pareil (bordure en mousse et bandes latérales en mousse) sont réunies.
  */
-export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false } = {}) {
+export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false, laines = null } = {}) {
   const lignes = [];
   const segments = rang.segments;
   const premier = segments[0]?.lisiere ? segments[0] : null;
@@ -140,14 +146,19 @@ export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false
   const milieu = segments.filter((s) => !s.lisiere);
   if (premier) lignes.push({ zone: "lisiere", texte: abreviations ? "1 gl. f. dev. (lisière)" : "Glisse la 1re maille, fil devant (lisière)" });
   const tous = milieu.flatMap((s) => s.gestes);
-  if (milieu.length > 1 && tous.every((c) => c === tous[0])) {
+  if (milieu.length > 1 && !rang.intarsia && tous.every((c) => c === tous[0])) {
     lignes.push({ zone: "tout", texte: majuscule(texteGestes(tous, { abreviations })) });
   } else {
     for (const s of milieu) {
+      // En intarsia, chaque colonne nomme sa laine et porte sa couleur (pastille dans le suivi).
+      const laine = rang.intarsia && s.colonne && laines ? laines.get(s.laineId) || laines.values().next().value : null;
       const etiquette = s.colonne
-        ? etiquetteColonne(s)
+        ? etiquetteColonne(s, laine)
         : s.zone === "corps" ? (rang.type === "transition" ? (rond ? "Tour de transition" : "Rang de transition") : majuscule(nomBloc)) : NOMS_SEGMENTS[s.zone];
-      lignes.push({ zone: s.zone, etiquette: `${etiquette} (${consomme(s.gestes)} m.)`, texte: majuscule(decrireGestes(s.gestes, { abreviations })) });
+      lignes.push({
+        zone: s.zone, etiquette: `${etiquette} (${consomme(s.gestes)} m.)`, texte: majuscule(decrireGestes(s.gestes, { abreviations })),
+        ...(laine ? { couleur: laine.couleur || null } : {}),
+      });
     }
   }
   if (dernier) lignes.push({ zone: "lisiere", texte: abreviations ? "1 end. (lisière)" : "Tricote la dernière maille à l'endroit (lisière)" });
@@ -172,7 +183,7 @@ const guillemets = (l) => `« ${l?.nom || "ta laine"} »`;
  * elle attend du côté où le rang commence. Sinon, elle est coupée.
  * rangsLaine : la laine de chaque rang (id). Renvoie { parRang: Map(index → changement), croisements: Set(index), bouts }.
  */
-export function changementsDeLaine(rangsLaine, { filPorte = false, rond = false } = {}) {
+export function changementsDeLaine(rangsLaine, { filPorte = false, rond = false, portable = () => true } = {}) {
   const parRang = new Map();
   const croisements = new Set();
   if (!rangsLaine.length) return { parRang, croisements, bouts: 0 };
@@ -189,7 +200,7 @@ export function changementsDeLaine(rangsLaine, { filPorte = false, rond = false 
     const prochaine = suites.slice(k + 1).find((x) => x.laineId === ancienne);
     const ecart = prochaine ? prochaine.debut - debut : null;
     // À plat, la laine attend du côté où le rang commence : il faut un nombre pair de rangs. En rond, elle attend au début du tour.
-    const porter = filPorte && ecart !== null && (rond || ecart % 2 === 0) && ecart <= RANGS_MAX_FIL_PORTE;
+    const porter = filPorte && ecart !== null && (rond || ecart % 2 === 0) && ecart <= RANGS_MAX_FIL_PORTE && portable(ancienne) && portable(nouvelle);
     if (porter) {
       enAttente.set(ancienne, debut);
       for (let i = debut + 2; i < prochaine.debut; i += 2) croisements.add(i);
@@ -233,6 +244,7 @@ export function genererPatron({
   const nomBlocDe = (id) => {
     const b = plan.blocs.find((x) => x.id === id);
     if (!b) return "";
+    if (b.section) return b.nom;
     // Un corps coupé par des bandes : « corps (partie 2) ».
     const parties = plan.blocs.filter((x) => x.zone === "corps");
     if (b.zone === "corps" && parties.length > 1) return `corps, partie ${parties.indexOf(b) + 1}`;
@@ -244,8 +256,28 @@ export function genererPatron({
   const mesLaines = new Map([[principaleId, laine || { id: principaleId, nom: "ta laine" }]]);
   for (const l of laines) if (l && !mesLaines.has(l.id)) mesLaines.set(l.id, l);
   const laineDuRang = (r) => (r.laineId && mesLaines.has(r.laineId) ? r.laineId : principaleId);
-  const changements = changementsDeLaine(plan.rangs.map(laineDuRang), { filPorte: !!projet.filPorte, rond });
+  // Intarsia (E3c-4) : un bloc dont les colonnes ont des laines différentes se tricote avec une petite pelote par colonne.
+  const CLE_INTARSIA = "intarsia:";
+  const cleDuRang = (r) => (r.intarsia ? CLE_INTARSIA + r.blocId : laineDuRang(r));
+  const estIntarsia = (cle) => String(cle).startsWith(CLE_INTARSIA);
+  const changements = changementsDeLaine(plan.rangs.map(cleDuRang), { filPorte: !!projet.filPorte, rond, portable: (c) => !estIntarsia(c) });
   const plusieurs = mesLaines.size > 1;
+  const nomDeLaine = (id) => mesLaines.get(id && mesLaines.has(id) ? id : principaleId);
+  const pelotesDuBloc = (b) => {
+    if (!b?.intarsia) return [];
+    const parLaine = new Map();
+    for (const c of b.colonnes) {
+      const id = c.laineId && mesLaines.has(c.laineId) ? c.laineId : principaleId;
+      parLaine.set(id, (parLaine.get(id) || 0) + 1);
+    }
+    return [...parLaine].map(([laineId, nombre]) => ({ laineId, nombre, laine: mesLaines.get(laineId) }));
+  };
+  const textePelotes = (b) => {
+    const p = pelotesDuBloc(b);
+    const n = p.reduce((t, x) => t + x.nombre, 0);
+    return `${n} petites pelotes : ${p.map((x) => `${x.nombre} en ${guillemets(x.laine)}`).join(", ")}`;
+  };
+  const blocDeCle = (cle) => plan.blocs.find((b) => CLE_INTARSIA + b.id === cle);
 
   // ---- Techniques : chaque geste expliqué au premier rang qui l'utilise ----
   const techniques = { ...TECHNIQUES_PATRON };
@@ -285,7 +317,26 @@ export function genererPatron({
       avant.push({ zone: "marqueur", texte: texteDeplacement(r.marqueur.mailles, r.marqueur.sens) + (r.marqueur.raison === "retour" ? " Il retrouve ainsi sa place de départ." : "") });
       avantAbrege.push({ zone: "marqueur", texte: texteDeplacement(r.marqueur.mailles, r.marqueur.sens, { abreviations: true }) });
     }
-    if (changement) {
+    const entreIntarsia = r.intarsia && (index === 0 || (changement && estIntarsia(changement.nouvelle)));
+    if (changement && (estIntarsia(changement.nouvelle) || estIntarsia(changement.ancienne))) {
+      // Entrée ou sortie d'un bloc en intarsia.
+      const sortie = estIntarsia(changement.ancienne) ? blocDeCle(changement.ancienne) : null;
+      const morceaux = [];
+      morceaux.push(sortie ? "Coupe les petites pelotes en laissant 15 cm" : `Coupe ${guillemets(nomDeLaine(changement.ancienne))} en laissant 15 cm`);
+      morceaux.push(entreIntarsia
+        ? `prépare ${textePelotes(bloc)} (une par colonne) et commence le rang, chaque colonne avec sa pelote`
+        : `commence le rang avec ${guillemets(nomDeLaine(changement.nouvelle))}`);
+      const couleur = entreIntarsia ? null : nomDeLaine(changement.nouvelle)?.couleur || null;
+      avant.push({ zone: "laine", couleur, texte: `${morceaux[0]}, puis ${morceaux[1]}` });
+      avantAbrege.push({ zone: "laine", couleur, texte: entreIntarsia ? `Chgt laine : ${textePelotes(bloc)}` : `Chgt laine : couper les pelotes, prendre ${nomDeLaine(changement.nouvelle)?.nom}` });
+      if (!entreIntarsia && !dejaVus.has("laine")) {
+        dejaVus.add("laine");
+        nouveaux.unshift("laine");
+      }
+    } else if (entreIntarsia) {
+      avant.push({ zone: "laine", texte: `Prépare ${textePelotes(bloc)} (une par colonne) : chaque colonne se tricote avec sa pelote` });
+      avantAbrege.push({ zone: "laine", texte: textePelotes(bloc) });
+    } else if (changement) {
       const couleur = mesLaines.get(changement.nouvelle)?.couleur || null;
       avant.push({ zone: "laine", couleur, texte: lignesChangement(changement, mesLaines, { rond }) });
       avantAbrege.push({ zone: "laine", couleur, texte: lignesChangement(changement, mesLaines, { abreviations: true }) });
@@ -303,6 +354,10 @@ export function genererPatron({
       avant.push({ zone: "laine", texte: rond ? "Au début du tour, croise le fil du tour avec la laine en attente" : "Avant la lisière, croise le fil du rang avec la laine en attente" });
       avantAbrege.push({ zone: "laine", texte: "Croiser avec la laine en attente" });
     }
+    if (r.intarsia && !dejaVus.has("intarsia")) {
+      dejaVus.add("intarsia");
+      nouveaux.unshift("intarsia");
+    }
     return {
       numero: r.numero,
       cote: r.cote,
@@ -317,8 +372,9 @@ export function genererPatron({
       mailles: r.mailles,
       gestes: codes,
       laineId: plusieurs ? laineId : undefined,
-      lignes: [...avant, ...lignesDuRang(r, nomBlocDe(r.blocId), { rond })],
-      lignesAbregees: [...avantAbrege, ...lignesDuRang(r, nomBlocDe(r.blocId), { abreviations: true, rond })],
+      lignes: [...avant, ...lignesDuRang(r, nomBlocDe(r.blocId), { rond, laines: mesLaines })],
+      lignesAbregees: [...avantAbrege, ...lignesDuRang(r, nomBlocDe(r.blocId), { abreviations: true, rond, laines: mesLaines })],
+      ...(r.intarsia ? { intarsia: true } : {}),
       ...(r.marqueur ? { marqueur: r.marqueur } : {}),
       techniques: nouveaux,
       longueurCm: Math.round(hauteur * 10) / 10,
@@ -352,8 +408,13 @@ export function genererPatron({
         return `${l.nom}${m ? ` : environ ${m} m` : ""}${i === 0 ? " (laine principale)" : ""}`;
       })
     : [`${laine?.nom || "Ta laine"}${metrage ? ` : environ ${metrage.metres} m` : ""}`];
+  const blocsIntarsia = plan.blocs.filter((b) => b.intarsia);
+  const nbPelotes = blocsIntarsia.reduce((t, b) => t + b.colonnes.length, 0);
   const materiel = [
     ...lignesLaines,
+    ...(blocsIntarsia.length
+      ? [`De quoi préparer ${nbPelotes} petites pelotes pour l'intarsia (${blocsIntarsia.map((b) => `${majuscule(nomBlocDe(b.id))} : ${textePelotes(b).replace(/^\d+ petites pelotes : /, "")}`).join(" ; ")})`]
+      : []),
     `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (${rond ? "on tricote en rond" : "on tricote à plat, en allers-retours"})`,
     ...(rond ? ["Un marqueur de début de tour (un anneau ou un bout de laine d'une autre couleur)"] : []),
     "Une aiguille à laine pour rentrer les fils",
@@ -376,11 +437,11 @@ export function genererPatron({
     const nomPoints = b.colonnes
       ? `${b.colonnes.length} colonnes`
       : point ? majuscule(point.nom) : "";
-    const autreLaine = b.laineId && b.laineId !== principaleId ? mesLaines.get(b.laineId) : null;
+    const autreLaine = !b.intarsia && b.laineId && b.laineId !== principaleId ? mesLaines.get(b.laineId) : null;
     const colonnesTexte = b.colonnes
       ? ` En colonnes, ${rond ? "depuis le marqueur, tout autour" : "du bord droit (début des rangs endroit) au bord gauche"} : ${b.colonnes
-          .map((c, j) => `colonne ${j + 1} en ${minuscule(pointParId(c.pointId)?.nom || "")} (${c.mailles} mailles)`)
-          .join(", ")}.`
+          .map((c, j) => `colonne ${j + 1} en ${minuscule(pointParId(c.pointId)?.nom || "")}${b.intarsia ? ` dans ${guillemets(nomDeLaine(c.laineId))}` : ""} (${c.mailles} mailles)`)
+          .join(", ")}.${b.intarsia ? ` Intarsia : ${textePelotes(b)}, une par colonne ; les bords se tricotent avec la pelote de la colonne d'à côté.` : ""}`
       : "";
     etapes.push({
       cle: "bloc", blocId: b.id, titre: majuscule(nomBlocDe(b.id)),
@@ -406,7 +467,8 @@ export function genererPatron({
       texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage simple, en tricotant chaque maille comme elle se présente.`,
       techniques: ["rabattage"],
     });
-  const bouts = changements.bouts;
+  // Une petite pelote = 2 bouts (début et fin) ; le bloc en intarsia était compté comme une seule laine.
+  const bouts = changements.bouts + blocsIntarsia.reduce((t, b) => t + 2 * b.colonnes.length - 2, 0);
   etapes.push({
     cle: "finitions", titre: "Finitions", detail: "Rentrer les fils, bloquer",
     texte: bouts > 2
@@ -425,6 +487,7 @@ export function genererPatron({
   }
   for (const c of ["rabattageSouple", "filsRond", "blocageRond"]) delete techniques[c];
   if (!rond) for (const c of ["joindre", "marqueur", "laineRond", "porteRond"]) delete techniques[c];
+  if (!blocsIntarsia.length) delete techniques.intarsia;
 
   // ---- Copie des points utilisés (recettes figées) ----
   const pointIds = [...new Set([
@@ -448,7 +511,7 @@ export function genererPatron({
     const pts = b.colonnes
       ? `${b.colonnes.length} colonnes (${b.colonnes.map((c) => minuscule(pointParId(c.pointId)?.nom || "")).join(", ")})`
       : `${minuscule(pointParId(b.pointId)?.nom || "")}`;
-    const autre = b.laineId && b.laineId !== principaleId ? ` dans ${guillemets(mesLaines.get(b.laineId))}` : "";
+    const autre = b.intarsia ? " en intarsia" : b.laineId && b.laineId !== principaleId ? ` dans ${guillemets(mesLaines.get(b.laineId))}` : "";
     return `${nomBlocDe(b.id)} en ${pts}${autre}`;
   });
   if (plan.bandesLaterales) resumeBlocs.push(`bandes latérales de ${plan.bandesLaterales.mailles} mailles en ${minuscule(pointParId(plan.bandesLaterales.pointId)?.nom || "")}`);
@@ -478,7 +541,9 @@ export function genererPatron({
     blocs: plan.blocs.map((b) => ({
       id: b.id, zone: b.zone, nom: nomBlocDe(b.id), pointId: b.pointId, premierRang: b.premierRang, dernierRang: b.dernierRang, hauteurCm: b.hauteurCm,
       laineId: b.laineId || null,
-      colonnes: b.colonnes ? b.colonnes.map((c) => ({ id: c.id, pointId: c.pointId, mailles: c.mailles, largeurCm: c.largeurCm })) : null,
+      colonnes: b.colonnes ? b.colonnes.map((c) => ({ id: c.id, pointId: c.pointId, mailles: c.mailles, largeurCm: c.largeurCm, laineId: c.laineId || null })) : null,
+      ...(b.intarsia ? { intarsia: true, pelotes: pelotesDuBloc(b).map((x) => ({ laineId: x.laineId, nombre: x.nombre })) } : {}),
+      ...(b.section ? { section: true } : {}),
     })),
     bandesLaterales: plan.bandesLaterales,
     resume: majuscule(resumeBlocs.join(", ")) + ".",

@@ -14,7 +14,7 @@ import { geste } from "../catalogue/gestes.js";
 import { consomme, produit, deplier, maillesLesPlusProches, maillesConviennent, comptesDesRangs, sortieRang, convertirEnRond, tricoterTour } from "./simulateur.js";
 import { rangsPourHauteurMotif, gestesDeTransition, explicationTransition, nomAvecArticle } from "./dimensions.js";
 import { repartirMailles, repartitionEgale, densiteDesColonnes, motifCommun, explicationColonnes } from "./colonnes.js";
-import { ZONES_HORIZONTALES, NOMS_DES_ZONES } from "./plan.js";
+import { ZONES_HORIZONTALES, NOMS_DES_ZONES, repartirLeCorps } from "./plan.js";
 
 const DE_LA_ZONE = { bas: "de la bordure du bas", corps: "du corps", bande: "de la bande", haut: "de la bordure du haut" };
 const tombe = (point) => (point.article === "les" ? "tombent" : "tombe");
@@ -65,7 +65,7 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
   const erreurs = [];
   const explications = [];
   const echec = (message, bloc = null) => {
-    erreurs.push({ bloc: bloc?.id ?? null, nomBloc: bloc ? NOMS_DES_ZONES[bloc.zone] : null, message });
+    erreurs.push({ bloc: bloc?.id ?? null, nomBloc: bloc ? bloc.nom || NOMS_DES_ZONES[bloc.zone] : null, message });
     return { ok: false, erreurs, explications };
   };
 
@@ -73,7 +73,7 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
   const corpsIndex = horizontaux.findIndex((b) => b.zone === "corps");
   if (corpsIndex === -1) return echec("Il faut un bloc « corps ».");
   const partiesCorps = horizontaux.filter((b) => b.zone === "corps");
-  if (partiesCorps.some((b) => b.pointId !== partiesCorps[0].pointId)) return echec("Toutes les parties du corps doivent avoir le même point.", partiesCorps[0]);
+  // Depuis 0.16.0 (sections), les parties du corps peuvent avoir chacune leur point.
 
   const infos = new Map();
   for (const b of horizontaux) {
@@ -165,13 +165,13 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
     const b = horizontaux[i];
     const info = infos.get(b.id);
     const voisin = mailles[j];
-    if (b.zone === "corps") {
+    if (b.zone === "corps" && !b.section) {
       mailles[i] = nCorps;
       continue;
     }
     if (info.convient(voisin)) {
       mailles[i] = voisin;
-      if (!info.colonnes && voisin === nCorps && info.densite.mailles / iCorps.densite.mailles > 1.1) {
+      if (!info.colonnes && !b.section && voisin === nCorps && info.densite.mailles / iCorps.densite.mailles > 1.1) {
         if (!resserres.has(info.point)) resserres.set(info.point, []);
         resserres.get(info.point).push(b.zone);
       }
@@ -198,7 +198,11 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
     const info = infos.get(b.id);
     if (!info.colonnes) continue;
     const cle = `${info.colonnes.length}|${mailles[i]}`;
-    const r = repartirMailles(info.colonnes, mailles[i], "rond", modeles.get(cle) || null);
+    const alignees = b.section ? horizontaux.filter((x, k) => x.section && mailles[k] === mailles[i] && infos.get(x.id).colonnes?.length === info.colonnes.length) : [];
+    const jointe = alignees.length > 1
+      ? repartirMailles(info.colonnes.map((c, j) => ({ ...c, points: alignees.map((x) => infos.get(x.id).colonnes[j].point) })), mailles[i], "rond")
+      : null;
+    const r = jointe || repartirMailles(info.colonnes, mailles[i], "rond", modeles.get(cle) || null);
     if (!r) return echec("Les colonnes ne tombent pas juste.", b);
     if (!modeles.has(cle)) modeles.set(cle, r);
     repartitions.set(b.id, r);
@@ -226,7 +230,9 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
   });
   const corpsVoulu = hauteurCm - autresCm;
   if (corpsVoulu < 2 * partiesCorps.length) return echec("Les bordures et les bandes sont plus hautes que le snood : le corps n'a plus de place.", corps);
-  for (const b of partiesCorps) hauteurs.set(b.id, rangsPourHauteurMotif(motifDuBloc(infos.get(b.id)), corpsVoulu / partiesCorps.length, infos.get(b.id).densite));
+  const parts = repartirLeCorps(partiesCorps, corpsVoulu, (b, cm) => rangsPourHauteurMotif(motifDuBloc(infos.get(b.id)), cm, infos.get(b.id).densite));
+  if (parts.erreur) return echec(parts.erreur, corps);
+  for (const [id, h] of parts.hauteurs) hauteurs.set(id, h);
 
   // ---- Tours ----
   const rangs = [];
@@ -289,7 +295,7 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
         }, segments, hTour);
       }
       plansDesBlocs.push({
-        id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId, laineId,
+        id: b.id, zone: b.zone, nom: b.nom || NOMS_DES_ZONES[b.zone], section: b.section || undefined, pointId: b.pointId, laineId,
         premierRang: premier, dernierRang: rangs.length, rangs: rangs.length - premier + 1,
         maillesCorps: n, hauteurCm: rangs.slice(premier - 1).reduce((s, r) => s + r.hauteurCm, 0), densite: info.densite,
         colonnes: info.colonnes.map((c, j) => ({ id: c.id, pointId: c.pointId, mailles: rep[j], largeurCm: (rep[j] * 10) / c.densite.mailles, densite: c.densite })),
@@ -314,7 +320,7 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
       );
     }
     plansDesBlocs.push({
-      id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId, laineId, colonnes: null,
+      id: b.id, zone: b.zone, nom: b.nom || NOMS_DES_ZONES[b.zone], section: b.section || undefined, pointId: b.pointId, laineId, colonnes: null,
       premierRang: premier, dernierRang: rangs.length, rangs: rangs.length - premier + 1,
       maillesCorps: n, hauteurCm: rangs.slice(premier - 1).reduce((s, r) => s + r.hauteurCm, 0), densite: info.densite,
       marqueur: recette.marqueur || false,

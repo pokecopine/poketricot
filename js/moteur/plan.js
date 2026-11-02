@@ -105,6 +105,28 @@ export function rangPrepare(point, prep, t, n) {
   return { rang: point.rangs[i], entree: comptes ? comptes[i] : n, indice: i };
 }
 
+/**
+ * Hauteurs des parties du corps (E3c-2) : une section dont la hauteur est fixée la garde (au motif près),
+ * les autres se partagent le reste à parts égales. hauteurDe(bloc, cm) renvoie { rangs, hauteurCm, … }.
+ * Renvoie { hauteurs: Map(id → hauteur) } ou { erreur }.
+ */
+export function repartirLeCorps(parties, totalCm, hauteurDe) {
+  const hauteurs = new Map();
+  const fixees = parties.filter((b) => b.section && b.hauteurCm > 0);
+  const libres = parties.filter((b) => !fixees.includes(b));
+  let pris = 0;
+  for (const b of fixees) {
+    const h = hauteurDe(b, b.hauteurCm);
+    hauteurs.set(b.id, h);
+    pris += h.hauteurCm;
+  }
+  if (!libres.length) return { hauteurs };
+  const reste = totalCm - pris;
+  if (reste < 2 * libres.length) return { erreur: "Les sections dont tu as fixé la hauteur prennent toute la place : raccourcis-en une, ou répartis-les également." };
+  for (const b of libres) hauteurs.set(b.id, hauteurDe(b, reste / libres.length));
+  return { hauteurs };
+}
+
 const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
 
 /**
@@ -124,8 +146,9 @@ const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
 export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres = "chainette" }) {
   const erreurs = [];
   const explications = [];
+  const nomDe = (b) => b.nom || NOMS_DES_ZONES[b.zone];
   const echec = (message, bloc = null) => {
-    erreurs.push({ bloc: bloc?.id ?? null, nomBloc: bloc ? NOMS_DES_ZONES[bloc.zone] : null, message });
+    erreurs.push({ bloc: bloc?.id ?? null, nomBloc: bloc ? nomDe(bloc) : null, message });
     return { ok: false, erreurs, explications };
   };
 
@@ -133,7 +156,7 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   const corpsIndex = horizontaux.findIndex((b) => b.zone === "corps");
   if (corpsIndex === -1) return echec("Il faut un bloc « corps ».");
   const partiesCorps = horizontaux.filter((b) => b.zone === "corps");
-  if (partiesCorps.some((b) => b.pointId !== partiesCorps[0].pointId)) return echec("Toutes les parties du corps doivent avoir le même point.", partiesCorps[0]);
+  // Depuis 0.16.0 (sections), les parties du corps peuvent avoir chacune leur point.
   const lateral = blocs.find((b) => b.zone === "cotes") || null;
 
   const infos = new Map();
@@ -145,7 +168,7 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
         if (!point) return echec(`Point inconnu : ${c.pointId}`, b);
         const densite = densites[c.pointId];
         if (!densite) return echec(`Densité inconnue pour ${nomAvecArticle(point)}.`, b);
-        colonnes.push({ id: c.id, pointId: c.pointId, point, densite, mailles: c.mailles });
+        colonnes.push({ id: c.id, pointId: c.pointId, point, densite, mailles: c.mailles, laineId: c.laineId !== undefined ? c.laineId : b.laineId ?? null });
       }
       infos.set(b.id, {
         point: pointParId(b.pointId) || colonnes[0].point,
@@ -221,7 +244,8 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       const b = horizontaux[i];
       const info = infos.get(b.id);
       const ideal = (corpsCm * info.densite.mailles) / 10;
-      if (voisin !== undefined && convient(info, voisin) && Math.abs(voisin / ideal - 1) <= 0.05) {
+      // Une section garde les mailles de son voisin dès que son motif y tombe juste (E3c-2).
+      if (voisin !== undefined && convient(info, voisin) && (b.section || Math.abs(voisin / ideal - 1) <= 0.05)) {
         choix[i] = { n: voisin, explication: null };
         return true;
       }
@@ -229,7 +253,7 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       const retenu = info.colonnes ? plusProche(info, voulu) : maillesPourLargeur(info.point, corpsCm, info.densite).retenu;
       if (retenu === null) return false;
       const explication = ajustement(info, voulu, retenu, b.zone);
-      choix[i] = { n: retenu, explication: explication && explication + (b.zone === "corps" || info.colonnes ? "" : ` (${NOMS_DES_ZONES[b.zone]})`) };
+      choix[i] = { n: retenu, explication: explication && explication + (b.zone === "corps" || info.colonnes ? "" : ` (${nomDe(b)})`) };
       return true;
     };
     const ordre = [corpsIndex];
@@ -263,7 +287,12 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     const info = infos.get(b.id);
     if (!info.colonnes) return;
     const cle = `${info.colonnes.length}|${mailles[i]}`;
-    const r = repartirMailles(info.colonnes, mailles[i], "plat", modeles.get(cle) || null);
+    // Damier de sections : une même répartition pour toutes les sections de même largeur, si leurs points s'accordent.
+    const alignees = b.section ? horizontaux.filter((x, k) => x.section && mailles[k] === mailles[i] && infos.get(x.id).colonnes?.length === info.colonnes.length) : [];
+    const jointe = alignees.length > 1
+      ? repartirMailles(info.colonnes.map((c, j) => ({ ...c, points: alignees.map((x) => infos.get(x.id).colonnes[j].point) })), mailles[i], "plat")
+      : null;
+    const r = jointe || repartirMailles(info.colonnes, mailles[i], "plat", modeles.get(cle) || null);
     if (r && !modeles.has(cle)) modeles.set(cle, r);
     repartitions.set(b.id, r);
   });
@@ -293,9 +322,9 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   });
   const corpsHauteurVoulue = longueurCm - autresCm;
   if (corpsHauteurVoulue < 2 * partiesCorps.length) return echec("Les bordures et les bandes sont plus longues que l'écharpe : le corps n'a plus de place.", corps);
-  for (const b of partiesCorps) {
-    hauteurs.set(b.id, hauteurDuBloc(infos.get(b.id), corpsHauteurVoulue / partiesCorps.length));
-  }
+  const r = repartirLeCorps(partiesCorps, corpsHauteurVoulue, (b, cm) => hauteurDuBloc(infos.get(b.id), cm));
+  if (r.erreur) return echec(r.erreur, corps);
+  for (const [id, h] of r.hauteurs) hauteurs.set(id, h);
 
   // ---- Rangs ----
   const bande = lateral ? infos.get(lateral.id).point : null;
@@ -309,24 +338,31 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   const rangBande = (t) => rangPrepare(bande, suiteBande, t, nBande);
 
   const rangs = [];
-  const segmentsDuRang = (c, corpsSegment) => {
+  // Chaque segment porte sa laine (null = principale). Les bords droits (lisière, bande latérale) prennent la laine
+  // de la colonne 1, les bords gauches celle de la dernière colonne (intarsia, E3c-4).
+  const segmentsDuRang = (c, corpsSegment, laineId) => {
     const t = rangs.length;
+    const colonnesZ = Array.isArray(corpsSegment) ? corpsSegment : null;
+    const laineDe1 = (s) => (s.laineId !== undefined ? s.laineId : laineId);
+    const laineDroite = colonnesZ ? laineDe1(colonnesZ[0]) : laineId;
+    const laineGauche = colonnesZ ? laineDe1(colonnesZ.at(-1)) : laineId;
+    const laineDe = (zone) => (zone.endsWith("D") ? laineDroite : laineGauche);
     const bandes = (zone) => {
       if (!bande) return [];
       const { rang: r, entree } = rangBande(t);
-      return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, entree) }];
+      return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, entree), laineId: laineDe(zone) }];
     };
-    const lisiere = (zone, code) => (nLisiere ? [{ zone, pointId: null, rang: null, lisiere: true, gestes: [code] }] : []);
+    const lisiere = (zone, code) => (nLisiere ? [{ zone, pointId: null, rang: null, lisiere: true, gestes: [code], laineId: laineDe(zone) }] : []);
     // Colonnes : sur un rang endroit, on part du bord droit (colonne 1) ; sur l'envers, de la dernière colonne.
-    const corpsZ = Array.isArray(corpsSegment)
-      ? (c === "E" ? corpsSegment : [...corpsSegment].reverse())
-      : [{ zone: "corps", ...corpsSegment }];
+    const corpsZ = colonnesZ
+      ? (c === "E" ? colonnesZ : [...colonnesZ].reverse())
+      : [{ zone: "corps", laineId, ...corpsSegment }];
     return c === "E"
       ? [...lisiere("bordD", "glAv"), ...bandes("bandeD"), ...corpsZ, ...bandes("bandeG"), ...lisiere("bordG", "end")]
       : [...lisiere("bordG", "glAv"), ...bandes("bandeG"), ...corpsZ, ...bandes("bandeD"), ...lisiere("bordD", "end")];
   };
   const ajouterRang = (infosRang, corpsSegment, hauteurRangCm) => {
-    const segments = segmentsDuRang(cote, corpsSegment);
+    const segments = segmentsDuRang(cote, corpsSegment, infosRang.laineId ?? null);
     rangs.push({
       numero: rangs.length + 1, cote, ...infosRang, segments,
       mailles: segments.reduce((t, s) => t + produit(s.gestes), 0),
@@ -361,27 +397,28 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       }
       const { L: Lc, mep: mepMax } = motifCommun(info.colonnes.map((c) => c.point));
       const H = hauteurs.get(b.id).rangs;
+      const intarsia = new Set(info.colonnes.map((c) => c.laineId || null)).size > 1;
       for (let t = 0; t < H; t++) {
         const segments = info.colonnes.map((c, j) => {
           const { rang: r, entree } = rangPrepare(c.point, preps[j], t, rep[j]);
-          return { zone: "corps", colonne: j + 1, colonneId: c.id, pointId: c.pointId, rang: r, gestes: deplier(r, entree) || [] };
+          return { zone: "corps", colonne: j + 1, colonneId: c.id, pointId: c.pointId, rang: r, gestes: deplier(r, entree) || [], laineId: c.laineId };
         });
         const enMiseEnPlace = t < mepMax;
         ajouterRang(
           {
-            blocId: b.id, laineId, type: enMiseEnPlace ? "miseEnPlace" : "motif",
+            blocId: b.id, laineId: intarsia ? info.colonnes[0].laineId : laineId, intarsia: intarsia || undefined, type: enMiseEnPlace ? "miseEnPlace" : "motif",
             numeroMotif: enMiseEnPlace ? null : ((t - mepMax) % Lc) + 1, rangsDuMotif: enMiseEnPlace ? null : Lc,
           },
           segments, hRang,
         );
       }
       plansDesBlocs.push({
-        id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId, laineId,
+        id: b.id, zone: b.zone, nom: nomDe(b), section: b.section || undefined, pointId: b.pointId, laineId, intarsia,
         premierRang: premier, dernierRang: rangs.length, rangs: rangs.length - premier + 1,
         maillesCorps: mailles[i], hauteurCm: rangs.slice(premier - 1).reduce((t, r) => t + r.hauteurCm, 0),
         densite: info.densite,
         colonnes: info.colonnes.map((c, j) => ({
-          id: c.id, pointId: c.pointId, mailles: rep[j], largeurCm: (rep[j] * 10) / c.densite.mailles, densite: c.densite,
+          id: c.id, pointId: c.pointId, mailles: rep[j], largeurCm: (rep[j] * 10) / c.densite.mailles, densite: c.densite, laineId: c.laineId,
         })),
       });
       continue;
@@ -389,7 +426,7 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     const p = preparerPoint(point, cote, maillesCorps);
     if (p.erreur) return echec(p.erreur, b);
     if (p.ajoute) {
-      explications.push(`1 rang ${p.miseEnPlace.at(-1).cote === "E" ? "endroit" : "envers"} avant ${nomAvecArticle(point)} (${NOMS_DES_ZONES[b.zone]}), pour que son motif commence sur le bon côté`);
+      explications.push(`1 rang ${p.miseEnPlace.at(-1).cote === "E" ? "endroit" : "envers"} avant ${nomAvecArticle(point)} (${nomDe(b)}), pour que son motif commence sur le bon côté`);
     }
     p.miseEnPlace.forEach((r, t) => {
       const { entree } = rangPrepare(point, p, t, maillesCorps);
@@ -406,7 +443,7 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       );
     }
     plansDesBlocs.push({
-      id: b.id, zone: b.zone, nom: NOMS_DES_ZONES[b.zone], pointId: b.pointId, laineId, colonnes: null,
+      id: b.id, zone: b.zone, nom: nomDe(b), section: b.section || undefined, pointId: b.pointId, laineId, colonnes: null,
       premierRang: premier, dernierRang: rangs.length, rangs: rangs.length - premier + 1,
       maillesCorps: mailles[i], hauteurCm: rangs.slice(premier - 1).reduce((t, r) => t + r.hauteurCm, 0),
       densite: infos.get(b.id).densite,

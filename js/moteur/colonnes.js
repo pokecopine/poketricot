@@ -21,10 +21,12 @@ const ppcm = (a, b) => (a * b) / pgcd(a, b);
  * Renvoie la liste des nombres de mailles (dans l'ordre), ou null si aucune répartition ne tombe juste.
  */
 export function repartirMailles(colonnes, n, mode = "plat", reference = null) {
+  // Une colonne peut porter plusieurs points (damier de sections, E3c-3) : le nombre doit convenir à tous.
+  const convient = (c, m) => (c.points || [c.point]).every((p) => maillesConviennent(p, m, mode));
   const fixes = colonnes.map((c) => (Number.isInteger(c.mailles) && c.mailles > 0 ? c.mailles : null));
   const libres = colonnes.map((c, i) => i).filter((i) => fixes[i] === null);
   const reste = n - fixes.reduce((t, m) => t + (m || 0), 0);
-  for (const [i, m] of fixes.entries()) if (m !== null && !maillesConviennent(colonnes[i].point, m, mode)) return null;
+  for (const [i, m] of fixes.entries()) if (m !== null && !convient(colonnes[i], m)) return null;
   if (libres.length === 0) return reste === 0 ? fixes : null;
   if (reste < libres.length) return null;
   const ideal = reste / libres.length;
@@ -34,7 +36,7 @@ export function repartirMailles(colonnes, n, mode = "plat", reference = null) {
     const liste = [];
     for (let m = 1; m <= reste; m++) {
       if (Math.abs(m - ideal) > Math.max(3, ideal * 0.6)) continue;
-      if (maillesConviennent(colonnes[i].point, m, mode)) liste.push(m);
+      if (convient(colonnes[i], m)) liste.push(m);
     }
     return liste;
   });

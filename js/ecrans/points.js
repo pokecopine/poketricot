@@ -5,7 +5,8 @@ import { useApp } from "../etat.js";
 import { naviguer, retour } from "../routeur.js";
 import { useProjet } from "../composants/etape.js";
 import { PatronDejaCree } from "./patron.js";
-import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBloc } from "../donnees/projets.js";
+import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBloc, nomBloc, numeroSection } from "../donnees/projets.js";
+const minusculeNom = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
@@ -416,6 +417,7 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
   if (!bloc) return html`<main class="ecran"><${EnTete} titre="Bloc introuvable" secours=${cheminEtape(projet)} /></main>`;
   const laine = laines.find((l) => l.id === (bloc.laineId || projet.laineId)) || laines.find((l) => l.id === projet.laineId);
   const nomZone = NOMS_DES_ZONES[bloc.zone];
+  const section1 = bloc.section && numeroSection(projet, bloc) === 1;
   const iColonne = colonneId ? (bloc.colonnes || []).findIndex((c) => c.id === colonneId) : -1;
   if (iColonne >= 0) {
     const c = bloc.colonnes[iColonne];
@@ -426,7 +428,7 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
       couleur: laine?.couleur,
       actuel: c.pointId,
       avis: (p) => avisPourBloc(p, projet.type, "corps", { colonne: true }),
-      titre: `Point : colonne ${iColonne + 1} ${bloc.zone === "corps" ? "du corps" : "de la bande"}`,
+      titre: `Point : colonne ${iColonne + 1} ${bloc.section ? `de la ${minusculeNom(nomBloc(bloc, projet))}` : bloc.zone === "corps" ? "du corps" : "de la bande"}`,
       aide: projet.type === "snood"
         ? "Une colonne autour du tour, à côté des autres : chaque point garde son motif. Un point qui déplace le début du tour prend tout le tour."
         : "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
@@ -444,8 +446,10 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
     actuel: bloc.pointId,
     avis: (p) => avisPourBloc(p, projet.type, bloc.zone),
     titrePeuAdaptes: { bas: "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
-    titre: bloc.zone === "corps" ? "Point principal" : `Point : ${nomZone}`,
-    aide: (projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
+    titre: section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
+    aide: bloc.section && !section1
+      ? `Une section du corps, sur ${projet.type === "snood" ? "tout le tour" : "toute la largeur"} : chaque section a son point.`
+      : (projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
     choisir: async (pointId) => {
       await modifier((p) => avecPointDuBloc(p, blocId, pointId));

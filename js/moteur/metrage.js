@@ -47,11 +47,14 @@ export function surfacesDuPlan(plan) {
   for (const b of plan.blocs) {
     const laineId = b.laineId || null;
     if (b.colonnes) {
+      // Intarsia (0.16.0) : chaque colonne dans sa laine ; la lisière droite dans celle de la colonne 1, la gauche dans celle de la dernière.
       for (const c of b.colonnes) {
-        surfaces.push({ blocId: b.id, colonneId: c.id, nom: b.nom, pointId: c.pointId, laineId, cm2: c.largeurCm * b.hauteurCm });
+        surfaces.push({ blocId: b.id, colonneId: c.id, nom: b.nom, pointId: c.pointId, laineId: (c.laineId !== undefined ? c.laineId : laineId), cm2: c.largeurCm * b.hauteurCm });
       }
       if (plan.lisieres.mailles) {
-        surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.colonnes[0].pointId, laineId, cm2: lisieres(b.colonnes[0].densite) * b.hauteurCm });
+        const demi = (lisieres(b.colonnes[0].densite) * b.hauteurCm) / 2;
+        surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.colonnes[0].pointId, laineId: (b.colonnes[0].laineId !== undefined ? b.colonnes[0].laineId : laineId), cm2: demi });
+        surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.colonnes[0].pointId, laineId: (b.colonnes.at(-1).laineId !== undefined ? b.colonnes.at(-1).laineId : laineId), cm2: demi });
       }
       continue;
     }
@@ -62,8 +65,13 @@ export function surfacesDuPlan(plan) {
   if (plan.bandesLaterales) {
     const bandesCm = 2 * plan.bandesLaterales.largeurCm;
     // Une seule surface par laine (une seule en tout quand l'écharpe est d'une seule laine).
+    // Chaque côté compte pour moitié ; en intarsia, il prend la laine de la colonne qu'il touche.
     const parLaine = new Map();
-    for (const b of plan.blocs) parLaine.set(b.laineId || null, (parLaine.get(b.laineId || null) || 0) + b.hauteurCm);
+    const compter = (id, h) => parLaine.set(id || null, (parLaine.get(id || null) || 0) + h);
+    for (const b of plan.blocs) {
+      compter(b.colonnes ? (b.colonnes[0].laineId !== undefined ? b.colonnes[0].laineId : b.laineId) : b.laineId, b.hauteurCm / 2);
+      compter(b.colonnes ? (b.colonnes.at(-1).laineId !== undefined ? b.colonnes.at(-1).laineId : b.laineId) : b.laineId, b.hauteurCm / 2);
+    }
     const total = [...parLaine.values()].reduce((t, h) => t + h, 0) || 1;
     for (const [laineId, h] of parLaine) {
       surfaces.push({

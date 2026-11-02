@@ -111,6 +111,7 @@ export function nouveauProjet({ type = "echarpe", nom = "" } = {}) {
       statut: "conception",
       etape: 1,
       laineId: "",
+      autresLaines: [],
       aiguillesId: "",
       pointPrincipal: "",
       echantillonId: "",
@@ -129,6 +130,7 @@ export function nouveauProjet({ type = "echarpe", nom = "" } = {}) {
     statut: "conception",
     etape: 1,
     laineId: "",
+    autresLaines: [],
     aiguillesId: "",
     pointPrincipal: "",
     echantillonId: "",
@@ -242,7 +244,8 @@ export function avecPointPrincipal(projet, pointId) {
     ...projet,
     pointPrincipal: pointId,
     echantillonId: "",
-    blocs: projet.blocs.map((b) => (b.zone === "corps" ? { ...b, pointId } : b)),
+    // Le point principal est celui de la section 1 ; les autres sections gardent le leur (E3c-2).
+    blocs: projet.blocs.map((b) => (b.zone === "corps" && (!b.section || b.id === premiereSection(projet)?.id) ? { ...b, pointId } : b)),
   };
 }
 
@@ -250,7 +253,7 @@ export function avecPointPrincipal(projet, pointId) {
 export function avecPointDuBloc(projet, blocId, pointId) {
   const bloc = projet.blocs.find((b) => b.id === blocId);
   if (!bloc) return projet;
-  if (bloc.zone === "corps") return avecPointPrincipal(projet, pointId);
+  if (bloc.zone === "corps" && !(bloc.section && bloc.id !== premiereSection(projet)?.id)) return avecPointPrincipal(projet, pointId);
   return { ...projet, blocs: projet.blocs.map((b) => (b.id === blocId ? { ...b, pointId } : b)) };
 }
 
@@ -268,23 +271,108 @@ export function materielManquant(projet, { echantillon }) {
 export const pointsDuBloc = (b) => [b.pointId, ...(b.colonnes || []).map((c) => c.pointId)].filter(Boolean);
 
 /**
- * Laines utilisées par le projet : la principale d'abord, puis celles des blocs, dans l'ordre (sans doublon).
- * Une laine qui n'est plus dans la réserve est ignorée (le bloc reprend la laine principale).
+ * Identifiants des laines du projet (E3c-1) : la principale, puis `autresLaines`, puis (projets d'avant 0.16.0,
+ * sans migration) celles trouvées dans les blocs et les colonnes, sans doublon.
+ */
+export function idsLainesDuProjet(projet) {
+  const ids = [];
+  const ajouter = (id) => { if (id && !ids.includes(id)) ids.push(id); };
+  ajouter(projet.laineId);
+  (projet.autresLaines || []).forEach(ajouter);
+  for (const b of projet.blocs || []) {
+    ajouter(b.laineId);
+    (b.colonnes || []).forEach((c) => ajouter(c.laineId));
+  }
+  return ids;
+}
+
+/**
+ * Laines du projet : la principale d'abord, puis les autres, dans l'ordre.
+ * Une laine qui n'est plus dans la réserve est ignorée (ses blocs reprennent la laine principale).
  */
 export function lainesDuProjet(projet, laines = []) {
-  const principale = laines.find((l) => l.id === projet.laineId);
-  const liste = principale ? [principale] : [];
+  return idsLainesDuProjet(projet).map((id) => laines.find((l) => l.id === id)).filter(Boolean);
+}
+
+/** Laines vraiment utilisées par les blocs (la principale d'abord), pour les avertissements d'épaisseur. */
+function lainesUtilisees(projet, laines = []) {
+  const ids = [projet.laineId];
   for (const b of projet.blocs) {
-    const l = b.laineId && b.laineId !== projet.laineId ? laines.find((x) => x.id === b.laineId) : null;
-    if (l && !liste.includes(l)) liste.push(l);
+    for (const id of [b.laineId, ...(b.colonnes || []).map((c) => c.laineId)]) if (id && !ids.includes(id)) ids.push(id);
   }
-  return liste;
+  return ids.map((id) => laines.find((l) => l.id === id)).filter(Boolean);
+}
+
+/** Ajoute une laine au projet (étape Matériel). */
+export function avecLaineDuProjet(projet, laineId) {
+  if (!laineId || idsLainesDuProjet(projet).includes(laineId)) return projet;
+  const autres = idsLainesDuProjet(projet).filter((id) => id !== projet.laineId);
+  return { ...projet, autresLaines: [...autres, laineId] };
+}
+
+/** Blocs (et colonnes) qui utilisent une laine : combien reprendront la laine principale si on la retire. */
+export function blocsDeLaLaine(projet, laineId) {
+  return projet.blocs.filter((b) => b.laineId === laineId || (b.colonnes || []).some((c) => c.laineId === laineId)).length;
+}
+
+/** Retire une laine du projet : ses blocs et ses colonnes reprennent la laine principale. */
+export function sansLaineDuProjet(projet, laineId) {
+  if (!laineId || laineId === projet.laineId) return projet;
+  const autres = idsLainesDuProjet(projet).filter((id) => id !== projet.laineId && id !== laineId);
+  const sans = (o) => {
+    if (o.laineId !== laineId) return o;
+    const { laineId: _, ...reste } = o;
+    return reste;
+  };
+  return {
+    ...projet,
+    autresLaines: autres,
+    blocs: projet.blocs.map((b) => {
+      const c = sans(b);
+      return c.colonnes ? { ...c, colonnes: c.colonnes.map(sans) } : c;
+    }),
+  };
+}
+
+/** Change la laine principale ; si elle était parmi les autres laines, elle en sort. */
+export function avecLainePrincipale(projet, laineId) {
+  const autres = idsLainesDuProjet(projet).filter((id) => id !== projet.laineId && id !== laineId);
+  return { ...projet, laineId, autresLaines: autres };
 }
 
 /** Laine d'un bloc (null = la laine principale), en ignorant une laine disparue de la réserve. */
 export function laineDuBloc(projet, bloc, laines) {
   if (!bloc?.laineId || bloc.laineId === projet.laineId) return null;
   return laines && !laines.some((l) => l.id === bloc.laineId) ? null : bloc.laineId;
+}
+
+/**
+ * Laine d'une colonne (E3c-4, intarsia à plat seulement) : la sienne, sinon celle de son bloc (null = principale).
+ * En rond, une colonne garde la laine de sa section.
+ */
+export function laineDeColonne(projet, bloc, colonne, laines) {
+  const duBloc = laineDuBloc(projet, bloc, laines);
+  if (enRond(projet) || !colonne?.laineId) return duBloc;
+  if (colonne.laineId === projet.laineId) return null;
+  return laines && !laines.some((l) => l.id === colonne.laineId) ? duBloc : colonne.laineId;
+}
+
+/** Un bloc est en intarsia quand deux laines différentes se trouvent dans un même rang (à plat seulement). */
+export function blocEnIntarsia(projet, bloc, laines) {
+  if (enRond(projet) || !(bloc?.colonnes?.length >= 2)) return false;
+  const ids = new Set(bloc.colonnes.map((c) => laineDeColonne(projet, bloc, c, laines) || "principale"));
+  return ids.size > 1;
+}
+
+/** Petites pelotes d'un bloc en intarsia : une par colonne, comptées par laine (null = principale). */
+export function petitesPelotes(projet, bloc, laines) {
+  if (!blocEnIntarsia(projet, bloc, laines)) return [];
+  const parLaine = new Map();
+  for (const c of bloc.colonnes) {
+    const id = laineDeColonne(projet, bloc, c, laines);
+    parLaine.set(id, (parLaine.get(id) || 0) + 1);
+  }
+  return [...parLaine].map(([laineId, nombre]) => ({ laineId, nombre }));
 }
 
 /**
@@ -302,8 +390,11 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
     .filter((b) => b.pointId)
     .map((b) => {
       const laineId = laineDuBloc(projet, b, reserve);
-      const colonnes = b.colonnes?.length >= COLONNES_MIN && b.zone !== "cotes" ? b.colonnes.filter((c) => c.pointId) : null;
-      return { ...b, laineId, colonnes: colonnes?.length >= COLONNES_MIN ? colonnes : undefined };
+      const colonnes = b.colonnes?.length >= COLONNES_MIN && b.zone !== "cotes"
+        ? b.colonnes.filter((c) => c.pointId).map((c) => ({ ...c, laineId: laineDeColonne(projet, b, c, reserve) }))
+        : null;
+      const nom = estSection(b) ? `section ${numeroSection(projet, b)}` : undefined;
+      return { ...b, laineId, nom, colonnes: colonnes?.length >= COLONNES_MIN ? colonnes : undefined };
     });
   const densites = densitesDuProjet({
     pointIds: [...new Set(blocs.flatMap(pointsDuBloc))], laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon,
@@ -333,7 +424,7 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
   }
   // Une laine d'une autre épaisseur que la principale : les dimensions de ses blocs sont moins sûres.
   const avertissements = [];
-  for (const l of lainesDuProjet({ ...projet, blocs }, reserve).slice(1)) {
+  for (const l of lainesUtilisees({ ...projet, blocs }, reserve).slice(1)) {
     if (laine.epaisseur && l.epaisseur && l.epaisseur !== laine.epaisseur) {
       const ep = (id) => EPAISSEURS.find((e) => e.id === id)?.nom.toLowerCase() || id;
       avertissements.push(`« ${l.nom} » est ${ep(l.epaisseur)}, ta laine principale est ${ep(laine.epaisseur)} : les blocs dans cette laine n'auront pas tout à fait la même taille. Choisis plutôt une laine de même épaisseur.`);
@@ -391,12 +482,14 @@ export const blocsHorizontaux = (projet) => projet.blocs.filter(horizontal);
 export const blocLateral = (projet) => projet.blocs.find((b) => b.zone === "cotes") || null;
 
 /** Nom d'un bloc pour l'écran : « Bordure du bas », « Corps », « Bande », « Bandes latérales ». */
-export function nomBloc(bloc) {
+export function nomBloc(bloc, projet = null) {
+  if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
   return { bas: "Bordure du bas", corps: "Corps", bande: "Bande", haut: "Bordure du haut", cotes: "Bandes latérales" }[bloc.zone] || "Bloc";
 }
 
 /** Nom court pour les pastilles des blocs. */
-export function nomCourtBloc(bloc) {
+export function nomCourtBloc(bloc, projet = null) {
+  if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
   return { bas: "Bordure", corps: "Corps", bande: "Bande", haut: "Bordure", cotes: "Côtés" }[bloc.zone] || "Bloc";
 }
 
@@ -582,8 +675,8 @@ export function colonnesEgalesPossibles(bloc, total, mode = "plat") {
 
 // ---------------- Laines ----------------
 
-/** Les blocs qui peuvent prendre une autre laine : bordures et bandes (le corps garde la laine principale). */
-export const coloriable = (bloc) => ["bas", "haut", "bande"].includes(bloc?.zone);
+/** Les blocs qui peuvent prendre une autre laine : bordures, bandes et sections (un corps d'un seul tenant garde la laine principale). */
+export const coloriable = (bloc) => ["bas", "haut", "bande"].includes(bloc?.zone) || estSection(bloc);
 
 export function avecLaineDuBloc(projet, blocId, laineId) {
   return {
@@ -599,8 +692,138 @@ export function avecLaineDuBloc(projet, blocId, laineId) {
   };
 }
 
-/** Le projet a-t-il des blocs d'une autre laine ? */
-export const plusieursLaines = (projet) => projet.blocs.some((b) => b.laineId && b.laineId !== projet.laineId);
+/** Le projet a-t-il des blocs (ou des colonnes) d'une autre laine ? */
+export const plusieursLaines = (projet) =>
+  projet.blocs.some((b) => (b.laineId && b.laineId !== projet.laineId) || (!enRond(projet) && (b.colonnes || []).some((c) => c.laineId && c.laineId !== projet.laineId)));
+
+/** Laine d'une colonne (intarsia) ; undefined ou la laine de son bloc la libère. */
+export function avecLaineDeColonne(projet, blocId, colonneId, laineId) {
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) => {
+      if (b.id !== blocId) return b;
+      const duBloc = b.laineId || projet.laineId;
+      return {
+        ...b,
+        colonnes: (b.colonnes || []).map((c) => {
+          if (c.id !== colonneId) return c;
+          const { laineId: _, ...reste } = c;
+          return !laineId || laineId === duBloc ? reste : { ...reste, laineId };
+        }),
+      };
+    }),
+  };
+}
+
+// ---------------- Sections du corps (E3c-2, E3c-3) ----------------
+
+export const SECTIONS_MIN = 2;
+export const SECTIONS_MAX = 6;
+
+export const estSection = (b) => b?.zone === "corps" && !!b.section;
+export const sectionsDuProjet = (projet) => (projet?.blocs || []).filter(estSection);
+export const enSections = (projet) => sectionsDuProjet(projet).length >= SECTIONS_MIN;
+export const premiereSection = (projet) => sectionsDuProjet(projet)[0] || null;
+export function numeroSection(projet, bloc) {
+  return sectionsDuProjet(projet).findIndex((b) => b.id === bloc.id) + 1;
+}
+
+/**
+ * Coupe le corps en n sections empilées (la section 1 en bas, au point principal ; les paires dans un autre point).
+ * Les bandes qui coupaient le corps restent à leur place relative.
+ */
+export function diviserEnSections(projet, n) {
+  const k = Math.max(SECTIONS_MIN, Math.min(SECTIONS_MAX, Math.round(n)));
+  const blocs = projet.blocs;
+  const iCorps = blocs.map((b, i) => (b.zone === "corps" ? i : -1)).filter((i) => i >= 0);
+  if (!iCorps.length) return projet;
+  const premier = iCorps[0];
+  const dernier = iCorps[iCorps.length - 1];
+  const m = iCorps.length;
+  const base = projet.pointPrincipal || blocs[premier].pointId;
+  // Bandes au milieu du corps : après quelle partie (1 à m − 1) ?
+  const bandes = [];
+  let partie = 0;
+  for (let i = premier; i <= dernier; i++) {
+    if (blocs[i].zone === "corps") partie += 1;
+    else bandes.push({ bloc: blocs[i], apres: Math.min(k, Math.ceil((partie * k) / m)) });
+  }
+  const milieu = [];
+  for (let j = 0; j < k; j++) {
+    milieu.push({ id: j === 0 ? blocs[premier].id : idBloc(), zone: "corps", section: true, pointId: j % 2 === 0 ? base : pointAlterne(base) });
+    for (const x of bandes) if (x.apres === j + 1) milieu.push(x.bloc);
+  }
+  return { ...projet, blocs: [...blocs.slice(0, premier), ...milieu, ...blocs.slice(dernier + 1)] };
+}
+
+/** Le corps redevient d'un seul tenant (dans le point et la laine principaux) ; les bandes restent. */
+export function sansSections(projet) {
+  const blocs = [];
+  for (const b of projet.blocs) {
+    if (b.zone !== "corps") { blocs.push(b); continue; }
+    if (blocs.at(-1)?.zone === "corps") continue; // deux parties voisines : recollées
+    blocs.push({ id: b.id, zone: "corps", pointId: projet.pointPrincipal || b.pointId });
+  }
+  return { ...projet, blocs };
+}
+
+/** Hauteur fixée d'une section ; il reste toujours au moins une section libre, qui prend le reste. */
+export function avecHauteurSection(projet, blocId, hauteurCm) {
+  const sections = sectionsDuProjet(projet);
+  const h = borne(hauteurCm, [1, 300]);
+  let blocs = projet.blocs.map((b) => (b.id === blocId ? { ...b, hauteurCm: h } : b));
+  const libres = blocs.filter((b) => estSection(b) && !(b.hauteurCm > 0));
+  if (!libres.length) {
+    const autre = [...sections].reverse().find((b) => b.id !== blocId);
+    if (autre) blocs = blocs.map((b) => (b.id === autre.id ? (({ hauteurCm, ...r }) => r)(b) : b));
+  }
+  return { ...projet, blocs };
+}
+
+/** Toutes les sections repartent à hauteurs égales. */
+export function repartirSections(projet) {
+  return { ...projet, blocs: projet.blocs.map((b) => (estSection(b) ? (({ hauteurCm, ...r }) => r)(b) : b)) };
+}
+
+export const sectionsFixees = (projet) => sectionsDuProjet(projet).some((b) => b.hauteurCm > 0);
+
+/** Toutes les sections sont-elles en colonnes ? */
+export const estUnDamier = (projet) => enSections(projet) && sectionsDuProjet(projet).every((b) => b.colonnes?.length >= COLONNES_MIN);
+
+/**
+ * Damier : toutes les sections en autant de colonnes que la section choisie (4 par défaut) ;
+ * la colonne j de la section k prend le point et la laine de la colonne (j + k) mod n du modèle (en rond : le point seulement).
+ */
+export function faireUnDamier(projet, sectionId) {
+  const sections = sectionsDuProjet(projet);
+  if (sections.length < SECTIONS_MIN) return projet;
+  let modele = sections.find((b) => b.id === sectionId) || sections[0];
+  if (!(modele.colonnes?.length >= COLONNES_MIN)) modele = diviserBloc(projet, modele.id, 4).blocs.find((b) => b.id === modele.id);
+  const M = modele.colonnes;
+  const n = M.length;
+  const rond = enRond(projet);
+  const iModele = sections.findIndex((b) => b.id === modele.id);
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) => {
+      const k = sections.findIndex((s) => s.id === b.id);
+      if (k < 0) return b;
+      const d = (((k - iModele) % n) + n) % n;
+      const colonnes = Array.from({ length: n }, (_, j) => {
+        const src = M[(j + d) % n];
+        const c = { id: b.id === modele.id ? M[j].id : `c${j + 1}-${Math.random().toString(36).slice(2, 6)}`, pointId: src.pointId };
+        if (!rond && src.laineId) c.laineId = src.laineId;
+        return c;
+      });
+      return { ...b, colonnes: b.id === modele.id ? M.map((c) => ({ ...c })) : colonnes };
+    }),
+  };
+}
+
+/** Les sections redeviennent d'un seul tenant (sans colonnes). */
+export function defaireLeDamier(projet) {
+  return { ...projet, blocs: projet.blocs.map((b) => (estSection(b) ? (({ colonnes, ...r }) => r)(b) : b)) };
+}
 
 // ---------------- Aperçu et création du patron ----------------
 

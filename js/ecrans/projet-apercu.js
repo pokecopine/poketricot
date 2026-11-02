@@ -50,7 +50,8 @@ export function EtapeApercu({ id }) {
   const c = calcul?.laineSuffit;
   const manques = etat.manques || [];
   const avertir = etat.possible && (etat.approximatif || manques.length > 0);
-  const utilisees = lainesDuProjet(projet, laines);
+  // Seules les laines vraiment utilisées (une laine du projet peut attendre au Matériel sans servir).
+  const utilisees = calcul?.parLaine?.length ? calcul.parLaine.map((x) => x.laine) : lainesDuProjet(projet, laines).slice(0, 1);
   const snood = projet.type === "snood";
 
   async function creer() {

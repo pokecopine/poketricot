@@ -35,7 +35,15 @@ export function descriptionDuSnood(projet, plan, laines = []) {
   const bas = pointParId(projet.blocs.find((b) => b.zone === "bas")?.pointId);
   const laine = laines.find((l) => l.id === projet.laineId);
   const morceaux = [`Snood en 3D : un tube de ${Math.round(geo.tour)} cm de tour et ${Math.round(geo.hauteur)} cm de haut`];
-  if (corps) morceaux.push(`corps en ${minuscule(corps.nom)}${laine ? ` « ${laine.nom} »` : ""}`);
+  const sections = projet.blocs.filter((b) => b.zone === "corps" && b.section);
+  if (sections.length > 1) {
+    // E3c : chaque section nommée avec son point et sa laine.
+    sections.forEach((b, i) => {
+      const p = pointParId(b.pointId);
+      const l = laines.find((x) => x.id === (b.laineId || projet.laineId));
+      morceaux.push(`section ${i + 1} en ${p ? minuscule(p.nom) : "point à choisir"}${l ? ` « ${l.nom} »` : ""}`);
+    });
+  } else if (corps) morceaux.push(`corps en ${minuscule(corps.nom)}${laine ? ` « ${laine.nom} »` : ""}`);
   if (bas) morceaux.push(`bordures en ${minuscule(bas.nom)}`);
   return morceaux.join(", ") + ". Glisse un doigt pour tourner autour, pince pour zoomer.";
 }

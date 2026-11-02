@@ -2,17 +2,19 @@
 import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
-import { Encart, Pastille } from "../composants/base.js";
+import { useState } from "preact/hooks";
+import { Encart, Pastille, Fenetre } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { etiquettesProprietes } from "../catalogue/fiche.js";
-import { trierLaines, trierAiguilles, titreAiguilles, lireNombre, formaterNombre } from "../donnees/reserve.js";
+import { trierLaines, trierAiguilles, titreAiguilles, lireNombre, formaterNombre, EPAISSEURS } from "../donnees/reserve.js";
 import { texteDate, estPese } from "../donnees/echantillons.js";
 import {
   cheminEtape, detailLaineProjet, conseilAiguille, echantillonDuProjet, materielManquant, nomPropose, avisPointPrincipal, noteEchantillonEnRond,
+  avecLainePrincipale, avecLaineDuProjet, sansLaineDuProjet, blocsDeLaLaine, idsLainesDuProjet,
 } from "../donnees/projets.js";
 import { densiteJerseyProvisoire } from "../moteur/densite.js";
 
@@ -33,7 +35,7 @@ export function EtapeMateriel({ id }) {
   const taille = lireNombre(aig?.tailleMm);
 
   const choisirLaine = (l) =>
-    modifier((p) => ({ ...p, laineId: l.id, echantillonId: "", nom: p.nomAuto ? nomPropose(p.type, l) : p.nom }));
+    modifier((p) => ({ ...avecLainePrincipale(p, l.id), echantillonId: "", nom: p.nomAuto ? nomPropose(p.type, l) : p.nom }));
   const choisirAiguilles = (a) => modifier((p) => ({ ...p, aiguillesId: a.id, echantillonId: "" }));
 
   const adresseEchantillon = () => {
@@ -52,21 +54,7 @@ export function EtapeMateriel({ id }) {
     <main class="ecran">
       <${EnTeteEtape} titre=${projet.nom} numero=${2} secours=${cheminEtape(projet, 1)} />
       <div class="ecran-contenu">
-        <div class="titre-section">
-          <h2>1. Laine, dans ma réserve</h2>
-          <a href="#/reserve/laine/nouvelle">+ Nouvelle</a>
-        </div>
-        ${listeLaines.length === 0 && html`<${Encart} type="brique">Ta réserve n'a pas encore de laine : ajoute celle de ce projet.<//>`}
-        ${listeLaines.map(
-          (l) => html`<button type="button" class="choix-laine" aria-pressed=${String(l.id === projet.laineId)} onClick=${() => choisirLaine(l)}>
-            <${Pastille} couleur=${l.couleur} taille=${40} />
-            <span class="ligne-element-texte">
-              <span class="ligne-element-nom">${l.nom}</span>
-              <span class="ligne-element-detail">${detailLaineProjet(l)}</span>
-            </span>
-            ${l.id === projet.laineId && html`<span class="badge">Choisie</span>`}
-          </button>`
-        )}
+        <${LainesDuProjet} projet=${projet} laines=${listeLaines} laine=${laine} surPrincipale=${choisirLaine} modifier=${modifier} />
 
         <div class="titre-section">
           <h2>2. Aiguilles, dans ma réserve</h2>
@@ -162,7 +150,83 @@ function CarteEchantillon({ projet, laine, point, taille, echantillon, adresse, 
     </button>
     ${projet.sansEchantillon &&
     html`<${Encart} type="brique">${provisoire
-      ? `Dimensions estimées d'après ${provisoire.origine === "etiquette" ? `l'échantillon de l'étiquette (${formaterNombre(provisoire.mailles)} mailles${provisoire.rangsEtiquette ? ` × ${formaterNombre(provisoire.rangs)} rangs` : ""} en jersey${Math.abs(provisoire.mailles - lireNombre(laine.echantillonEtiquette?.mailles)) > 0.05 ? ", ajusté à tes aiguilles" : ""})` : "l'épaisseur de la laine"}. Le patron demandera ton vrai échantillon.`
+      ? `Dimensions estimées d'après ${provisoire.origine === "etiquette" ? `l'échantillon de l'étiquette (${formaterNombre(provisoire.mailles)} mailles${provisoire.rangsEtiquette ? ` × ${formaterNombre(provisoire.rangs)} rangs` : ""} en jersey${Math.abs(provisoire.mailles - lireNombre(laine.echantillonEtiquette?.mailles)) > 0.05 ? ", ajusté à tes aiguilles" : ""})` : "l'épaisseur de la laine"}. Ça suffit pour créer le patron, avec des tailles approximatives ; ton échantillon les rendra justes.`
       : "Sans échantillon ni étiquette, l'outil ne peut pas estimer les dimensions : indique l'échantillon de l'étiquette dans ta laine, ou tricote ton échantillon."}<//>`}
   </div>`;
+}
+
+/** E3c-1 : la laine principale, puis les autres laines du projet (ajouter, retirer). */
+function LainesDuProjet({ projet, laines, laine, surPrincipale, modifier }) {
+  const [changer, setChanger] = useState(false);
+  const [ajouter, setAjouter] = useState(false);
+  const [aRetirer, setARetirer] = useState(null);
+  const ids = idsLainesDuProjet(projet);
+  const autres = ids.filter((id) => id !== projet.laineId).map((id) => laines.find((l) => l.id === id)).filter(Boolean);
+  const disponibles = laines.filter((l) => !ids.includes(l.id));
+  const ep = (id) => EPAISSEURS.find((e) => e.id === id)?.nom.toLowerCase() || id;
+  const retirer = (l) => {
+    if (blocsDeLaLaine(projet, l.id) > 0) setARetirer(l);
+    else modifier((p) => sansLaineDuProjet(p, l.id));
+  };
+  const n = aRetirer ? blocsDeLaLaine(projet, aRetirer.id) : 0;
+  const ligne = (l, actions) => html`<div class="choix-laine laine-projet">
+    <${Pastille} couleur=${l.couleur} taille=${36} />
+    <span class="ligne-element-texte">
+      <span class="ligne-element-nom">${l.nom}</span>
+      <span class="ligne-element-detail">${detailLaineProjet(l)}</span>
+    </span>
+    ${actions}
+  </div>`;
+  const listeChoix = (liste, surChoix) => liste.map(
+    (l) => html`<button type="button" class="choix-laine" aria-pressed=${String(l.id === projet.laineId)} onClick=${() => surChoix(l)}>
+      <${Pastille} couleur=${l.couleur} taille=${40} />
+      <span class="ligne-element-texte">
+        <span class="ligne-element-nom">${l.nom}</span>
+        <span class="ligne-element-detail">${detailLaineProjet(l)}</span>
+      </span>
+      ${l.id === projet.laineId && html`<span class="badge">Choisie</span>`}
+    </button>`
+  );
+
+  return html`
+    <div class="titre-section">
+      <h2>1. Laine principale</h2>
+      ${laine && !changer
+        ? html`<button type="button" class="bouton-lien" onClick=${() => setChanger(true)}>Changer</button>`
+        : html`<a href="#/reserve/laine/nouvelle">+ Nouvelle</a>`}
+    </div>
+    ${laines.length === 0 && html`<${Encart} type="brique">Ta réserve n'a pas encore de laine : ajoute celle de ce projet.<//>`}
+    ${laine && !changer
+      ? html`${ligne(laine, html`<span class="badge badge-sauge">Principale</span>`)}
+          <p class="note">Elle donne l'échantillon et l'aiguille.</p>`
+      : listeChoix(laines.filter((l) => !ids.includes(l.id) || l.id === projet.laineId), (l) => { setChanger(false); surPrincipale(l); })}
+    ${laine && changer && html`<button type="button" class="bouton-lien" onClick=${() => setChanger(false)}>Garder ${laine.nom}</button>`}
+
+    ${laine && html`
+      <div class="titre-section">
+        <h2 style="font-size:17px">Autres laines du projet</h2>
+      </div>
+      ${autres.length === 0 && html`<p class="note">Pour des bandes, des sections ou des colonnes d'une autre couleur, ajoute ici les autres laines de ce projet.</p>`}
+      ${autres.map((l) => html`
+        ${ligne(l, html`<button type="button" class="bouton-lien" aria-label=${`Retirer ${l.nom} du projet`} onClick=${() => retirer(l)}>Retirer</button>`)}
+        ${laine.epaisseur && l.epaisseur && l.epaisseur !== laine.epaisseur &&
+        html`<${Encart} type="brique">« ${l.nom} » est ${ep(l.epaisseur)}, ta laine principale est ${ep(laine.epaisseur)} : les blocs dans cette laine n'auront pas tout à fait la même taille. Choisis plutôt une laine de même épaisseur.<//>`}`)}
+      ${ajouter
+        ? html`<div class="sous-liste">
+            ${disponibles.length === 0 && html`<p class="note">Toutes les laines de ta réserve sont déjà dans le projet.</p>`}
+            ${listeChoix(disponibles, (l) => { setAjouter(false); modifier((p) => avecLaineDuProjet(p, l.id)); })}
+            <div class="rangee-boutons">
+              <a class="bouton-lien" href="#/reserve/laine/nouvelle">Nouvelle laine</a>
+              <button type="button" class="bouton-lien" onClick=${() => setAjouter(false)}>Fermer</button>
+            </div>
+          </div>`
+        : html`<button type="button" class="bouton-secondaire" onClick=${() => setAjouter(true)}>+ Ajouter une laine du projet</button>`}
+    `}
+
+    <${Fenetre} ouverte=${!!aRetirer} titre=${aRetirer ? `Retirer « ${aRetirer.nom} » du projet ?` : ""} surFermeture=${() => setARetirer(null)}
+      actions=${html`
+        <button type="button" class="bouton-principal" onClick=${() => { const id = aRetirer.id; setARetirer(null); modifier((p) => sansLaineDuProjet(p, id)); }}>Retirer</button>
+        <button type="button" class="bouton-secondaire" onClick=${() => setARetirer(null)}>Annuler</button>`}>
+      <p>${n} bloc${n > 1 ? "s reprendront" : " reprendra"} la laine principale${laine ? ` (« ${laine.nom} »)` : ""}. La laine reste dans ta réserve.</p>
+    <//>`;
 }

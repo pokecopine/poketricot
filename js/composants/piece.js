@@ -44,6 +44,10 @@ export function geometrieEcharpe(projet, plan) {
     const laineId = b.laineId || null;
     const pb = plan?.blocs.find((p) => p.id === b.id);
     const colonnes = pb ? pb.colonnes : b.colonnes?.length >= 2 ? b.colonnes : null;
+    // Intarsia (0.16.0) : chaque colonne dans sa laine ; la bande droite prend celle de la colonne 1, la gauche celle de la dernière.
+    const laineCol = (c) => (pb ? (c.laineId !== undefined ? c.laineId : laineId) : c.laineId || laineId);
+    let laineDroite = laineId;
+    let laineGauche = laineId;
     if (colonnes) {
       // Largeurs réelles des colonnes si le plan les donne, sinon parts égales.
       const poids = colonnes.map((c) => c.largeurCm || 1);
@@ -51,15 +55,17 @@ export function geometrieEcharpe(projet, plan) {
       let x = bandeCm;
       colonnes.forEach((c, j) => {
         const l = (poids[j] / somme) * milieu;
-        rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId, rangee: i, x, y, l, h });
+        rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId: laineCol(c), rangee: i, x, y, l, h });
         x += l;
       });
+      laineDroite = laineCol(colonnes[0]);
+      laineGauche = laineCol(colonnes.at(-1));
     } else {
       rects.push({ blocId: b.id, pointId: b.pointId, laineId, rangee: i, x: bandeCm, y, l: milieu, h });
     }
     if (lateral && bandeCm > 0) {
-      rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId, rangee: i, x: 0, y, l: bandeCm, h, cote: "droit" });
-      rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId, rangee: i, x: largeur - bandeCm, y, l: bandeCm, h, cote: "gauche" });
+      rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId: laineDroite, rangee: i, x: 0, y, l: bandeCm, h, cote: "droit" });
+      rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId: laineGauche, rangee: i, x: largeur - bandeCm, y, l: bandeCm, h, cote: "gauche" });
     }
     y += h;
   });
