@@ -216,3 +216,122 @@ export function DessinEcharpe({
       </g>
     </svg>`;
 }
+
+/**
+ * Géométrie du snood ouvert et posé à plat, en centimètres (0.14.0) : largeur = tour, hauteur = hauteur du snood.
+ * Rectangles { blocId, colonneId?, colonne?, pointId, laineId, rangee, x, y, l, h } ; x depuis le bord droit
+ * (le début du tour), y depuis le bas. Les colonnes partent du marqueur, vers la gauche.
+ */
+export function geometrieSnood(projet, plan) {
+  const tour = plan ? plan.largeur.reelleCm : projet.taille.tourCm;
+  const hauteur = plan ? plan.longueur.reelleCm : projet.taille.hauteurCm;
+  const horizontaux = projet.blocs.filter((b) => b.zone !== "cotes");
+  let hauteurs;
+  if (plan) {
+    hauteurs = horizontaux.map((b) => plan.blocs.find((p) => p.id === b.id)?.hauteurCm || 0);
+  } else {
+    const fixes = horizontaux.filter((b) => b.zone !== "corps").reduce((t, b) => t + (b.hauteurCm || 0), 0);
+    const nCorps = horizontaux.filter((b) => b.zone === "corps").length || 1;
+    const corps = Math.max(hauteur * 0.2, hauteur - fixes) / nCorps;
+    hauteurs = horizontaux.map((b) => (b.zone === "corps" ? corps : b.hauteurCm || 0));
+  }
+  const total = hauteurs.reduce((t, h) => t + h, 0) || 1;
+  const rects = [];
+  let y = 0;
+  horizontaux.forEach((b, i) => {
+    const h = (hauteurs[i] * hauteur) / total;
+    const laineId = b.laineId || null;
+    const pb = plan?.blocs.find((p) => p.id === b.id);
+    const colonnes = pb ? pb.colonnes : b.colonnes?.length >= 2 ? b.colonnes : null;
+    if (colonnes) {
+      const poids = colonnes.map((c) => c.largeurCm || 1);
+      const somme = poids.reduce((t, w) => t + w, 0);
+      let x = 0;
+      colonnes.forEach((c, j) => {
+        const l = (poids[j] / somme) * tour;
+        rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId, rangee: i, x, y, l, h });
+        x += l;
+      });
+    } else {
+      rects.push({ blocId: b.id, pointId: b.pointId, laineId, rangee: i, x: 0, y, l: tour, h });
+    }
+    y += h;
+  });
+  return { tour, hauteur, rects, rangees: horizontaux.map((b, i) => ({ blocId: b.id, zone: b.zone, hauteur: (hauteurs[i] * hauteur) / total })) };
+}
+
+/**
+ * Le snood dessiné ouvert et posé à plat (maquette validée le 02/11) : les blocs empilés du bas vers le haut,
+ * le début du tour marqué par un trait pointillé sur le bord droit.
+ */
+export function DessinSnood({
+  projet, plan, couleur, laines = [], blocChoisi = null, colonneChoisie = null, surChoix = null,
+  largeurPx = 300, hauteurMinPx = 84, hauteurMaxPx = 170, echelleTexture = 0.42, prefixe = "snood", libelle, reperes = true,
+}) {
+  const geo = geometrieSnood(projet, plan);
+  const teinte = (r) => couleurDeLaine(r.laineId, couleur, laines);
+  const motifs = useMotifs(geo.rects.map((r) => ({ pointId: r.pointId, couleur: teinte(r) })), echelleTexture, prefixe);
+  const c = nuancesLaine(couleur);
+  const W = largeurPx;
+  const H = Math.min(hauteurMaxPx, Math.max(hauteurMinPx, (W * geo.hauteur) / geo.tour));
+  const minBloc = 10;
+  const hPx = geo.rangees.map((r) => (r.zone === "corps" ? 0 : Math.max(minBloc, (r.hauteur * H) / geo.hauteur)));
+  const fixe = hPx.reduce((t, h) => t + h, 0);
+  const corpsBrut = geo.rangees.reduce((t, r) => t + (r.zone === "corps" ? r.hauteur : 0), 0) || 1;
+  geo.rangees.forEach((r, i) => {
+    if (r.zone === "corps") hPx[i] = (r.hauteur * Math.max(0, H - fixe)) / corpsBrut;
+  });
+  const yPx = [];
+  let cumul = 0;
+  geo.rangees.forEach((r, i) => {
+    yPx[i] = H - cumul - hPx[i];
+    cumul += hPx[i];
+  });
+  const mx = 4;
+  const my = 8;
+  const bas = reperes ? 26 : 0;
+  const formes = geo.rects.map((r) => {
+    const l = (r.l / geo.tour) * W;
+    const x = W - (r.x / geo.tour) * W - l;
+    return { ...r, couleur: teinte(r), px: { x: f(x), y: f(yPx[r.rangee]), l: f(l), h: f(hPx[r.rangee]) } };
+  });
+  const choisis = formes.filter((r) => r.blocId === blocChoisi && (!colonneChoisie || r.colonneId === colonneChoisie));
+  const contour = choisis.length ? boite(choisis) : null;
+  const remplir = (r) => {
+    const m = motifDe(motifs, r.pointId, r.couleur);
+    return m ? `url(#${m.id})` : nuancesLaine(r.couleur).maille;
+  };
+  return html`
+    <svg width=${W + 2 * mx} height=${H + 2 * my + bas} viewBox=${`0 0 ${W + 2 * mx} ${H + 2 * my + bas}`} role="img"
+      aria-label=${libelle || "Le snood ouvert et posé à plat, avec ses blocs ; le début du tour est sur le bord droit"}
+      style="max-width:100%;height:auto;display:block;margin:0 auto">
+      <defs>
+        ${Object.values(motifs).map(
+          (m) => html`<pattern id=${m.id} patternUnits="userSpaceOnUse" width=${f(m.l)} height=${f(m.h)}>
+            <image href=${m.url} width=${f(m.l)} height=${f(m.h)} preserveAspectRatio="none" />
+          </pattern>`
+        )}
+        <clipPath id=${`${prefixe}-contour`}><rect x="0" y="0" width=${W} height=${H} rx="6" /></clipPath>
+      </defs>
+      <g transform=${`translate(${mx} ${my})`}>
+        <g clip-path=${`url(#${prefixe}-contour)`}>
+          <rect x="0" y="0" width=${W} height=${H} fill=${c.fond} />
+          ${formes.map(
+            (r) => html`<rect x=${r.px.x} y=${r.px.y} width=${r.px.l} height=${f(r.px.h + 0.4)} fill=${remplir(r)}
+              style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix(r.blocId, r.colonneId) : undefined} />`
+          )}
+          ${geo.rangees.slice(1).map((r, i) => html`<line x1="0" x2=${W} y1=${f(yPx[i + 1] + hPx[i + 1])} y2=${f(yPx[i + 1] + hPx[i + 1])} stroke=${c.contour} stroke-width="0.8" opacity="0.6" />`)}
+          ${formes.filter((r) => r.colonne > 1).map(
+            (r) => html`<line x1=${f(r.px.x + r.px.l)} x2=${f(r.px.x + r.px.l)} y1=${r.px.y} y2=${f(r.px.y + r.px.h)} stroke=${nuancesLaine(r.couleur).contour} stroke-width="0.8" opacity="0.7" />`
+          )}
+        </g>
+        <rect x="0" y="0" width=${W} height=${H} rx="6" fill="none" stroke=${c.contour} stroke-opacity="0.35" />
+        ${contour && html`<rect x=${f(contour.x + 1.5)} y=${f(contour.y + 1.5)} width=${f(contour.l - 3)} height=${f(contour.h - 3)}
+          rx="4" fill="none" stroke="var(--accent)" stroke-width="3" pointer-events="none" />`}
+        <line x1=${W} x2=${W} y1="-6" y2=${H + 6} stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" />
+        ${reperes && html`
+          <text x=${W - 2} y=${H + 22} text-anchor="end" font-size="12" font-weight="700" fill="var(--accent)" font-family="var(--corps)">début du tour ↑</text>
+          <text x="0" y=${H + 22} font-size="12" fill="var(--texte-2)" font-family="var(--corps)">← le tour continue</text>`}
+      </g>
+    </svg>`;
+}

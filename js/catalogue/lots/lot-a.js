@@ -254,15 +254,14 @@ export const POINTS_LOT = [
       V(["env"]),
       E(["3p1_a", "jete"], { debut: ["end"], fin: ["end", "end"] }),
     ],
-    // En rond, le décalage des nœuds tomberait à cheval sur le début du tour : version en rond non écrite.
-    rond: { mode: "impossible", raison: "Les nœuds se décalent d'une maille tous les 2 tours : il faudrait déplacer le début du tour, ce que l'outil ne sait pas encore expliquer." },
+    // En rond, les nœuds se décalent de 2 mailles tous les 2 tours : le début du tour se déplace (0.14.0).
     densite: { mailles: 0.95, rangs: 1 },
     consommation: 0.95,
     proprietes: { reversible: false, roule: true, elasticite: 2, chaleur: 1, niveau: 2 },
     ouvrages: {
       echarpe: possible("Son envers est différent et les côtés roulent : ajoute une bordure (mousse ou riz)."),
-      snood: deconseille("L'outil ne sait pas encore expliquer ce point en rond."),
-      bonnet: deconseille("L'outil ne sait pas encore expliquer ce point en rond."),
+      snood: possible("Ajouré : léger, plutôt pour la mi-saison."),
+      bonnet: possible("Ajouré : plutôt pour un bonnet de mi-saison."),
       couverture: possible("Ajouré et léger : plutôt une couverture de mi-saison, avec une bordure."),
     },
     zones: { bordure: deconseille("Il roule : une bordure en dentelle nouée s'enroulerait.") },

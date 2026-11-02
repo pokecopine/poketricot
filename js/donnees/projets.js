@@ -5,7 +5,8 @@ import { PALETTE, EPAISSEURS, lireNombre, formaterNombre, metrageLaine, aiguille
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { echantillonsCorrespondants, densitesDuProjet } from "../moteur/densite.js";
 import { planEcharpe, MAILLES_MAX_BANDE_LATERALE } from "../moteur/plan.js";
-import { maillesMinimum, maillesConviennent } from "../moteur/simulateur.js";
+import { planSnood, cableTropLong } from "../moteur/plan-rond.js";
+import { maillesMinimum, maillesConviennent, convertirEnRond } from "../moteur/simulateur.js";
 import { repartirMailles, maillesVoisines, totauxEgaux, COLONNES_MIN, COLONNES_MAX } from "../moteur/colonnes.js";
 import { metrageNecessaire, comparerALaLaine } from "../moteur/metrage.js";
 import { densitePoint } from "../moteur/densite.js";
@@ -24,7 +25,10 @@ export const ETAPES = [
 export const etapeParCle = (cle) => ETAPES.find((e) => e.cle === cle) || ETAPES[0];
 export const cheminEtape = (projet, numero = projet.etape) => `/projet/${encodeURIComponent(projet.id)}/${ETAPES[numero - 1].cle}`;
 
-export const TYPES_DISPONIBLES = ["echarpe"];
+export const TYPES_DISPONIBLES = ["echarpe", "snood"];
+
+/** La pièce se tricote-t-elle en rond ? */
+export const enRond = (projet) => projet?.type === "snood" || projet?.mode === "rond";
 
 /** Tailles d'écharpe (PRD) : longueurs proposées et largeur par défaut. */
 export const TAILLES_ECHARPE = {
@@ -48,8 +52,39 @@ export const TAILLES_ECHARPE = {
 
 export const LIMITES_ECHARPE = { longueur: [40, 300], largeur: [6, 60] };
 
-/** Blocs d'une écharpe neuve : bordures et bandes latérales en point mousse, corps dans le point principal. */
-export function blocsParDefaut(pointPrincipal = "") {
+/** Tailles de snood (PRD, 01/11) : tour × hauteur. */
+export const TAILLES_SNOOD = {
+  adulte: [
+    { preset: "1tour", nom: "1 tour", detail: "Ajusté autour du cou", tourCm: 62, hauteurCm: 24 },
+    { preset: "2tours", nom: "2 tours", detail: "Long, on l'enroule deux fois", tourCm: 152, hauteurCm: 25 },
+  ],
+  enfant: [{ preset: "1tour", nom: "1 tour", detail: "Ajusté autour du cou", tourCm: 56, hauteurCm: 20 }],
+};
+
+export const LIMITES_SNOOD = { tour: [40, 200], hauteur: [10, 60] };
+
+/** Sous ce tour, un snood risque de ne pas passer la tête. */
+export const TOUR_MIN_TETE = 56;
+
+/** Taille d'un snood neuf ou après un changement de public. */
+export function tailleSnood(pub = "adulte", preset = "1tour") {
+  const liste = TAILLES_SNOOD[pub] || TAILLES_SNOOD.adulte;
+  const t = liste.find((x) => x.preset === preset) || liste[0];
+  return { public: pub, preset: t.preset, tourCm: t.tourCm, hauteurCm: t.hauteurCm };
+}
+
+/**
+ * Blocs d'une pièce neuve.
+ * Écharpe : bordures et bandes latérales en point mousse ; snood : bordures en côtes 1/1 (décision du 02/11), sans bandes latérales.
+ */
+export function blocsParDefaut(pointPrincipal = "", type = "echarpe") {
+  if (type === "snood") {
+    return [
+      { id: "bas", zone: "bas", pointId: "cotes-1-1", hauteurCm: 3 },
+      { id: "corps", zone: "corps", pointId: pointPrincipal },
+      { id: "haut", zone: "haut", pointId: "cotes-1-1", hauteurCm: 3 },
+    ];
+  }
   return [
     { id: "bas", zone: "bas", pointId: "mousse", hauteurCm: 3 },
     { id: "corps", zone: "corps", pointId: pointPrincipal },
@@ -59,6 +94,24 @@ export function blocsParDefaut(pointPrincipal = "") {
 }
 
 export function nouveauProjet({ type = "echarpe", nom = "" } = {}) {
+  if (type === "snood") {
+    return {
+      nom: nom.trim() || "Snood",
+      nomAuto: !nom.trim(),
+      type,
+      statut: "conception",
+      etape: 1,
+      laineId: "",
+      aiguillesId: "",
+      pointPrincipal: "",
+      echantillonId: "",
+      sansEchantillon: false,
+      taille: tailleSnood(),
+      mode: "rond",
+      lisieres: "aucune",
+      blocs: blocsParDefaut("", "snood"),
+    };
+  }
   const t = TAILLES_ECHARPE.adulte;
   return {
     nom: nom.trim() || "Écharpe",
@@ -145,7 +198,10 @@ export const zoneAvis = (zone) => (zone === "bas" || zone === "haut" ? "bordure"
  * Avis sur un point pour un bloc : celui du catalogue (pièce et zone),
  * et pour les bandes latérales, les motifs trop larges sont écartés.
  */
-export function avisPourBloc(point, piece, zone) {
+export function avisPourBloc(point, piece, zone, { colonne = false } = {}) {
+  if (colonne && (piece === "snood" || piece === "bonnet") && convertirEnRond(point).marqueur) {
+    return { avis: "deconseille", raison: "Il déplace le début du tour : il prend tout le tour, pas une colonne." };
+  }
   if (zone === "cotes") {
     const min = maillesMinimum(point, "plat");
     if (min > MAILLES_MAX_BANDE_LATERALE) {
@@ -244,10 +300,12 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
     pointIds: [...new Set(blocs.flatMap(pointsDuBloc))], laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon,
   });
   if (Object.values(densites).some((d) => !d)) return null;
-  const r = planEcharpe({
-    largeurCm: projet.taille.largeurCm, longueurCm: projet.taille.longueurCm,
-    blocs, densites, lisieres: projet.lisieres,
-  });
+  const r = projet.type === "snood"
+    ? planSnood({ tourCm: projet.taille.tourCm, hauteurCm: projet.taille.hauteurCm, blocs: blocs.filter((b) => b.zone !== "cotes"), densites })
+    : planEcharpe({
+      largeurCm: projet.taille.largeurCm, longueurCm: projet.taille.longueurCm,
+      blocs, densites, lisieres: projet.lisieres,
+    });
   let metrage = null;
   let laineSuffit = null;
   let parLaine = [];
@@ -272,8 +330,14 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
       avertissements.push(`« ${l.nom} » est ${ep(l.epaisseur)}, ta laine principale est ${ep(laine.epaisseur)} : les blocs dans cette laine n'auront pas tout à fait la même taille. Choisis plutôt une laine de même épaisseur.`);
     }
   }
+  // En rond : un câble plus long que le tour ne permet pas de joindre les mailles.
+  let cable = null;
+  if (projet.type === "snood") {
+    cable = cableTropLong(lireNombre(aiguilles?.cableCm), projet.taille.tourCm);
+    if (cable) cable = { ...cable, cableCm: lireNombre(aiguilles.cableCm), tourCm: projet.taille.tourCm };
+  }
   return {
-    ...r, densites, echantillon, metrage, laineSuffit, parLaine, avertissements,
+    ...r, densites, echantillon, metrage, laineSuffit, parLaine, avertissements, cable,
     estime: !echantillon || Object.values(densites).some((d) => d.statut !== "mesuree"),
   };
 }
@@ -474,11 +538,12 @@ export function changerLargeurColonne(projet, blocId, colonneId, sens, { total, 
   const j = bloc?.colonnes?.findIndex((c) => c.id === colonneId) ?? -1;
   if (j < 0) return projet;
   const point = pointParId(bloc.colonnes[j].pointId);
-  const m = point && maillesVoisines(point, actuelles[j], sens);
+  const mode = enRond(projet) ? "rond" : "plat";
+  const m = point && maillesVoisines(point, actuelles[j], sens, mode);
   if (!m) return projet;
   const colonnes = bloc.colonnes.map((c, i) => ({ point: pointParId(c.pointId), mailles: i === j ? m : c.mailles }));
   if (!colonnes.some((c, i) => i !== j && !Number.isInteger(c.mailles))) return projet;
-  if (!repartirMailles(colonnes, total)) return projet;
+  if (!repartirMailles(colonnes, total, mode)) return projet;
   return avecLargeurColonne(projet, blocId, colonneId, m);
 }
 
@@ -490,7 +555,7 @@ export function apercuDecoupe(projet, blocId, n, total) {
   const essai = diviserBloc(projet, blocId, n).blocs.find((b) => b.id === blocId);
   const colonnes = (essai?.colonnes || []).map((c) => ({ point: pointParId(c.pointId) }));
   if (!colonnes.length || colonnes.some((c) => !c.point) || !total) return null;
-  const r = repartirMailles(colonnes, total);
+  const r = repartirMailles(colonnes, total, enRond(projet) ? "rond" : "plat");
   return r ? { mailles: r, egales: r.every((m) => m === r[0]) } : null;
 }
 
@@ -498,10 +563,10 @@ export function apercuDecoupe(projet, blocId, n, total) {
  * Pour des colonnes égales, combien de mailles faudrait-il au bloc (au-dessous et au-dessus) ?
  * Renvoie { dessous, dessus } avec pour chacun { total, parColonne } (ou null).
  */
-export function colonnesEgalesPossibles(bloc, total) {
+export function colonnesEgalesPossibles(bloc, total, mode = "plat") {
   const colonnes = (bloc?.colonnes || []).map((c) => ({ point: pointParId(c.pointId) }));
   if (colonnes.length < COLONNES_MIN || colonnes.some((c) => !c.point)) return null;
-  const { dessous, dessus } = totauxEgaux(colonnes, total);
+  const { dessous, dessus } = totauxEgaux(colonnes, total, mode);
   const part = (t) => (t === null ? null : { total: t, parColonne: t / colonnes.length });
   return { dessous: part(dessous), dessus: part(dessus) };
 }
@@ -562,8 +627,15 @@ export function etatCreationPatron(projet, calcul) {
 export function texteSuivi(projet, suivi) {
   const total = projet.patron?.nbRangs || 0;
   const fait = suivi?.rangsFaits || 0;
+  const tour = enRond(projet);
   if (!total) return "Patron créé";
-  if (fait === 0) return `Patron prêt · ${total} rangs${projet.patron?.approximatif ? " · tailles approximatives" : ""}`;
-  if (fait >= total) return "Tous les rangs sont tricotés";
-  return `Rang ${fait + 1} sur ${total} · ${Math.floor((fait / total) * 100)} %`;
+  if (fait === 0) return `Patron prêt · ${total} ${tour ? "tours" : "rangs"}${projet.patron?.approximatif ? " · tailles approximatives" : ""}`;
+  if (fait >= total) return tour ? "Tous les tours sont tricotés" : "Tous les rangs sont tricotés";
+  return `${tour ? "Tour" : "Rang"} ${fait + 1} sur ${total} · ${Math.floor((fait / total) * 100)} %`;
+}
+
+/** Phrase sur un échantillon à plat utilisé pour une pièce en rond (décision du 02/11), ou null. */
+export function noteEchantillonEnRond(projet, echantillon) {
+  if (!enRond(projet) || !echantillon || echantillon.mode === "rond") return null;
+  return "Tricoté à plat : en rond, le tricot peut être un peu plus serré.";
 }

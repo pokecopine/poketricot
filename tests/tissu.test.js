@@ -156,3 +156,51 @@ test("tissu : accrochée à la nuque, l'écharpe tirée ne glisse pas du cou", (
   assert.equal(t.pos[ancre + 1], y0);
   assert.ok(Math.abs(t.pos[ancre] - BUSTE.cou.cx) < BUSTE.cou.rayon + 3, "la nuque a quitté le cou");
 });
+
+// ---------- Tube (snood, 0.14.0) ----------
+import { Tissu as TissuTube, BUSTE as BUSTE_T } from "../js/rendu/tissu.js";
+
+for (const [L, H, tours] of [[62, 24, 1], [152, 25, 2]]) {
+  test(`snood ${tours} tour${tours > 1 ? "s" : ""} : le tube fait le tour, se pose sur le buste sans le traverser ni s'étirer`, () => {
+    const t = new TissuTube({ largeur: L, longueur: H, pas: tours > 1 ? 2.5 : 2, ferme: true });
+    // La dernière colonne est reliée à la première.
+    const a = t.indice(t.nx - 1, 0);
+    let relie = false;
+    for (let c = 0; c < t.liensA.length; c++) if ((t.liensA[c] === a && t.liensB[c] === t.indice(0, 0)) || (t.liensB[c] === a && t.liensA[c] === t.indice(0, 0))) relie = true;
+    assert.ok(relie);
+    t.poserSnood({ tours });
+    for (let i = 0; i < 200; i++) t.pas(1 / 60);
+    let dedans = 0;
+    let haut = -Infinity;
+    for (let i = 0; i < t.n; i++) {
+      const [x, y, z] = [t.pos[i * 3], t.pos[i * 3 + 1], t.pos[i * 3 + 2]];
+      haut = Math.max(haut, y);
+      for (const o of Object.values(BUSTE_T)) {
+        if (o.type === "ellipsoide" && Math.hypot((x - o.c[0]) / o.r[0], (y - o.c[1]) / o.r[1], (z - o.c[2]) / o.r[2]) < 0.97) dedans++;
+        if (o.type === "cylindreY" && y > o.y0 && y < o.y1 && Math.hypot(x - o.cx, z - o.cz) < o.rayon * 0.97) dedans++;
+      }
+    }
+    assert.equal(dedans, 0, "le tissu ne traverse pas le buste");
+    assert.ok(haut <= t.plafond + 1e-6, "il ne remonte pas par-dessus le cou");
+    // Un rang ne fait pas un tour plus long que le tissu (à 7 % près, juste au contact des épaules).
+    for (let k = 0; k < t.ny; k++) {
+      let l = 0;
+      for (let j = 0; j < t.nx; j++) {
+        const p = t.indice(j, k) * 3;
+        const q = t.indice((j + 1) % t.nx, k) * 3;
+        l += Math.hypot(t.pos[q] - t.pos[p], t.pos[q + 1] - t.pos[p + 1], t.pos[q + 2] - t.pos[p + 2]);
+      }
+      assert.ok(l <= L * 1.07, `rang ${k} : ${l.toFixed(1)} cm`);
+    }
+  });
+}
+
+test("positionA fait le tour d'un tube", () => {
+  const t = new TissuTube({ largeur: 60, longueur: 10, pas: 2, ferme: true });
+  t.poserSnood({ tours: 1 });
+  const a = new Float32Array(3);
+  const b = new Float32Array(3);
+  t.positionA(0, 4, a);
+  t.positionA(60, 4, b);
+  assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 1e-4);
+});

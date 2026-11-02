@@ -50,6 +50,7 @@ export function EtapeApercu({ id }) {
   const manques = etat.manques || [];
   const avertir = etat.possible && (etat.approximatif || manques.length > 0);
   const utilisees = lainesDuProjet(projet, laines);
+  const snood = projet.type === "snood";
 
   async function creer() {
     if (!etat.possible || enCours) return;
@@ -77,17 +78,20 @@ export function EtapeApercu({ id }) {
 
   return html`
     <main class="ecran">
-      <${EnTeteEtape} titre="Ton écharpe, terminée" numero=${5} secours=${cheminEtape(projet, 4)} />
+      <${EnTeteEtape} titre=${snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
-        ${plan
+        ${plan && snood
+          ? html`<${Piece3D} key="snood" projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose="snood" />
+            <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} cm de tour × ${formaterNombre(plan.longueur.reelleCm, 0)} cm de haut${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
+          : plan
           ? html`<${Onglets} libelle="Où voir l'écharpe" valeur=${pose} surChoix=${setPose}
               choix=${[{ valeur: "barre", libelle: "Sur une barre" }, { valeur: "cou", libelle: "Autour du cou" }]} />
             <${Piece3D} key=${pose} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose=${pose} />
             <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
-          : html`<${Encart} type="brique">L'écharpe s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
+          : html`<${Encart} type="brique">${snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
 
         ${corps && !corps.proprietes.reversible &&
-        html`<${Onglets} libelle="Côté de l'écharpe" valeur=${face} surChoix=${setFace}
+        html`<${Onglets} libelle=${snood ? "Côté du snood" : "Côté de l'écharpe"} valeur=${face} surChoix=${setFace}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]} />`}
 
         ${utilisees.length > 0 &&
@@ -99,7 +103,7 @@ export function EtapeApercu({ id }) {
         ${plan &&
         html`<div class="chiffres-cles">
           <div><strong>${plan.montage.mailles}</strong><span>mailles à monter</span></div>
-          <div><strong>${plan.rangs.length}</strong><span>rangs</span></div>
+          <div><strong>${plan.rangs.length}</strong><span>${snood ? "tours" : "rangs"}</span></div>
           <div><strong>${m ? `≈ ${m.metres} m` : "?"}</strong><span>${calcul.parLaine?.length > 1 ? `de laine en tout (${calcul.parLaine.length} laines)` : c?.disponible ? `sur ${c.disponible} m` : "de laine"}</span></div>
         </div>`}
 
@@ -122,7 +126,9 @@ export function EtapeApercu({ id }) {
                   ? `Calculé depuis ton échantillon en ${minuscule(pointParId(dCorps.depuis)?.nom || "un autre point")} : tailles approximatives`
                   : "Pas d'échantillon : il en faut un pour créer le patron"}
           <//>`}
-          ${corps && html`<${Coche} ok=${true}>${texteReversible(corps)}<//>`}
+          ${corps && html`<${Coche} ok=${true}>${texteReversible(corps, projet.type)}<//>`}
+          ${calcul?.cable && html`<${Coche} ok=${false}>Ton câble (${formaterNombre(calcul.cable.cableCm, 0)} cm) est plus long que le tour du snood : prends un câble de ${calcul.cable.conseille} cm<//>`}
+          ${snood && calcul?.echantillon && calcul.echantillon.mode !== "rond" && html`<${Coche} ok=${true}>Échantillon tricoté à plat : en rond, le tricot peut être un peu plus serré<//>`}
         </ul>
         ${!etat.possible && calcul?.ok && html`<${Encart} type="brique">${etat.raison}<//>`}
         ${calcul?.ok && calcul.explications.length > 0 &&
@@ -147,7 +153,7 @@ export function EtapeApercu({ id }) {
         html`<${Encart} type="brique"><strong>Tailles approximatives</strong> : sans échantillon tricoté en ${corps ? minuscule(corps.nom) : "ce point"}, l'écart réel peut dépasser 10 %. Le patron portera cette mention.<//>`}
         ${manques.map((x) => html`<${Encart} type="brique">Il manque environ ${x.metres} m${manques.length > 1 || utilisees.length > 1 ? ` de « ${x.nom} »` : " de laine"} : prévois une pelote de plus, du même bain si possible.<//>`)}
         ${dCorps?.origine === "etiquette" && corps &&
-        html`<p class="note">Astuce : tricote les 15 premiers centimètres du corps, mesure-les, et compare avec le patron (il indique la longueur tricotée à chaque rang).</p>`}
+        html`<p class="note">Astuce : tricote les ${snood ? "5" : "15"} premiers centimètres du corps, mesure-les, et compare avec le patron (il indique la longueur tricotée à chaque ${snood ? "tour" : "rang"}).</p>`}
       <//>
     </main>`;
 }

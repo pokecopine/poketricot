@@ -67,3 +67,16 @@ export function texteRang(rang, { tour = false, abreviations = false } = {}) {
 export function texteCote(cote) {
   return cote === "E" ? "endroit" : "envers";
 }
+
+/**
+ * Consigne de déplacement du marqueur de début de tour (en rond).
+ * sens "gauche" : on glisse des mailles sans les tricoter ; "droite" : on les remet sur l'aiguille gauche.
+ */
+export function texteDeplacement(mailles, sens = "gauche", { abreviations = false } = {}) {
+  const m = mailles > 1 ? `${mailles} mailles` : "1 maille";
+  if (abreviations) return sens === "gauche" ? `Déplacer le marqueur : gl. ${mailles} m. sans les tric.` : `Déplacer le marqueur : remettre ${mailles} m. sur l'aig. g.`;
+  const de = mailles > 1 ? `de ${m}` : "d'une maille";
+  return sens === "gauche"
+    ? `Avant ce tour, déplace le marqueur ${de} vers la gauche : glisse ${m} sans ${mailles > 1 ? "les" : "la"} tricoter, puis replace le marqueur.`
+    : `Avant ce tour, déplace le marqueur ${de} vers la droite : remets ${m} de l'aiguille droite sur l'aiguille gauche, puis replace le marqueur.`;
+}

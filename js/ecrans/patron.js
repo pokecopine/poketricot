@@ -4,9 +4,10 @@ import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Encart, Fenetre, EnTete, BoutonRetour, Pastille } from "../composants/base.js";
-import { DessinEcharpe } from "../composants/piece.js";
+import { DessinEcharpe, DessinSnood } from "../composants/piece.js";
 import { ConfirmerSuppression } from "../composants/suppression.js";
 import { pointParId } from "../catalogue/points.js";
+import { nomSource } from "./points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { texteDate } from "../donnees/echantillons.js";
 import { rangsCondenses, cocherRang, decocherRang, projetVariante, nouveauSuivi } from "../moteur/patron.js";
@@ -14,6 +15,11 @@ import { rangsCondenses, cocherRang, decocherRang, projetVariante, nouveauSuivi 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 const minuscule = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 const cote = (c) => (c === "E" ? "Côté endroit" : "Côté envers");
+
+/** Vocabulaire du patron : « rang » à plat, « tour » en rond. */
+const motsDe = (patron) => (patron?.mode === "rond"
+  ? { Rang: "Tour", rang: "tour", rangs: "tours", piece: "le snood", Piece: "Le snood", ton: "ton snood" }
+  : { Rang: "Rang", rang: "rang", rangs: "rangs", piece: "l'écharpe", Piece: "L'écharpe", ton: "ton écharpe" });
 
 /** Charge le projet, son patron et son suivi. */
 function usePatron(id) {
@@ -103,8 +109,10 @@ export function EcranPatron({ id }) {
   const total = patron.rangs.length;
   const faits = suivi?.rangsFaits || 0;
   const corps = patron.points[patron.projet.pointPrincipal];
+  const mots = motsDe(patron);
+  const rond = patron.mode === "rond";
   const codesTechniques = [
-    "montage", "lisiere",
+    "montage", "joindre", "lisiere",
     ...[...new Set(patron.rangs.flatMap((r) => r.techniques))].filter((c) => c !== "lisiere"),
     "rabattage", "fils", "blocage",
   ].filter((c, i, t) => patron.techniques[c] && t.indexOf(c) === i);
@@ -132,12 +140,17 @@ export function EcranPatron({ id }) {
       <div class="ecran-contenu">
         <div class="recap-patron">
           <div class="recap-dessin">
-            <${DessinEcharpe} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []} orientation="verticale"
-              longueurVerticalePx=${170} prefixe="patron" echelleTexture=${0.3} libelle=${patron.resume} />
+            ${rond
+              ? html`<${DessinSnood} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []}
+                  largeurPx=${120} hauteurMinPx=${60} hauteurMaxPx=${110} prefixe="patron" echelleTexture=${0.3} reperes=${false} libelle=${patron.resume} />`
+              : html`<${DessinEcharpe} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []} orientation="verticale"
+                  longueurVerticalePx=${170} prefixe="patron" echelleTexture=${0.3} libelle=${patron.resume} />`}
           </div>
           <div class="recap-texte">
-            <strong>${formaterNombre(patron.dimensions.largeurCm, 0)} × ${formaterNombre(patron.dimensions.longueurCm, 0)} cm</strong>
-            <span>Aiguilles ${formaterNombre(patron.aiguilles.tailleMm, 2)} mm${patron.aiguilles.cableCm ? `, câble ${formaterNombre(patron.aiguilles.cableCm, 0)} cm` : ""}, tricot à plat</span>
+            <strong>${rond
+              ? `${formaterNombre(patron.dimensions.largeurCm, 0)} cm de tour × ${formaterNombre(patron.dimensions.longueurCm, 0)} cm`
+              : `${formaterNombre(patron.dimensions.largeurCm, 0)} × ${formaterNombre(patron.dimensions.longueurCm, 0)} cm`}</strong>
+            <span>Aiguilles ${formaterNombre(patron.aiguilles.tailleMm, 2)} mm${patron.aiguilles.cableCm ? `, câble ${formaterNombre(patron.aiguilles.cableCm, 0)} cm` : ""}, tricot ${rond ? "en rond" : "à plat"}</span>
             ${patron.laines?.length > 1
               ? html`<span class="liste-laines">${patron.laines.map((l) => html`<span><${Pastille} couleur=${l.couleur} taille=${12} />${l.nom}${l.metres ? ` · environ ${l.metres} m` : ""}</span>`)}</span>`
               : patron.laine && html`<span>${patron.laine.nom}${patron.metrage ? ` · environ ${patron.metrage.metres} m${patron.laineSuffit?.disponible ? ` sur ${patron.laineSuffit.disponible} m` : ""}` : ""}</span>`}
@@ -147,7 +160,7 @@ export function EcranPatron({ id }) {
           </div>
         </div>
         ${patron.approximatif &&
-        html`<${Encart} type="brique">Tailles approximatives : le patron a été calculé sans échantillon tricoté dans le point du corps. Mesure ton tricot après une quinzaine de centimètres : le suivi indique la longueur attendue à chaque rang.<//>`}
+        html`<${Encart} type="brique">Tailles approximatives : le patron a été calculé sans échantillon tricoté dans le point du corps. Mesure ton tricot après ${rond ? "quelques" : "une quinzaine de"} centimètres : le suivi indique la longueur attendue à chaque ${mots.rang}.<//>`}
         <p class="note">${patron.resume}</p>
 
         <h2 style="font-size:18px">Les étapes</h2>
@@ -164,7 +177,7 @@ export function EcranPatron({ id }) {
                   onChange=${(ev) => setCoches({ ...coches, [j]: ev.currentTarget.checked })} /> ${x}</label>`)}`}
                 ${e.texte && html`<p>${e.texte}</p>`}
                 ${(e.techniques || []).map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
-                ${e.cle === "bloc" && html`<${RangsDuBloc} patron=${patron} bloc=${patron.blocs.find((b) => b.id === e.blocId)} abreviations=${prefs.abreviations} />`}
+                ${e.cle === "bloc" && html`<${RangsDuBloc} patron=${patron} bloc=${patron.blocs.find((b) => b.id === e.blocId)} abreviations=${prefs.abreviations} mots=${mots} />`}
               </div>
             </details>
           </li>`)}
@@ -180,15 +193,15 @@ export function EcranPatron({ id }) {
           <summary>Ajustements faits par l'outil (${patron.explications.length})</summary>
           ${patron.explications.map((e) => html`<p class="note">${e.charAt(0).toUpperCase() + e.slice(1)}${e.endsWith(".") ? "" : "."}</p>`)}
         </details>`}
-        ${corps?.source && html`<p class="note">Le point du corps vient des Triconautes : <a href=${corps.source} target="_blank" rel="noopener">voir l'article et la vidéo</a> (il faut du réseau).</p>`}
-        <p class="note">Patron créé le ${texteDate(patron.creeLe.slice(0, 10))}, vérifié rang par rang par l'outil : ${total} rangs.</p>
+        ${corps?.source && html`<p class="note">Le point du corps vient ${nomSource(corps.source) === "Les Triconautes" ? "des Triconautes" : `du site ${nomSource(corps.source)}`} : <a href=${corps.source} target="_blank" rel="noopener">voir l'article et la vidéo</a> (il faut du réseau).</p>`}
+        <p class="note">Patron créé le ${texteDate(patron.creeLe.slice(0, 10))}, vérifié ${mots.rang} par ${mots.rang} par l'outil : ${total} ${mots.rangs}.</p>
         <button type="button" class="bouton-lien bouton-danger" onClick=${() => setSupprimer(true)}>Supprimer ce projet</button>
       </div>
 
       <div class="ecran-pied ecran-pied-pile">
         ${projet.statut !== "termine" &&
         html`<button type="button" class="bouton-principal" onClick=${() => naviguer(`/projet/${encodeURIComponent(projet.id)}/suivi`)}>
-          ${faits === 0 ? "Commencer le suivi des rangs" : faits >= total ? "Terminer l'écharpe" : `Reprendre au rang ${faits + 1}`}
+          ${faits === 0 ? `Commencer le suivi des ${mots.rangs}` : faits >= total ? `Terminer ${mots.piece}` : `Reprendre au ${mots.rang} ${faits + 1}`}
         </button>`}
         <button type="button" class="bouton-secondaire" onClick=${dupliquer}>Dupliquer en variante</button>
       </div>
@@ -204,17 +217,17 @@ export function EcranPatron({ id }) {
     </main>`;
 }
 
-function RangsDuBloc({ patron, bloc, abreviations }) {
+function RangsDuBloc({ patron, bloc, abreviations, mots }) {
   if (!bloc) return null;
   return html`<div class="rangs-bloc">
     ${rangsCondenses(patron, bloc).map((x) =>
       x.rang
         ? html`<div class="rang-court">
-            <div class="rang-court-titre"><strong>Rang ${x.rang.numero}</strong><span>${x.rang.cote === "E" ? "endroit" : "envers"} · ${x.rang.mailles} m.</span></div>
+            <div class="rang-court-titre"><strong>${mots.Rang} ${x.rang.numero}</strong><span>${x.rang.cote === "E" ? "endroit" : "envers"} · ${x.rang.mailles} m.</span></div>
             <${Lignes} rang=${x.rang} abreviations=${abreviations} />
             ${x.rang.techniques.filter((c) => c !== "lisiere").map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
           </div>`
-        : html`<p class="repete">Répète ${x.repete.de === x.repete.a ? `le rang ${x.repete.de}` : `les rangs ${x.repete.de} à ${x.repete.a}`} jusqu'au rang ${x.repete.jusqua} (${x.repete.rangs} rangs de plus).</p>`
+        : html`<p class="repete">Répète ${x.repete.de === x.repete.a ? `le ${mots.rang} ${x.repete.de}` : `les ${mots.rangs} ${x.repete.de} à ${x.repete.a}`} jusqu'au ${mots.rang} ${x.repete.jusqua} (${x.repete.rangs} ${mots.rangs} de plus)${x.repete.marqueur ? ", en déplaçant le marqueur comme indiqué : le suivi le rappelle à chaque tour concerné" : ""}.</p>`
     )}
   </div>`;
 }
@@ -265,11 +278,13 @@ export function EcranSuivi({ id }) {
   const montage = patron.etapes.find((e) => e.cle === "montage");
   const rabattage = patron.etapes.find((e) => e.cle === "rabattage");
   const finitions = patron.etapes.find((e) => e.cle === "finitions");
+  const mots = motsDe(patron);
+  const rond = patron.mode === "rond";
 
   async function terminer() {
     await majProjet((p) => ({ ...p, statut: "termine", termineLe: new Date().toISOString() }));
     majSuivi((s) => ({ ...s, termine: true }));
-    flash("Bravo, ton écharpe est terminée !");
+    flash(rond ? "Bravo, ton snood est terminé !" : "Bravo, ton écharpe est terminée !");
     naviguer("/reglages?sauvegarde=1", { remplacer: true });
   }
 
@@ -284,8 +299,8 @@ export function EcranSuivi({ id }) {
           </button>
         </div>
         <div class="suivi-progression">
-          <div class="jauge-ligne"><strong>${fini ? `Les ${total} rangs sont tricotés` : `Rang ${faits + 1} sur ${total}`}</strong><span>${pourcent} %</span></div>
-          <div class="jauge-barre" role="progressbar" aria-valuemin="0" aria-valuemax=${total} aria-valuenow=${faits} aria-label="Rangs tricotés">
+          <div class="jauge-ligne"><strong>${fini ? `Les ${total} ${mots.rangs} sont tricotés` : `${mots.Rang} ${faits + 1} sur ${total}`}</strong><span>${pourcent} %</span></div>
+          <div class="jauge-barre" role="progressbar" aria-valuemin="0" aria-valuemax=${total} aria-valuenow=${faits} aria-label=${rond ? "Tours tricotés" : "Rangs tricotés"}>
             <div class="jauge-plein suivi-plein" style=${`width:${pourcent}%`}></div>
           </div>
         </div>
@@ -294,22 +309,23 @@ export function EcranSuivi({ id }) {
       <div class="ecran-contenu">
         ${precedent && html`<div class="rang-fait">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
-          <span>Rang ${precedent.numero} · fait</span>
+          <span>${mots.Rang} ${precedent.numero} · fait</span>
         </div>`}
 
         ${faits === 0 && montage &&
         html`<div class="carte-etape-suivi">
-          <strong>Avant le rang 1 : le montage</strong>
+          <strong>Avant le ${mots.rang} 1 : le montage</strong>
           <p>${montage.texte}</p>
           <${Technique} code="montage" patron=${patron} />
+          ${rond && html`<${Technique} code="joindre" patron=${patron} />`}
         </div>`}
 
         ${!fini && rang &&
         html`<section class="carte-rang" aria-live="polite" aria-labelledby="titre-rang">
           ${rang.debutBloc && html`<span class="debut-bloc">Nouveau bloc : ${rang.nomBloc}</span>`}
           <div class="carte-rang-titre">
-            <h2 id="titre-rang">Rang ${rang.numero}</h2>
-            <span class="carte-rang-cote">${cote(rang.cote)}</span>
+            <h2 id="titre-rang">${mots.Rang} ${rang.numero}</h2>
+            <span class="carte-rang-cote">${rond ? "sur l'endroit" : cote(rang.cote)}</span>
           </div>
           <${Lignes} rang=${rang} abreviations=${ab} grand=${true} />
           <div class="puces carte-rang-reperes">
@@ -317,20 +333,20 @@ export function EcranSuivi({ id }) {
             ${rang.laineId && patron.laines?.length > 1 &&
             html`<span class="etiquette etiquette-laine"><${Pastille} couleur=${patron.laines.find((l) => l.id === rang.laineId)?.couleur} taille=${12} />${patron.laines.find((l) => l.id === rang.laineId)?.nom}</span>`}
             <span class="etiquette">${rang.mailles} mailles</span>
-            <span class="etiquette">≈ ${formaterNombre(rang.longueurCm, 0)} cm tricotés à la fin du rang</span>
+            <span class="etiquette">≈ ${formaterNombre(rang.longueurCm, 0)} cm tricotés à la fin du ${mots.rang}</span>
           </div>
           ${rang.techniques.map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
-          <button type="button" class="bouton-lien" onClick=${() => setAide(true)}>Un doute sur un geste de ce rang ?</button>
+          <button type="button" class="bouton-lien" onClick=${() => setAide(true)}>Un doute sur un geste de ce ${mots.rang} ?</button>
         </section>`}
 
         ${!fini && suivant &&
         html`<div class="rang-suivant">
-          <span class="rang-suivant-titre">Ensuite · rang ${suivant.numero}${suivant.debutBloc ? ` · ${suivant.nomBloc}` : ""}</span>
+          <span class="rang-suivant-titre">Ensuite · ${mots.rang} ${suivant.numero}${suivant.debutBloc ? ` · ${suivant.nomBloc}` : ""}</span>
           <span>${suivant.commeLeRang
-            ? `Comme le rang ${suivant.commeLeRang}.`
+            ? `Comme le ${mots.rang} ${suivant.commeLeRang}.`
             : (ab ? suivant.lignesAbregees : suivant.lignes).filter((l) => l.zone !== "lisiere").map((l) => l.texte).join(" · ")}</span>
         </div>`}
-        ${!fini && !suivant && html`<div class="rang-suivant"><span class="rang-suivant-titre">Ensuite</span><span>Le rabattage : c'est le dernier rang !</span></div>`}
+        ${!fini && !suivant && html`<div class="rang-suivant"><span class="rang-suivant-titre">Ensuite</span><span>Le rabattage : c'est le dernier ${mots.rang} !</span></div>`}
 
         ${fini &&
         html`<div class="carte-etape-suivi">
@@ -351,13 +367,13 @@ export function EcranSuivi({ id }) {
           ? html`<button type="button" class="bouton-principal bouton-rang" onClick=${terminer}>Marquer comme terminé</button>`
           : html`<button type="button" class="bouton-principal bouton-rang" onClick=${() => majSuivi((s) => cocherRang(s, total))}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>
-              Rang ${rang.numero} terminé
+              ${mots.Rang} ${rang.numero} terminé
             </button>`}
         ${faits > 0 &&
-        html`<button type="button" class="bouton-lien bouton-retour-rang" onClick=${() => majSuivi(decocherRang)}>Revenir au rang ${faits}</button>`}
+        html`<button type="button" class="bouton-lien bouton-retour-rang" onClick=${() => majSuivi(decocherRang)}>Revenir au ${mots.rang} ${faits}</button>`}
       </div>
 
-      <${Fenetre} ouverte=${aide} titre="Les gestes de ce rang" surFermeture=${() => setAide(false)}
+      <${Fenetre} ouverte=${aide} titre=${`Les gestes de ce ${mots.rang}`} surFermeture=${() => setAide(false)}
         actions=${html`<button type="button" class="bouton-secondaire" onClick=${() => setAide(false)}>Fermer</button>`}>
         ${aide && rang && html`<${GestesDuRang} rang=${rang} patron=${patron} />`}
       <//>
@@ -366,6 +382,6 @@ export function EcranSuivi({ id }) {
 
 /** Les explications des gestes du rang en cours (lisière comprise). */
 function GestesDuRang({ rang, patron }) {
-  const utiles = ["lisiere", ...(rang.gestes || [])].filter((c, i, t) => patron.techniques[c] && t.indexOf(c) === i);
+  const utiles = ["lisiere", ...(rang.marqueur ? ["marqueur"] : []), ...(rang.gestes || [])].filter((c, i, t) => patron.techniques[c] && t.indexOf(c) === i);
   return html`${utiles.map((c) => html`<${Technique} code=${c} patron=${patron} />`)}`;
 }

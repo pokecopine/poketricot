@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  tricoterRang, simuler, convertirEnRond, maillesConviennent, maillesLesPlusProches, maillesMinimum, consomme, produit, largeurMotif, comptesVariables,
+  tricoterRang, simuler, convertirEnRond, verifierRond, deduireRond, tricoterTour, maillesConviennent, maillesLesPlusProches, maillesMinimum, consomme, produit, largeurMotif, comptesVariables,
 } from "../js/moteur/simulateur.js";
 import { POINTS, pointParId } from "../js/catalogue/points.js";
 import { GESTES } from "../js/catalogue/gestes.js";
@@ -118,20 +118,9 @@ for (const point of POINTS) {
     const kRond = 5;
     const sim = simuler(point, { mailles: kRond * n, rangs: nbRangs, mode: "rond" });
     assert.equal(sim.ok, true, `en rond : ${JSON.stringify(sim.erreurs)}`);
-    if (variable) return;
-
-    // Le dessin en rond doit être le même que le dessin à plat, au milieu du tricot (loin des bords),
-    // à un décalage près (le même pour tous les rangs).
-    const plat = simuler(point, { mailles: (min % n) + (kRond + 1) * n, rangs: nbRangs });
-    assert.equal(plat.ok, true);
-    const correspond = (dec) => {
-      for (let r = 0; r < nbRangs; r++) {
-        for (let c = n; c < (kRond - 1) * n; c++) if (sim.grille[r][c] !== plat.grille[r][c + dec]) return false;
-      }
-      return true;
-    };
-    let trouve = false;
-    for (let dec = 0; dec < 2 * n + (min % n) && !trouve; dec++) trouve = correspond(dec);
-    assert.ok(trouve, "le dessin en rond correspond au dessin à plat");
+    // Le dessin en rond doit être le même que le dessin à plat, maille par maille, en suivant la colonne de départ
+    // (déplacements du début du tour compris).
+    const v = verifierRond(point);
+    assert.equal(v.ok, true, `le dessin en rond correspond au dessin à plat : ${v.erreur}`);
   });
 }

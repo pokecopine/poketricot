@@ -15,7 +15,7 @@ import { IconeChevron, IconeCoeur, IconeEprouvette } from "../composants/icones.
 import { MARQUES, pointsMarques, estMarque, basculerMarque } from "../donnees/marques.js";
 import { POINTS, FAMILLES, PIECES, pointParId, rechercherPoints, avisPour } from "../catalogue/points.js";
 import { etiquettesProprietes, texteConsommation, texteDensite, texteMultiple, texteOuvragesConseilles } from "../catalogue/fiche.js";
-import { texteRang, texteCote } from "../catalogue/texte.js";
+import { texteRang, texteCote, texteDeplacement } from "../catalogue/texte.js";
 import { TECHNIQUES, techniquesDuPoint } from "../catalogue/techniques.js";
 import { convertirEnRond } from "../moteur/simulateur.js";
 import { CRITERES, filtrerParCriteres } from "../catalogue/criteres.js";
@@ -282,9 +282,9 @@ function Recette({ point, mode }) {
       <p class="note">Sur aiguilles circulaires, en rond : ${texteMultiple(point, "rond")}. Tous les tours se tricotent sur l'endroit.</p>
       <ol class="recette">
         ${rond.miseEnPlace.map((r) => html`<li class="recette-mep"><strong>Mise en place (une fois)</strong> ${texteRang(r, { tour: true })}</li>`)}
-        ${rond.rangs.map((r, i) => html`<li><strong>Tour ${i + 1}</strong> ${texteRang(r, { tour: true })}</li>`)}
+        ${rond.rangs.map((r, i) => html`<li>${r.decale ? html`<span class="recette-marqueur">${texteDeplacement(r.decale)}</span> ` : ""}<strong>Tour ${i + 1}</strong> ${texteRang(r, { tour: true })}</li>`)}
       </ol>
-      <p class="note">Répète ces ${rond.rangs.length} tours.</p>`;
+      <p class="note">Répète ces ${rond.rangs.length} tours.${rond.marqueur ? " Le motif se décale d'un tour à l'autre : en déplaçant le marqueur, chaque tour commence au début d'un motif (pas au tout premier tour)." : ""}</p>`;
   }
   return html`
     <p class="note">À plat : ${texteMultiple(point, "plat")}, sans compter les mailles lisières.</p>
@@ -400,6 +400,13 @@ const AIDES_ZONES = {
   bande: "Une bande décorative dans la longueur de l'écharpe.",
 };
 
+const AIDES_ZONES_SNOOD = {
+  corps: "Le point du corps est aussi le point de ton échantillon.",
+  bas: "La bordure du bas tient le bord du snood : les points qui ne roulent pas sont proposés d'abord.",
+  haut: "La bordure du haut tient le bord du snood : les points qui ne roulent pas sont proposés d'abord.",
+  bande: "Une bande décorative tout autour du snood.",
+};
+
 export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
   const { projet, laines, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<main class="ecran"><${EnTete} titre="Projet introuvable" secours="/" /></main>`;
@@ -418,9 +425,11 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
       zone: "corps",
       couleur: laine?.couleur,
       actuel: c.pointId,
-      avis: (p) => avisPourBloc(p, projet.type, "corps"),
+      avis: (p) => avisPourBloc(p, projet.type, "corps", { colonne: true }),
       titre: `Point : colonne ${iColonne + 1} ${bloc.zone === "corps" ? "du corps" : "de la bande"}`,
-      aide: "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
+      aide: projet.type === "snood"
+        ? "Une colonne autour du tour, à côté des autres : chaque point garde son motif. Un point qui déplace le début du tour prend tout le tour."
+        : "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
       secours: retourBuilder,
       choisir: async (pointId) => {
         await modifier((p) => avecPointDeColonne(p, blocId, colonneId, pointId));
@@ -436,7 +445,7 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
     avis: (p) => avisPourBloc(p, projet.type, bloc.zone),
     titrePeuAdaptes: { bas: "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
     titre: bloc.zone === "corps" ? "Point principal" : `Point : ${nomZone}`,
-    aide: AIDES_ZONES[bloc.zone] || "",
+    aide: (projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
     choisir: async (pointId) => {
       await modifier((p) => avecPointDuBloc(p, blocId, pointId));

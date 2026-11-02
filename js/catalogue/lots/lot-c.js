@@ -89,7 +89,7 @@ export const POINTS_LOT = [
     nom: "Mini-feuilles",
     article: "les",
     synonymes: ["point de mini-feuilles", "petites feuilles"],
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
+    
     famille: "ajoures",
     rangs: [
       E(["end", "jete", "end", "end", "3ensBA_c", "end", "end", "jete"], { fin: ["end"] }),
@@ -128,7 +128,7 @@ export const POINTS_LOT = [
     nom: "Bouton de rose",
     article: "le",
     synonymes: ["point bouton de rose", "petits diamants sur fond mousse"],
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
+    
     famille: "ajoures",
     rangs: [
       E(["end", "end", "end", "2ens", "jete", "end", "jete", "ssk", "end", "end"], { fin: ["end"] }),
@@ -269,7 +269,7 @@ export const POINTS_LOT = [
     nom: "Jours obliques",
     article: "les",
     synonymes: ["point de jours obliques"],
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
+    
     famille: "ajoures",
     rangs: [
       // L'article : « 1 end., 1 jeté, 2 ens.*, 1 end. » ; lu comme 1 end., *1 jeté, 2 ens.*, 1 end. (multiple de 2).
@@ -355,7 +355,7 @@ export const POINTS_LOT = [
     nom: "Point de résille",
     article: "le",
     synonymes: ["point résille", "résille"],
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
+    
     famille: "ajoures",
     rangs: [
       E(["jete", "sd", "jete", "end"], { debut: ["end"] }),
@@ -382,7 +382,7 @@ export const POINTS_LOT = [
     nom: "Petits diamants ajourés",
     article: "les",
     synonymes: ["point de petits diamants"],
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
+    
     famille: "ajoures",
     rangs: [
       E(["2ens", "jete", ...tricotEndroit(4)], { fin: ["2ens", "jete", "end"] }),
@@ -479,7 +479,7 @@ export const POINTS_LOT = [
     nom: "Mousse glissé",
     article: "le",
     synonymes: ["point mousse glissé"],
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
+    
     famille: "textures",
     rangs: [
       E(["env"]),

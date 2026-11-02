@@ -53,12 +53,14 @@ export class Tissu {
    * largeur, longueur : taille de l'écharpe (cm) ; pas : écart visé entre deux points (cm).
    * options : { epaisseur (cm), raideurFlexion, autoCollision (distance minimale entre deux couches, cm) }
    */
-  constructor({ largeur, longueur, pas = 2, epaisseur = 0.5, raideurFlexion = 0.12, autoCollision = 1.4 }) {
+  constructor({ largeur, longueur, pas = 2, epaisseur = 0.5, raideurFlexion = 0.12, autoCollision = 1.4, ferme = false }) {
     this.largeur = largeur;
     this.longueur = longueur;
-    this.nx = Math.max(3, Math.round(largeur / pas) + 1);
+    // ferme : un tube (snood) — la largeur fait le tour, la dernière colonne rejoint la première.
+    this.ferme = ferme;
+    this.nx = ferme ? Math.max(6, Math.round(largeur / pas)) : Math.max(3, Math.round(largeur / pas) + 1);
     this.ny = Math.max(3, Math.round(longueur / pas) + 1);
-    this.dx = largeur / (this.nx - 1);
+    this.dx = ferme ? largeur / this.nx : largeur / (this.nx - 1);
     this.dy = longueur / (this.ny - 1);
     this.n = this.nx * this.ny;
     this.pos = new Float32Array(this.n * 3);
@@ -67,25 +69,38 @@ export class Tissu {
     this.epingle = new Int8Array(this.n); // 1 : le point est accroché à son appui (milieu sur la barre, nuque au cou)
     this.obstacles = [];
     this.sol = -1e6;
+    this.plafond = 1e6; // le tissu ne monte pas plus haut (un snood ne passe pas par-dessus le cou)
     this.epaisseur = epaisseur;
     this.distanceCouches = autoCollision;
     this.contact = new Uint8Array(this.n);
     // Frottement de la laine sur ses appuis (réglé pour qu'une écharpe tienne autour du cou sans glisser) :
     this.glisse = 0.25; // part du mouvement qu'un point posé sur un appui garde au-delà de l'accroche
     this.accroche = 2; // en dessous de ce déplacement par pas (cm), un point posé ne glisse pas
+    this.passesFinales = 0;
+    if (ferme) {
+      // Un snood repose sur une pente (la base du cou, les épaules) : moins d'accroche, et des passes après le frottement.
+      this.accroche = 0.4;
+      this.glisse = 0.5;
+      this.passesFinales = 6;
+    }
 
     const liens = [];
     const ajouter = (a, b, raideur) => liens.push([a, b, raideur]);
+    const nx = this.nx;
+    // Colonne voisine (j + d), ou -1 au bord d'un tissu ouvert ; dans un tube, on fait le tour.
+    const col = (j, d) => (ferme ? (j + d) % nx : j + d < nx ? j + d : -1);
     for (let k = 0; k < this.ny; k++) {
-      for (let j = 0; j < this.nx; j++) {
+      for (let j = 0; j < nx; j++) {
         const i = this.indice(j, k);
-        if (j + 1 < this.nx) ajouter(i, this.indice(j + 1, k), 1);
+        const j1 = col(j, 1);
+        const j2 = col(j, 2);
+        if (j1 >= 0) ajouter(i, this.indice(j1, k), 1);
         if (k + 1 < this.ny) ajouter(i, this.indice(j, k + 1), 1);
-        if (j + 1 < this.nx && k + 1 < this.ny) {
-          ajouter(i, this.indice(j + 1, k + 1), 0.6);
-          ajouter(this.indice(j + 1, k), this.indice(j, k + 1), 0.6);
+        if (j1 >= 0 && k + 1 < this.ny) {
+          ajouter(i, this.indice(j1, k + 1), 0.6);
+          ajouter(this.indice(j1, k), this.indice(j, k + 1), 0.6);
         }
-        if (j + 2 < this.nx) ajouter(i, this.indice(j + 2, k), raideurFlexion);
+        if (j2 >= 0) ajouter(i, this.indice(j2, k), raideurFlexion);
         if (k + 2 < this.ny) ajouter(i, this.indice(j, k + 2), raideurFlexion);
       }
     }
@@ -97,7 +112,9 @@ export class Tissu {
     for (let c = 0; c < liens.length; c++) {
       const [ja, ka] = this.coord(liens[c][0]);
       const [jb, kb] = this.coord(liens[c][1]);
-      this.liensL[c] = Math.hypot((ja - jb) * this.dx, (ka - kb) * this.dy);
+      let dj = Math.abs(ja - jb);
+      if (ferme) dj = Math.min(dj, nx - dj);
+      this.liensL[c] = Math.hypot(dj * this.dx, (ka - kb) * this.dy);
     }
   }
 
@@ -198,6 +215,62 @@ export class Tissu {
     });
   }
 
+  /**
+   * Pose un snood (tube : ferme) autour du cou du buste. tours = 1 : un anneau qui tombe sur les épaules ;
+   * tours = 2 : la boucle fait deux fois le tour du cou (deux couches, l'une autour de l'autre, qui se croisent devant).
+   * Le snood n'est pas épinglé : le cou et les épaules le portent, et il ne peut pas remonter par-dessus le cou.
+   */
+  poserSnood({ tours = 1 } = {}) {
+    const { cou } = BUSTE;
+    this.obstacles = Object.values(BUSTE);
+    this.plafond = cou.y1 + 1.5;
+    this.kAncre = undefined;
+    const L = this.largeur;
+    const H = this.longueur;
+    // Le snood est posé tassé, en accordéon, entre la base du cou et le haut du cou : en se dépliant, il se pose
+    // sur les épaules et fait son bourrelet et ses plis.
+    const bas = BUSTE.nuque.c[1] + BUSTE.nuque.r[1] + this.epaisseur + 0.5;
+    const tasse = Math.min(1, (this.plafond - 1 - bas) / H);
+    const pli = 1.2;
+    const poser = (j, k, x, y, z) => {
+      const p = [x, y, z];
+      this.pos.set(p, this.indice(j, k) * 3);
+      this.prec.set(p, this.indice(j, k) * 3);
+    };
+    if (tours <= 1) {
+      // Un tour : porté comme un col roulé souple. La moitié du bas monte le long du cou, celle du haut
+      // est repliée par-dessus, vers l'extérieur : le pli fait le bourrelet, la gravité fait les plis.
+      const R = L / (2 * Math.PI);
+      const moitie = (this.ny - 1) / 2;
+      const hauteurCol = Math.min(moitie * this.dy, this.plafond - 1 - bas);
+      for (let k = 0; k < this.ny; k++) {
+        const repli = k > moitie;
+        const a = repli ? this.ny - 1 - k : k; // distance au bord, en rangs
+        const y = bas + (Math.min(a, moitie) / moitie) * hauteurCol + (repli ? 0 : 0);
+        const r = R + (repli ? 1.6 : 0) + (k === Math.round(moitie) ? 0.8 : 0);
+        for (let j = 0; j < this.nx; j++) {
+          const t = (2 * Math.PI * j) / this.nx;
+          poser(j, k, cou.cx + r * Math.sin(t), repli ? bas + ((this.ny - 1 - k) / moitie) * hauteurCol : y, cou.cz - r * Math.cos(t));
+        }
+      }
+      return;
+    }
+    // Deux tours : le rayon passe de r1 à r2 le long du tour, la boucle se referme en croisant devant.
+    const ecart = 2.6;
+    const r1 = L / (4 * Math.PI) - ecart / 2;
+    const tasse2 = tasse * 0.5; // les deux tours se partagent la hauteur du cou
+    for (let k = 0; k < this.ny; k++) {
+      for (let j = 0; j < this.nx; j++) {
+        const s = j / this.nx;
+        const t = 4 * Math.PI * s + Math.PI; // départ devant
+        const r = r1 + ecart * s - pli * (k % 2);
+        // Le premier tour en bas, le second au-dessus, en spirale.
+        const y = bas + (s * H + k * this.dy) * tasse2;
+        poser(j, k, cou.cx + r * Math.sin(t), y, cou.cz - r * Math.cos(t));
+      }
+    }
+  }
+
   /** Un pas de simulation. */
   pas(dt = 1 / 60, { iterations = 16, amortissement = 0.02 } = {}) {
     const p = this.pos;
@@ -225,6 +298,12 @@ export class Tissu {
     // Le frottement fige les points posés : on sépare encore les couches qui se touchent, puis on repousse des appuis.
     this.separerLesCouches();
     this.collisions();
+    // Tube : quelques passes de plus après le frottement, pour qu'il ne garde pas de mailles étirées.
+    for (let it = 0; it < this.passesFinales; it++) {
+      this.contraindre();
+      this.attacher();
+      this.collisions();
+    }
   }
 
   contraindre() {
@@ -262,6 +341,7 @@ export class Tissu {
    * de tissu qui les sépare. Cela empêche une longue écharpe de s'étirer sous son poids, sans calcul coûteux.
    */
   attacher() {
+    if (this.ferme) this.garderLeTour();
     if (this.kAncre === undefined) return;
     const p = this.pos;
     for (let k = 0; k < this.ny; k++) {
@@ -281,6 +361,43 @@ export class Tissu {
         p[o] = p[a] + dx * f;
         p[o + 1] = p[a + 1] + dy * f;
         p[o + 2] = p[a + 2] + dz * f;
+      }
+    }
+  }
+
+  /**
+   * Tube (snood) : un rang ne peut pas faire un tour plus long que le tissu. Les liens seuls ne retiennent pas
+   * un anneau posé sur une pente (les épaules l'écartent peu à peu) : si le tour d'un rang dépasse sa longueur
+   * de plus de 2 %, le rang est resserré vers son centre. Repoussé par l'appui, il remonte alors la pente.
+   */
+  garderLeTour() {
+    const p = this.pos;
+    const nx = this.nx;
+    for (let k = 0; k < this.ny; k++) {
+      let cx = 0;
+      let cy = 0;
+      let cz = 0;
+      let tour = 0;
+      for (let j = 0; j < nx; j++) {
+        const a = this.indice(j, k) * 3;
+        const b = this.indice((j + 1) % nx, k) * 3;
+        cx += p[a];
+        cy += p[a + 1];
+        cz += p[a + 2];
+        tour += Math.hypot(p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]);
+      }
+      if (tour <= this.largeur * 1.02) continue;
+      cx /= nx;
+      cy /= nx;
+      cz /= nx;
+      const f = (this.largeur * 1.02) / tour;
+      for (let j = 0; j < nx; j++) {
+        const i = this.indice(j, k);
+        if (this.tenu[i]) continue;
+        const a = i * 3;
+        p[a] = cx + (p[a] - cx) * f;
+        p[a + 1] = cy + (p[a + 1] - cy) * f;
+        p[a + 2] = cz + (p[a + 2] - cz) * f;
       }
     }
   }
@@ -335,7 +452,9 @@ export class Tissu {
               if (cellule[m * 3] !== cx + ax || cellule[m * 3 + 1] !== cy + ay || cellule[m * 3 + 2] !== cz + az) continue;
               const jm = m % nx;
               const km = (m - jm) / nx;
-              if (Math.abs(jm - ji) <= 2 && Math.abs(km - ki) <= 2) continue;
+              let dj = Math.abs(jm - ji);
+              if (this.ferme) dj = Math.min(dj, nx - dj);
+              if (dj <= 2 && Math.abs(km - ki) <= 2) continue;
               const a = i * 3;
               const b = m * 3;
               const dx = p[b] - p[a];
@@ -418,6 +537,7 @@ export class Tissu {
         p[o + 1] = this.sol + this.epaisseur;
         touche = 1;
       }
+      if (p[o + 1] > this.plafond) p[o + 1] = this.plafond;
       if (touche) this.contact[i] = 1;
     }
   }
@@ -509,16 +629,22 @@ export class Tissu {
    * Écrit le résultat dans `sortie` à partir de `o`.
    */
   positionA(u, v, sortie, o = 0) {
-    const fj = Math.min(this.nx - 1.0001, Math.max(0, u / this.dx));
+    let fj;
+    if (this.ferme) {
+      fj = (((u / this.dx) % this.nx) + this.nx) % this.nx;
+    } else {
+      fj = Math.min(this.nx - 1.0001, Math.max(0, u / this.dx));
+    }
     const fk = Math.min(this.ny - 1.0001, Math.max(0, v / this.dy));
-    const j = Math.floor(fj);
+    const j = Math.min(this.nx - 1, Math.floor(fj));
     const k = Math.floor(fk);
     const a = fj - j;
     const b = fk - k;
+    const j1 = this.ferme ? (j + 1) % this.nx : j + 1;
     const i00 = this.indice(j, k) * 3;
-    const i10 = this.indice(j + 1, k) * 3;
+    const i10 = this.indice(j1, k) * 3;
     const i01 = this.indice(j, k + 1) * 3;
-    const i11 = this.indice(j + 1, k + 1) * 3;
+    const i11 = this.indice(j1, k + 1) * 3;
     const p = this.pos;
     for (let c = 0; c < 3; c++) {
       sortie[o + c] = (p[i00 + c] * (1 - a) + p[i10 + c] * a) * (1 - b) + (p[i01 + c] * (1 - a) + p[i11 + c] * a) * b;

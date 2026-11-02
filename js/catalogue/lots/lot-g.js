@@ -123,6 +123,22 @@ export const TECHNIQUES_LOT = {
     explication:
       "Pique dans les 5 mailles suivantes à la fois, comme pour les tricoter à l'endroit (en commençant par la plus éloignée), puis tricote-les ensemble : il n'en reste qu'une. Si c'est trop serré, écarte un peu les mailles avec la pointe de l'aiguille avant de piquer.",
   },
+  // Versions vues de l'endroit (en rond, 0.14.0).
+  etoileEnd: {
+    titre: "Étoile (sur l'endroit)",
+    explication:
+      "Pique dans les 3 mailles suivantes comme pour les tricoter ensemble à l'endroit et tricote-les ensemble, sans les lâcher de l'aiguille gauche. Fais un jeté, puis tricote encore une fois ces 3 mêmes mailles ensemble à l'endroit, et laisse-les glisser. Tu as de nouveau 3 mailles : c'est l'étoile, faite sur l'endroit comme en rond.",
+  },
+  "1en3jEnv": {
+    titre: "1 maille en 3 à l'envers avec un jeté",
+    explication:
+      "Tricote la maille à l'envers sans la laisser glisser de l'aiguille gauche. Fais un jeté (passe le fil par-dessus l'aiguille droite et ramène-le devant), puis tricote encore une fois la même maille à l'envers, et laisse-la glisser. Une maille en donne trois, avec un petit trou au milieu.",
+  },
+  "5ensEnv": {
+    titre: "5 mailles ensemble à l'envers",
+    explication:
+      "Fil devant, pique dans les 5 mailles suivantes à la fois, comme pour les tricoter à l'envers, puis tricote-les ensemble : il n'en reste qu'une. Si c'est trop serré, écarte un peu les mailles avec la pointe de l'aiguille avant de piquer.",
+  },
   "3ensT": {
     titre: "3 mailles ensemble à l'endroit torses",
     explication:
@@ -150,12 +166,11 @@ export const POINTS_LOT = [
     proprietes: { reversible: false, roule: true, elasticite: 1, chaleur: 3, niveau: 2 },
     ouvrages: {
       echarpe: possible("L'envers est différent et les bords roulent un peu : prévois des bordures et des bandes latérales."),
-      snood: possible("Pas encore de version en rond : à plat seulement pour l'instant."),
-      bonnet: possible("Pas encore de version en rond : à plat seulement pour l'instant."),
+      snood: ok,
+      bonnet: ok,
       couverture: ok,
     },
     zones: { bordure: deconseille("Ses bords roulent un peu : il tient mal une bordure.") },
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
     resume:
       "De petites étoiles serrées : 3 mailles rassemblées autour d'un jeté, tous les 2 rangs, décalées d'une rangée à l'autre. Un relief dense et graphique, sur 4 rangs faciles à mémoriser.",
     source: MOJO,
@@ -251,12 +266,11 @@ export const POINTS_LOT = [
     proprietes: { reversible: false, roule: true, elasticite: 1, chaleur: 3, niveau: 3 },
     ouvrages: {
       echarpe: possible("L'envers est différent et les bords roulent : prévois des bordures et des bandes latérales."),
-      snood: possible("Pas encore de version en rond : à plat seulement pour l'instant."),
-      bonnet: possible("Pas encore de version en rond : à plat seulement pour l'instant."),
+      snood: ok,
+      bonnet: ok,
       couverture: ok,
     },
     zones: { bordure: deconseille("Il roule et son motif est large : il tient mal une bordure.") },
-    rond: { mode: "impossible", raison: "La version en rond de ce point n'est pas encore écrite : pour l'instant, il se tricote à plat." },
     resume:
       "Des grappes en relief, comme de petites mûres, sur fond de jersey envers : on fait 3 mailles dans une, puis on en rassemble 5, en décalant d'un rang de grappes à l'autre. Un point riche, pour l'hiver.",
     source: TRICONAUTES + "selection-points-tricots-faciles-jolis/",

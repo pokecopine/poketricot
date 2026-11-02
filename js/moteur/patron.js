@@ -5,8 +5,8 @@
 import { geste } from "../catalogue/gestes.js";
 import { TECHNIQUES } from "../catalogue/techniques.js";
 import { pointParId } from "../catalogue/points.js";
-import { texteGestes } from "../catalogue/texte.js";
-import { consomme } from "./simulateur.js";
+import { texteGestes, texteDeplacement } from "../catalogue/texte.js";
+import { consomme, convertirEnRond } from "./simulateur.js";
 import { nomAvecArticle } from "./dimensions.js";
 import { formaterNombre, lireNombre } from "../donnees/reserve.js";
 
@@ -45,6 +45,41 @@ export const TECHNIQUES_PATRON = {
     titre: "Fil porté le long du bord",
     explication:
       "La laine qui ne sert pas reste attachée et attend au bord du tricot. Tous les 2 rangs, au début du rang, passe le fil du rang par-dessus le fil en attente avant de glisser la lisière : il monte ainsi le long du bord, sans boucle. Ne tire pas dessus, pour que le bord ne fronce pas. Quand le patron le dit, reprends-la : elle est déjà au bon endroit.",
+  },
+  joindre: {
+    titre: "Joindre en rond",
+    explication:
+      "Étale les mailles sur le câble et vérifie que le bord du montage est bien du même côté tout le long, sans tourner autour du câble : sinon le tricot serait vrillé, et on ne peut plus le rattraper. Place un marqueur sur l'aiguille droite : il marque le début du tour. Tricote la 1re maille de l'aiguille gauche en tirant bien le fil, pour fermer le cercle. À chaque fois que tu arrives au marqueur, un tour est fini : fais-le passer d'une aiguille à l'autre et continue.",
+  },
+  marqueur: {
+    titre: "Déplacer le début du tour",
+    explication:
+      "Dans ce point, le motif se décale d'un tour à l'autre. Pour que chaque tour commence pile au début d'un motif, sans geste coupé en deux, on déplace le marqueur avant certains tours. Vers la gauche : retire le marqueur, glisse le nombre de mailles indiqué sur l'aiguille droite sans les tricoter (en piquant comme pour une maille envers), puis remets le marqueur. Vers la droite : retire le marqueur, remets le nombre de mailles indiqué de l'aiguille droite sur l'aiguille gauche, puis remets le marqueur. Les mailles glissées seront tricotées à la fin du tour, comme les autres.",
+  },
+  laineRond: {
+    titre: "Changer de laine en rond",
+    explication:
+      "Au marqueur, laisse pendre 15 cm de la nouvelle laine à l'intérieur du snood et tricote la 1re maille du tour avec elle, en tenant le bout pour qu'il ne file pas ; continue tout le tour avec cette laine. En rond, les tours forment une spirale : au changement de couleur, une petite marche se voit au début du tour. C'est normal ; tirer un peu le fil de la 1re maille au tour suivant l'atténue. L'ancienne laine est coupée à 15 cm, sauf si le patron dit de la laisser en attente.",
+  },
+  porteRond: {
+    titre: "Laine en attente au début du tour",
+    explication:
+      "La laine qui ne sert pas reste attachée et attend au début du tour, à l'intérieur. Tous les 2 tours, au marqueur, passe le fil du tour par-dessus la laine en attente avant de tricoter la 1re maille : elle monte ainsi avec le tricot, sans boucle. Ne tire pas dessus. Quand le patron le dit, reprends-la : elle est déjà au bon endroit.",
+  },
+  rabattageSouple: {
+    titre: "Rabattage souple",
+    explication:
+      "Tricote 2 mailles comme le tour le demande. Avec l'aiguille gauche, passe la 1re maille de l'aiguille droite par-dessus la 2e et laisse-la tomber. Tricote 1 maille de plus et recommence, tout autour. Tricote sans serrer, avec une aiguille d'une taille au-dessus si tu en as une : le bord doit s'étirer autant que le tricot, pour passer la tête. À la fin, coupe le fil à 15 cm et passe-le dans la dernière maille.",
+  },
+  filsRond: {
+    titre: "Rentrer les fils",
+    explication:
+      "Enfile chaque bout de fil dans une aiguille à laine et fais-le passer dans les mailles de l'envers (l'intérieur du snood) sur 5 à 8 cm, en zigzag, de préférence dans une bordure ou dans les mailles de sa couleur. Coupe ce qui dépasse seulement après le blocage.",
+  },
+  blocageRond: {
+    titre: "Blocage",
+    explication:
+      "Laisse tremper le snood un quart d'heure dans de l'eau tiède avec un peu de savon doux, sans frotter. Presse-le dans une serviette (sans tordre), puis pose-le à plat, sans l'étirer, et laisse-le sécher complètement. Les mailles se régularisent et les jours de la dentelle s'ouvrent.",
   },
   blocage: {
     titre: "Blocage",
@@ -97,7 +132,7 @@ function etiquetteColonne(s) {
  * Lignes d'un rang du plan, dans l'ordre où on tricote.
  * Les zones voisines tricotées pareil (bordure en mousse et bandes latérales en mousse) sont réunies.
  */
-export function lignesDuRang(rang, nomBloc, { abreviations = false } = {}) {
+export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false } = {}) {
   const lignes = [];
   const segments = rang.segments;
   const premier = segments[0]?.lisiere ? segments[0] : null;
@@ -111,7 +146,7 @@ export function lignesDuRang(rang, nomBloc, { abreviations = false } = {}) {
     for (const s of milieu) {
       const etiquette = s.colonne
         ? etiquetteColonne(s)
-        : s.zone === "corps" ? (rang.type === "transition" ? "Rang de transition" : majuscule(nomBloc)) : NOMS_SEGMENTS[s.zone];
+        : s.zone === "corps" ? (rang.type === "transition" ? (rond ? "Tour de transition" : "Rang de transition") : majuscule(nomBloc)) : NOMS_SEGMENTS[s.zone];
       lignes.push({ zone: s.zone, etiquette: `${etiquette} (${consomme(s.gestes)} m.)`, texte: majuscule(decrireGestes(s.gestes, { abreviations })) });
     }
   }
@@ -137,7 +172,7 @@ const guillemets = (l) => `« ${l?.nom || "ta laine"} »`;
  * elle attend du côté où le rang commence. Sinon, elle est coupée.
  * rangsLaine : la laine de chaque rang (id). Renvoie { parRang: Map(index → changement), croisements: Set(index), bouts }.
  */
-export function changementsDeLaine(rangsLaine, { filPorte = false } = {}) {
+export function changementsDeLaine(rangsLaine, { filPorte = false, rond = false } = {}) {
   const parRang = new Map();
   const croisements = new Set();
   if (!rangsLaine.length) return { parRang, croisements, bouts: 0 };
@@ -153,7 +188,8 @@ export function changementsDeLaine(rangsLaine, { filPorte = false } = {}) {
     const ancienne = suites[k - 1].laineId;
     const prochaine = suites.slice(k + 1).find((x) => x.laineId === ancienne);
     const ecart = prochaine ? prochaine.debut - debut : null;
-    const porter = filPorte && ecart !== null && ecart % 2 === 0 && ecart <= RANGS_MAX_FIL_PORTE;
+    // À plat, la laine attend du côté où le rang commence : il faut un nombre pair de rangs. En rond, elle attend au début du tour.
+    const porter = filPorte && ecart !== null && (rond || ecart % 2 === 0) && ecart <= RANGS_MAX_FIL_PORTE;
     if (porter) {
       enAttente.set(ancienne, debut);
       for (let i = debut + 2; i < prochaine.debut; i += 2) croisements.add(i);
@@ -169,14 +205,15 @@ export function changementsDeLaine(rangsLaine, { filPorte = false } = {}) {
 }
 
 /** Lignes d'un changement de laine (en début de rang, avant la lisière). */
-function lignesChangement(c, laines, { abreviations = false } = {}) {
+function lignesChangement(c, laines, { abreviations = false, rond = false } = {}) {
   const a = laines.get(c.ancienne);
   const n = laines.get(c.nouvelle);
   if (abreviations) {
     return `Chgt laine : ${c.porter ? `${a?.nom || "ancienne"} en attente` : `couper ${a?.nom || "ancienne"}`}, ${c.reprise ? "reprendre" : "prendre"} ${n?.nom || "nouvelle"}`;
   }
-  const avant = c.porter ? `Laisse ${guillemets(a)} en attente au bord, sans la couper` : `Coupe ${guillemets(a)} en laissant 15 cm`;
-  const apres = c.reprise ? `reprends ${guillemets(n)}, qui attend au bord` : `commence le rang avec ${guillemets(n)}`;
+  const ou = rond ? "au début du tour" : "au bord";
+  const avant = c.porter ? `Laisse ${guillemets(a)} en attente ${ou}, sans la couper` : `Coupe ${guillemets(a)} en laissant 15 cm`;
+  const apres = c.reprise ? `reprends ${guillemets(n)}, qui attend ${ou}` : `commence le ${rond ? "tour" : "rang"} avec ${guillemets(n)}`;
   return `${avant}, puis ${apres}`;
 }
 
@@ -190,6 +227,9 @@ export function genererPatron({
 }) {
   const dCorps = densites?.[projet.pointPrincipal];
   const approximatif = !dCorps || dCorps.statut !== "mesuree";
+  const rond = plan.mode === "rond";
+  const motRang = rond ? "tour" : "rang";
+  const piece = { echarpe: "l'écharpe", snood: "le snood" }[plan.type] || "la pièce";
   const nomBlocDe = (id) => {
     const b = plan.blocs.find((x) => x.id === id);
     if (!b) return "";
@@ -204,7 +244,7 @@ export function genererPatron({
   const mesLaines = new Map([[principaleId, laine || { id: principaleId, nom: "ta laine" }]]);
   for (const l of laines) if (l && !mesLaines.has(l.id)) mesLaines.set(l.id, l);
   const laineDuRang = (r) => (r.laineId && mesLaines.has(r.laineId) ? r.laineId : principaleId);
-  const changements = changementsDeLaine(plan.rangs.map(laineDuRang), { filPorte: !!projet.filPorte });
+  const changements = changementsDeLaine(plan.rangs.map(laineDuRang), { filPorte: !!projet.filPorte, rond });
   const plusieurs = mesLaines.size > 1;
 
   // ---- Techniques : chaque geste expliqué au premier rang qui l'utilise ----
@@ -226,31 +266,41 @@ export function genererPatron({
       if (TECHNIQUES[code]) nouveaux.push(code);
     }
     if (r.numero === 1 && plan.lisieres.mailles) nouveaux.unshift("lisiere");
+    if (r.marqueur && !dejaVus.has("marqueur")) {
+      dejaVus.add("marqueur");
+      nouveaux.unshift("marqueur");
+    }
     const nomPoint = enColonnes ? `${majuscule(nomBlocDe(r.blocId))} en colonnes` : point ? majuscule(point.nom) : "";
     let repere;
-    if (r.type === "transition") repere = "Rang de transition";
+    if (r.type === "transition") repere = rond ? "Tour de transition" : "Rang de transition";
     else if (r.type === "miseEnPlace") repere = `${nomPoint} · mise en place`;
-    else repere = `${nomPoint} · rang ${r.numeroMotif} du motif${r.rangsDuMotif > 1 ? ` sur ${r.rangsDuMotif}` : ""}`;
+    else repere = `${nomPoint} · ${motRang} ${r.numeroMotif} du motif${r.rangsDuMotif > 1 ? ` sur ${r.rangsDuMotif}` : ""}`;
 
     // Changement de laine, ou laine en attente à croiser : une ligne avant la lisière.
     const laineId = laineDuRang(r);
     const changement = changements.parRang.get(index);
     const avant = [];
     const avantAbrege = [];
+    if (r.marqueur) {
+      avant.push({ zone: "marqueur", texte: texteDeplacement(r.marqueur.mailles, r.marqueur.sens) + (r.marqueur.raison === "retour" ? " Il retrouve ainsi sa place de départ." : "") });
+      avantAbrege.push({ zone: "marqueur", texte: texteDeplacement(r.marqueur.mailles, r.marqueur.sens, { abreviations: true }) });
+    }
     if (changement) {
       const couleur = mesLaines.get(changement.nouvelle)?.couleur || null;
-      avant.push({ zone: "laine", couleur, texte: lignesChangement(changement, mesLaines) });
+      avant.push({ zone: "laine", couleur, texte: lignesChangement(changement, mesLaines, { rond }) });
       avantAbrege.push({ zone: "laine", couleur, texte: lignesChangement(changement, mesLaines, { abreviations: true }) });
-      if (!dejaVus.has("laine")) {
-        dejaVus.add("laine");
-        nouveaux.unshift("laine");
+      const tLaine = rond ? "laineRond" : "laine";
+      const tPorte = rond ? "porteRond" : "porte";
+      if (!dejaVus.has(tLaine)) {
+        dejaVus.add(tLaine);
+        nouveaux.unshift(tLaine);
       }
-      if (changement.porter && !dejaVus.has("porte")) {
-        dejaVus.add("porte");
-        nouveaux.unshift("porte");
+      if (changement.porter && !dejaVus.has(tPorte)) {
+        dejaVus.add(tPorte);
+        nouveaux.unshift(tPorte);
       }
     } else if (changements.croisements.has(index)) {
-      avant.push({ zone: "laine", texte: "Avant la lisière, croise le fil du rang avec la laine en attente" });
+      avant.push({ zone: "laine", texte: rond ? "Au début du tour, croise le fil du tour avec la laine en attente" : "Avant la lisière, croise le fil du rang avec la laine en attente" });
       avantAbrege.push({ zone: "laine", texte: "Croiser avec la laine en attente" });
     }
     return {
@@ -267,8 +317,9 @@ export function genererPatron({
       mailles: r.mailles,
       gestes: codes,
       laineId: plusieurs ? laineId : undefined,
-      lignes: [...avant, ...lignesDuRang(r, nomBlocDe(r.blocId))],
-      lignesAbregees: [...avantAbrege, ...lignesDuRang(r, nomBlocDe(r.blocId), { abreviations: true })],
+      lignes: [...avant, ...lignesDuRang(r, nomBlocDe(r.blocId), { rond })],
+      lignesAbregees: [...avantAbrege, ...lignesDuRang(r, nomBlocDe(r.blocId), { abreviations: true, rond })],
+      ...(r.marqueur ? { marqueur: r.marqueur } : {}),
       techniques: nouveaux,
       longueurCm: Math.round(hauteur * 10) / 10,
     };
@@ -303,15 +354,22 @@ export function genererPatron({
     : [`${laine?.nom || "Ta laine"}${metrage ? ` : environ ${metrage.metres} m` : ""}`];
   const materiel = [
     ...lignesLaines,
-    `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (on tricote à plat, en allers-retours)`,
+    `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (${rond ? "on tricote en rond" : "on tricote à plat, en allers-retours"})`,
+    ...(rond ? ["Un marqueur de début de tour (un anneau ou un bout de laine d'une autre couleur)"] : []),
     "Une aiguille à laine pour rentrer les fils",
     "Une paire de ciseaux",
   ];
   etapes.push({ cle: "materiel", titre: "Matériel", detail: materiel.join(" · "), liste: materiel });
-  etapes.push({
-    cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles (montage tricoté)`,
-    texte: `Monte ${plan.montage.mailles} mailles avec le montage tricoté : ${repartition}.`, techniques: ["montage"],
-  });
+  etapes.push(rond
+    ? {
+      cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles, joindre en rond`,
+      texte: `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour.`,
+      techniques: ["montage", "joindre"],
+    }
+    : {
+      cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles (montage tricoté)`,
+      texte: `Monte ${plan.montage.mailles} mailles avec le montage tricoté : ${repartition}.`, techniques: ["montage"],
+    });
   for (const b of plan.blocs) {
     const point = pointParId(b.pointId);
     const transitions = plan.rangs.filter((r) => r.blocId === b.id && r.type === "transition").length;
@@ -320,33 +378,53 @@ export function genererPatron({
       : point ? majuscule(point.nom) : "";
     const autreLaine = b.laineId && b.laineId !== principaleId ? mesLaines.get(b.laineId) : null;
     const colonnesTexte = b.colonnes
-      ? ` En colonnes, du bord droit (début des rangs endroit) au bord gauche : ${b.colonnes
+      ? ` En colonnes, ${rond ? "depuis le marqueur, tout autour" : "du bord droit (début des rangs endroit) au bord gauche"} : ${b.colonnes
           .map((c, j) => `colonne ${j + 1} en ${minuscule(pointParId(c.pointId)?.nom || "")} (${c.mailles} mailles)`)
           .join(", ")}.`
       : "";
     etapes.push({
       cle: "bloc", blocId: b.id, titre: majuscule(nomBlocDe(b.id)),
-      detail: `${nomPoints}${autreLaine ? ` · ${autreLaine.nom}` : ""} · ${b.premierRang === b.dernierRang ? `rang ${b.premierRang}` : `rangs ${b.premierRang} à ${b.dernierRang}`}`,
-      texte: `${b.rangs} rang${b.rangs > 1 ? "s" : ""}, environ ${formaterNombre(b.hauteurCm)} cm${transitions ? `, dont ${transitions} rang de transition au début` : ""}.${colonnesTexte}${autreLaine ? ` Avec ${guillemets(autreLaine)}, sur toute la largeur.` : ""}${
-        plan.rangs.some((r, i) => r.blocId === b.id && changements.croisements.has(i)) ? " Tous les 2 rangs, avant la lisière, croise le fil du rang avec la laine en attente." : ""}`,
+      detail: `${nomPoints}${autreLaine ? ` · ${autreLaine.nom}` : ""} · ${b.premierRang === b.dernierRang ? `${motRang} ${b.premierRang}` : `${motRang}s ${b.premierRang} à ${b.dernierRang}`}`,
+      texte: `${b.rangs} ${motRang}${b.rangs > 1 ? "s" : ""}, environ ${formaterNombre(b.hauteurCm)} cm${transitions ? `, dont ${transitions} ${motRang} de transition au début` : ""}.${colonnesTexte}${autreLaine ? ` Avec ${guillemets(autreLaine)}, sur ${rond ? "tout le tour" : "toute la largeur"}.` : ""}${
+        plan.rangs.some((r, i) => r.blocId === b.id && changements.croisements.has(i))
+          ? rond ? " Tous les 2 tours, au début du tour, croise le fil du tour avec la laine en attente." : " Tous les 2 rangs, avant la lisière, croise le fil du rang avec la laine en attente."
+          : ""}${b.marqueur ? " Le motif se décale d'un tour à l'autre : avant certains tours, le patron te dit de déplacer le marqueur." : ""}`,
       premierRang: b.premierRang, dernierRang: b.dernierRang, pointId: b.pointId, laineId: autreLaine?.id || null,
     });
   }
   const dernierRang = rangs.at(-1);
-  etapes.push({
-    cle: "rabattage", titre: "Rabattage",
-    detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
-    texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage simple, en tricotant chaque maille comme elle se présente.`,
-    techniques: ["rabattage"],
-  });
+  etapes.push(rond
+    ? {
+      cle: "rabattage", titre: "Rabattage",
+      detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
+      texte: `Au marqueur, rabats les ${plan.rabattage.mailles} mailles souplement, en tricotant chaque maille comme elle se présente : le bord doit pouvoir passer la tête. Retire le marqueur en arrivant dessus.`,
+      techniques: ["rabattage"],
+    }
+    : {
+      cle: "rabattage", titre: "Rabattage",
+      detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
+      texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage simple, en tricotant chaque maille comme elle se présente.`,
+      techniques: ["rabattage"],
+    });
   const bouts = changements.bouts;
   etapes.push({
     cle: "finitions", titre: "Finitions", detail: "Rentrer les fils, bloquer",
     texte: bouts > 2
-      ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine), chacun dans les mailles de sa couleur, puis bloque l'écharpe pour régulariser les mailles.`
-      : "Rentre les deux bouts de fil (début et fin), puis bloque l'écharpe pour régulariser les mailles.",
+      ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine), chacun dans les mailles de sa couleur, puis bloque ${piece} pour régulariser les mailles.`
+      : `Rentre les deux bouts de fil (début et fin), puis bloque ${piece} pour régulariser les mailles.`,
     techniques: ["fils", "blocage"],
   });
+
+  if (rond) {
+    techniques.rabattage = techniques.rabattageSouple;
+    techniques.fils = techniques.filsRond;
+    techniques.blocage = techniques.blocageRond;
+    delete techniques.lisiere;
+    delete techniques.laine;
+    delete techniques.porte;
+  }
+  for (const c of ["rabattageSouple", "filsRond", "blocageRond"]) delete techniques[c];
+  if (!rond) for (const c of ["joindre", "marqueur", "laineRond", "porteRond"]) delete techniques[c];
 
   // ---- Copie des points utilisés (recettes figées) ----
   const pointIds = [...new Set([
@@ -356,7 +434,13 @@ export function genererPatron({
   const points = {};
   for (const id of pointIds) {
     const p = pointParId(id);
-    if (p) points[id] = structuredClone({ id: p.id, nom: p.nom, article: p.article, famille: p.famille, resume: p.resume, rangs: p.rangs, miseEnPlace: p.miseEnPlace, proprietes: p.proprietes, source: p.source });
+    if (!p) continue;
+    const copie = { id: p.id, nom: p.nom, article: p.article, famille: p.famille, resume: p.resume, rangs: p.rangs, miseEnPlace: p.miseEnPlace, proprietes: p.proprietes, source: p.source };
+    if (rond) {
+      const r = convertirEnRond(p);
+      if (r.ok) copie.rond = { rangs: r.rangs, miseEnPlace: r.miseEnPlace, marqueur: r.marqueur };
+    }
+    points[id] = structuredClone(copie);
   }
 
   const explications = [...(plan.explications || [])];
@@ -374,6 +458,7 @@ export function genererPatron({
     projetId: projet.id,
     nom: projet.nom,
     type: projet.type,
+    mode: rond ? "rond" : "plat",
     creeLe: maintenant.toISOString(),
     approximatif,
     origineDensite: dCorps?.origine || null,
@@ -387,6 +472,7 @@ export function genererPatron({
       : null,
     densiteCorps: dCorps ? { mailles: dCorps.mailles, rangs: dCorps.rangs, statut: dCorps.statut, origine: dCorps.origine } : null,
     dimensions: { largeurCm: plan.largeur.reelleCm, longueurCm: plan.longueur.reelleCm, largeurViseeCm: plan.largeur.viseeCm, longueurViseeCm: plan.longueur.viseeCm },
+    // Snood : largeur = tour, longueur = hauteur.
     montage: plan.montage,
     rabattage: plan.rabattage,
     blocs: plan.blocs.map((b) => ({
@@ -408,7 +494,12 @@ export function genererPatron({
 }
 
 /** Phrase de vérification pour un point : « le point de riz est réversible ». */
-export function texteReversible(point) {
+export function texteReversible(point, piece = "echarpe") {
+  if (piece === "snood") {
+    return point.proprietes.reversible
+      ? `${majuscule(nomAvecArticle(point))} est réversible : le snood peut se porter retourné`
+      : `${majuscule(nomAvecArticle(point))} a un envers différent : il reste à l'intérieur du snood`;
+  }
   return point.proprietes.reversible
     ? `${majuscule(nomAvecArticle(point))} est réversible : l'écharpe est belle des deux côtés`
     : `${majuscule(nomAvecArticle(point))} a un envers différent : l'écharpe a un beau côté`;
@@ -433,10 +524,10 @@ export function decocherRang(suivi) {
 }
 
 /** « Rang 42 sur 380 · 11 % » */
-export function texteProgression(suivi, total) {
+export function texteProgression(suivi, total, { rond = false } = {}) {
   const fait = suivi?.rangsFaits || 0;
-  if (fait >= total) return `Les ${total} rangs sont tricotés`;
-  return `Rang ${fait + 1} sur ${total} · ${Math.floor((fait / total) * 100)} %`;
+  if (fait >= total) return `Les ${total} ${rond ? "tours" : "rangs"} sont tricotés`;
+  return `${rond ? "Tour" : "Rang"} ${fait + 1} sur ${total} · ${Math.floor((fait / total) * 100)} %`;
 }
 
 /** Projet en conception reconstruit depuis un patron, pour « Dupliquer en variante ». */
@@ -469,6 +560,7 @@ export function rangsCondenses(patron, bloc) {
       repete: {
         de: motif[0].numero, a: motif[montres - 1].numero,
         fois: reste / montres, jusqua: motif.at(-1).numero, rangs: reste,
+        marqueur: motif.slice(montres).some((r) => r.marqueur),
       },
     });
   }

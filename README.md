@@ -15,7 +15,8 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu en 3D (sur une barre ou autour du cou, physique de tissu), patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.9.1) ; reste l'essai 📱 |
 | E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |
-| E4 à E6 | Bonnet / snood / couverture, laine insuffisante, bibliothèque | À venir |
+| E4 — Snood | Snood en rond (1 ou 2 tours, enfant ou adulte), déplacement du début du tour (9 points), builder en rond, aperçu 3D autour du cou, patron et suivi en tours | ✅ (0.14.0) ; bonnet et couverture à venir |
+| E5, E6 | Laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
 
@@ -44,8 +45,9 @@ js/composants/        éléments réutilisables (dont echantillon3d.js et vignet
 js/donnees/           base de données, réserve, sauvegarde, couleurs
 js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), critères de recherche, techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
-                      plan de l'écharpe et sa vérification, métrage, générateur du patron et suivi
-js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu
+                      plan de l'écharpe (plan.js) et du snood en rond (plan-rond.js) et leur vérification,
+                      métrage, générateur du patron et suivi
+js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (grille ouverte ou tube)
 tests/                tests automatiques
 ```
 

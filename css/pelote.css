@@ -600,6 +600,7 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .recette li { padding: 10px 12px; border-radius: 14px; background: var(--fond); }
 .recette li strong { display: block; font-size: 13px; color: var(--texte-2); margin-bottom: 2px; }
 .recette-mep { border: 1px dashed var(--bordure-champ); }
+.recette-marqueur { display: block; color: var(--brique); font-weight: 600; margin-bottom: 4px; }
 
 .technique { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .technique p { color: var(--texte); }
@@ -803,6 +804,8 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .lignes-rang.grand { font-size: 19px; gap: 10px; }
 .lignes-rang.grand .ligne-etiquette { font-size: 13px; }
 .lignes-rang.grand .ligne-lisiere { font-size: 15px; }
+.lignes-rang .ligne-marqueur { background: var(--brique-fond); color: var(--brique); border-radius: 14px; padding: 10px 12px; font-size: 14px; font-weight: 600; }
+.lignes-rang.grand .ligne-marqueur { font-size: 15px; }
 .astuce { display: flex; gap: 10px; padding: 12px; border-radius: 14px; background: var(--sauge-fond); font-size: 14px; line-height: 1.45; }
 .astuce svg { stroke: var(--sauge); flex: none; margin-top: 2px; }
 .ecran-pied-pile > * { width: 100%; }
