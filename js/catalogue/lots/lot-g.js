@@ -40,7 +40,18 @@ export const GESTES_LOT = {
     produit: 3,
     endroit: ["grain", "trou", "grain"],
     envers: ["Vdroite", "trou", "Vgauche"],
-    vuDeLAutreCote: null,
+    vuDeLAutreCote: "etoileEnd",
+  },
+  // La même étoile faite sur l'endroit (version en rond) : 3 ensemble à l'endroit sans lâcher, jeté, 3 ensemble dans les mêmes.
+  etoileEnd: {
+    nom: "étoile à l'endroit",
+    pluriel: "étoiles à l'endroit",
+    abrege: "étoile end.",
+    consomme: 3,
+    produit: 3,
+    endroit: ["Vgauche", "trou", "Vdroite"],
+    envers: ["grain", "trou", "grain"],
+    vuDeLAutreCote: "etoileEnv",
   },
   // (1 maille endroit, 1 jeté, 1 maille endroit) dans la même maille.
   "1en3j": {
@@ -51,7 +62,18 @@ export const GESTES_LOT = {
     produit: 3,
     endroit: ["V", "trou", "V"],
     envers: ["grain", "trou", "grain"],
-    vuDeLAutreCote: null,
+    vuDeLAutreCote: "1en3jEnv",
+  },
+  // Le même geste vu de l'autre côté (version en rond du point de mûres) : à l'envers.
+  "1en3jEnv": {
+    nom: "1 maille en 3 à l'envers avec un jeté",
+    pluriel: null,
+    abrege: "(1 env., 1 j., 1 env.) ds la m.",
+    consomme: 1,
+    produit: 3,
+    endroit: ["grain", "trou", "grain"],
+    envers: ["V", "trou", "V"],
+    vuDeLAutreCote: "1en3j",
   },
   "5ens": {
     nom: "5 mailles ensemble à l'endroit",
@@ -61,7 +83,17 @@ export const GESTES_LOT = {
     produit: 1,
     endroit: ["Vcentre"],
     envers: ["boule"],
-    vuDeLAutreCote: null,
+    vuDeLAutreCote: "5ensEnv",
+  },
+  "5ensEnv": {
+    nom: "5 mailles ensemble à l'envers",
+    pluriel: null,
+    abrege: "5 m. ens. env.",
+    consomme: 5,
+    produit: 1,
+    endroit: ["boule"],
+    envers: ["Vcentre"],
+    vuDeLAutreCote: "5ens",
   },
   "3ensT": {
     nom: "3 mailles ensemble à l'endroit torses",
