@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { pointParId } from "../catalogue/points.js";
-import { geometrieEcharpe, geometrieSnood, couleurDeLaine } from "./piece.js";
+import { geometrieEcharpe, couleurDeLaine } from "./piece.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 import { Tissu, BUSTE, sectionDuBuste } from "../rendu/tissu.js";
 import { cuire, liberer } from "../rendu/cuisson.js";
@@ -49,12 +49,66 @@ function grilleDuRect(THREE, rect, largeur, tuile) {
 }
 
 /**
+ * Les matières du tricot fini (écharpe, snood) : une par point, laine et face, habillées des textures cuites
+ * du point (relief, ombre de contact, jours), avec la teinte des creux de l'échantillon (interréflexions).
+ * La face « envers » est dessinée en BackSide : le dos de la même surface.
+ */
+export function fabriqueDeMatieres(THREE, renderer) {
+  const materiaux = new Map();
+  const matiere = (pointId, teinte, cote) => {
+    const cle = `${pointId}|${teinte}|${cote}`;
+    if (materiaux.has(cle)) return materiaux.get(cle);
+    const point = pointParId(pointId);
+    const t = point && cuire(THREE, renderer, point, cote);
+    const base = new THREE.Color(nuancesLaine(teinte).maille);
+    const m = new THREE.MeshPhysicalMaterial({
+      color: base, roughness: 0.78, metalness: 0,
+      sheen: 0.55, sheenRoughness: 0.5, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.35),
+      side: cote === "envers" ? THREE.BackSide : THREE.FrontSide,
+      alphaTest: 0.5,
+    });
+    if (t) {
+      // Relief (normales cuites), ombre de contact (canal rouge) et jours (canal vert).
+      Object.assign(m, { normalMap: t.normales, aoMap: t.ombre, aoMapIntensity: 1, alphaMap: t.ombre });
+      m.normalScale.set(1.3, 1.3);
+      // L'ombre de contact assombrit aussi la lumière directe, et les creux prennent la couleur de la laine
+      // (interréflexions) : même calcul que l'échantillon (teinteDuCreux).
+      const lin = lineaire(nuancesLaine(teinte).maille);
+      const max = Math.max(...lin, 1e-3);
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.teinteRebond = { value: new THREE.Vector3(...lin.map((c) => (c / max) * REBOND)) };
+        shader.fragmentShader = "uniform vec3 teinteRebond;\n" + shader.fragmentShader.replace(
+          "#include <color_fragment>",
+          "#include <color_fragment>\n#ifdef USE_AOMAP\n  float creux = texture2D( aoMap, vAoMapUv ).r;\n  diffuseColor.rgb *= creux + ( 1.0 - creux ) * teinteRebond;\n#endif"
+        );
+      };
+      m.customProgramCacheKey = () => "piece3d-creux";
+    }
+    materiaux.set(cle, m);
+    return m;
+  };
+  return { matiere, materiaux };
+}
+
+/** Taille (cm) d'une répétition du motif d'un rectangle du tricot, d'après les densités du projet. */
+export function tuileDuRect(THREE, renderer, r, densites) {
+  const point = pointParId(r.pointId);
+  if (!point) return null;
+  const d = densites[r.pointId] || { mailles: 18 * point.densite.mailles, rangs: 25 * point.densite.rangs };
+  const taille = { mailles: 1, rangs: 1 };
+  const t = cuire(THREE, renderer, point, "endroit");
+  if (t) Object.assign(taille, { mailles: t.mailles, rangs: t.rangs });
+  // Une répétition du motif mesure (mailles × largeur d'une maille) sur (rangs × hauteur d'un rang).
+  return { l: (taille.mailles * 10) / d.mailles, h: (taille.rangs * 10) / d.rangs };
+}
+
+/**
  * entree : { projet, plan, couleur, laines, densites, face, hauteur }
  * densites : { [pointId]: { mailles, rangs } } pour 10 cm (celles du calcul du projet).
  */
 /**
- * pose : "barre" (drapée sur une barre en bois), "cou" (autour du cou d'un buste de couturière),
- * ou "snood" (un tube porté autour du cou, 1 ou 2 tours selon sa taille).
+ * pose : "barre" (drapée sur une barre en bois) ou "cou" (autour du cou d'un buste de couturière).
+ * Le snood a sa propre vue, rigide et sans physique (snood3d.js, E4-9).
  */
 export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, face = "endroit", pose = "barre", hauteur = 460 }) {
   const boite = useRef(null);
@@ -69,12 +123,9 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
       .then((outils) => {
         const { THREE, OrbitControls } = outils;
         if (annule || !boite.current) return;
-        const snood = pose === "snood";
-        const geo = snood
-          ? (() => { const g = geometrieSnood(projet, plan); return { largeur: g.tour, longueur: g.hauteur, rects: g.rects }; })()
-          : geometrieEcharpe(projet, plan);
-        // Taille de la scène (cm) : la longueur de l'écharpe, ou la hauteur du buste pour un snood.
-        const echelle = snood ? (geo.largeur > 110 ? 66 : 52) : geo.longueur;
+        const geo = geometrieEcharpe(projet, plan);
+        // Taille de la scène (cm) : la longueur de l'écharpe.
+        const echelle = geo.longueur;
         const largeurPx = boite.current.clientWidth || 340;
         let renderer;
         try {
@@ -92,9 +143,7 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         renderer.domElement.setAttribute("role", "img");
         renderer.domElement.setAttribute(
           "aria-label",
-          snood
-            ? "Le snood fini en 3D, porté autour du cou d'un buste de couturière. Glisse un doigt pour tourner autour, pince pour zoomer, attrape le snood pour le faire bouger."
-            : `L'écharpe finie en 3D, ${pose === "cou" ? "autour du cou d'un buste de couturière" : "drapée sur une barre en bois"}. Glisse un doigt pour tourner autour, pince pour zoomer, attrape l'écharpe pour la faire bouger.`
+          `L'écharpe finie en 3D, ${pose === "cou" ? "autour du cou d'un buste de couturière" : "drapée sur une barre en bois"}. Glisse un doigt pour tourner autour, pince pour zoomer, attrape l'écharpe pour la faire bouger.`
         );
 
         const scene = new THREE.Scene();
@@ -102,59 +151,20 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         const camera = new THREE.PerspectiveCamera(34, largeurPx / hauteur, 1, 2000);
 
         // ---- Le tissu ----
-        const auCou = pose === "cou" || snood;
-        const tissu = new Tissu({ largeur: geo.largeur, longueur: geo.longueur, pas: snood && geo.largeur > 110 ? 2.5 : 2, ferme: snood });
-        if (snood) tissu.poserSnood({ tours: geo.largeur > 110 ? 2 : 1 });
-        else if (auCou) tissu.poserAutourDuCou();
+        const auCou = pose === "cou";
+        const tissu = new Tissu({ largeur: geo.largeur, longueur: geo.longueur, pas: 2 });
+        if (auCou) tissu.poserAutourDuCou();
         else tissu.poserSurLaBarre();
 
         // ---- Matières : une par point, laine et face ----
-        const materiaux = new Map();
-        const matiere = (pointId, teinte, cote) => {
-          const cle = `${pointId}|${teinte}|${cote}`;
-          if (materiaux.has(cle)) return materiaux.get(cle);
-          const point = pointParId(pointId);
-          const t = point && cuire(THREE, renderer, point, cote);
-          const base = new THREE.Color(nuancesLaine(teinte).maille);
-          const m = new THREE.MeshPhysicalMaterial({
-            color: base, roughness: 0.78, metalness: 0,
-            sheen: 0.55, sheenRoughness: 0.5, sheenColor: base.clone().lerp(new THREE.Color("#FFFFFF"), 0.35),
-            side: cote === "envers" ? THREE.BackSide : THREE.FrontSide,
-            alphaTest: 0.5,
-          });
-          if (t) {
-            // Relief (normales cuites), ombre de contact (canal rouge) et jours (canal vert).
-            Object.assign(m, { normalMap: t.normales, aoMap: t.ombre, aoMapIntensity: 1, alphaMap: t.ombre });
-            m.normalScale.set(1.3, 1.3);
-            // L'ombre de contact assombrit aussi la lumière directe, et les creux prennent la couleur de la laine
-            // (interréflexions) : même calcul que l'échantillon (teinteDuCreux).
-            const lin = lineaire(nuancesLaine(teinte).maille);
-            const max = Math.max(...lin, 1e-3);
-            m.onBeforeCompile = (shader) => {
-              shader.uniforms.teinteRebond = { value: new THREE.Vector3(...lin.map((c) => (c / max) * REBOND)) };
-              shader.fragmentShader = "uniform vec3 teinteRebond;\n" + shader.fragmentShader.replace(
-                "#include <color_fragment>",
-                "#include <color_fragment>\n#ifdef USE_AOMAP\n  float creux = texture2D( aoMap, vAoMapUv ).r;\n  diffuseColor.rgb *= creux + ( 1.0 - creux ) * teinteRebond;\n#endif"
-              );
-            };
-            m.customProgramCacheKey = () => "piece3d-creux";
-          }
-          materiaux.set(cle, m);
-          return m;
-        };
+        const { matiere, materiaux } = fabriqueDeMatieres(THREE, renderer);
 
         // ---- Les morceaux de l'écharpe ----
         const morceaux = [];
         const groupe = new THREE.Group();
         for (const r of geo.rects) {
-          const point = pointParId(r.pointId);
-          if (!point) continue;
-          const d = densites[r.pointId] || { mailles: 18 * point.densite.mailles, rangs: 25 * point.densite.rangs };
-          const taille = { mailles: 1, rangs: 1 };
-          const t = cuire(THREE, renderer, point, "endroit");
-          if (t) Object.assign(taille, { mailles: t.mailles, rangs: t.rangs });
-          // Une répétition du motif mesure (mailles × largeur d'une maille) sur (rangs × hauteur d'un rang).
-          const tuile = { l: (taille.mailles * 10) / d.mailles, h: (taille.rangs * 10) / d.rangs };
+          const tuile = tuileDuRect(THREE, renderer, r, densites);
+          if (!tuile) continue;
           const { geometrie, plat } = grilleDuRect(THREE, r, geo.largeur, tuile);
           const teinte = couleurDeLaine(r.laineId, couleur, laines);
           for (const cote of ["endroit", "envers"]) {
@@ -273,7 +283,7 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         scene.add(contre);
 
         // ---- Caméra et commandes ----
-        const centre = snood ? new THREE.Vector3(0, geo.largeur > 110 ? 1 : 0, 0) : auCou ? new THREE.Vector3(0, -geo.longueur * 0.2, 0) : new THREE.Vector3(0, -geo.longueur * 0.24, 0);
+        const centre = auCou ? new THREE.Vector3(0, -geo.longueur * 0.2, 0) : new THREE.Vector3(0, -geo.longueur * 0.24, 0);
         const controles = new OrbitControls(camera, renderer.domElement);
         controles.enableDamping = true;
         controles.dampingFactor = 0.12;
@@ -287,8 +297,7 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
         const viser = (f) => {
           const d = echelle * 1.05;
           const s = f === "envers" ? -1 : 1;
-          if (snood) camera.position.set(s * d * 0.35, centre.y + d * 0.35, s * d * 0.87);
-          else if (auCou) camera.position.set(s * d * 0.22, centre.y + d * 0.08, s * d * 0.97);
+          if (auCou) camera.position.set(s * d * 0.22, centre.y + d * 0.08, s * d * 0.97);
           else camera.position.set(s * d * 0.35, centre.y + d * 0.12, s * d * 0.92);
           controles.update();
         };
@@ -393,8 +402,7 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
           if (poses < POSE) return requestAnimationFrame(installer);
           // Une fois posée, l'écharpe est accrochée à son appui (milieu sur la barre, nuque au cou) :
           // on peut tirer les pans, elle ne tombe plus.
-          // Le snood n'est pas épinglé : le cou le porte.
-          if (!snood) tissu.epinglerAncre(auCou ? 6 : 4);
+          tissu.epinglerAncre(auCou ? 6 : 4);
           majMaillage();
           renderer.render(scene, camera);
           setEtat("pret");
@@ -449,12 +457,10 @@ export function Piece3D({ projet, plan, couleur, laines = [], densites = {}, fac
   return html`
     <div class="echantillon-3d">
       <div class="echantillon-3d-scene piece-3d-scene" ref=${boite} style=${`height:${hauteur}px`}>
-        ${etat === "chargement" && html`<span class="echantillon-3d-attente">${pose === "snood" ? "Je tricote ton snood…" : "Je tricote ton écharpe…"}</span>`}
+        ${etat === "chargement" && html`<span class="echantillon-3d-attente">Je tricote ton écharpe…</span>`}
         ${etat === "impossible" && html`<span class="echantillon-3d-attente">Ce téléphone ne peut pas afficher la 3D ici. Le dessin reste disponible.</span>`}
       </div>
       ${etat === "pret" &&
-      html`<p class="note">${pose === "snood"
-        ? "Glisse un doigt à côté du snood pour tourner autour, pince pour zoomer. Attrape le snood pour le faire bouger : le cou le retient."
-        : "Glisse un doigt à côté de l'écharpe pour tourner autour, pince pour zoomer. Attrape l'écharpe pour la faire bouger."}</p>`}
+      html`<p class="note">Glisse un doigt à côté de l'écharpe pour tourner autour, pince pour zoomer. Attrape l'écharpe pour la faire bouger.</p>`}
     </div>`;
 }

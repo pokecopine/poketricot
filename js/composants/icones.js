@@ -44,3 +44,5 @@ export const IconeAiguilles = ({ couleur = "var(--accent)" } = {}) => html`
     <path d="M8 10l10 10"></path><path d="M36 10L26 20"></path>
     <path d="M18 20c-2 14 10 18 8 0" stroke="var(--texte-2)"></path>
   </svg>`;
+export const IconeRecentrer = (o) =>
+  trait(html`<path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path>`, o);

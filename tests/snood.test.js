@@ -224,3 +224,11 @@ test("bande ajoutée et colonnes dans un snood : patron juste", () => {
   assert.ok(pat.rangs.length > 40);
   assert.ok(pat.etapes.some((e) => /depuis le marqueur/.test(e.texte || "")));
 });
+
+test("aperçu : le snood se porte en 1 ou 2 tours selon sa taille", async () => {
+  const { toursPortes } = await import("../js/donnees/projets.js");
+  assert.equal(toursPortes({ taille: { preset: "1tour", tourCm: 62 } }), 1);
+  assert.equal(toursPortes({ taille: { preset: "2tours", tourCm: 152 } }), 2);
+  assert.equal(toursPortes({ taille: { preset: "libre", tourCm: 140 } }), 2);
+  assert.equal(toursPortes({ taille: { preset: "libre", tourCm: 70 } }, { largeur: { reelleCm: 70 } }), 1);
+});

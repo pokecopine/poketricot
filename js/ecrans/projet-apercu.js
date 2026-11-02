@@ -6,12 +6,13 @@ import { naviguer } from "../routeur.js";
 import { Encart, Onglets, Fenetre, Pastille } from "../composants/base.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { Piece3D } from "../composants/piece3d.js";
+import { Snood3D } from "../composants/snood3d.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { genererPatron, nouveauSuivi, texteReversible } from "../moteur/patron.js";
-import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet } from "../donnees/projets.js";
+import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet, toursPortes } from "../donnees/projets.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 const minuscule = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -81,8 +82,11 @@ export function EtapeApercu({ id }) {
       <${EnTeteEtape} titre=${snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
         ${plan && snood
-          ? html`<${Piece3D} key="snood" projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose="snood" />
-            <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} cm de tour × ${formaterNombre(plan.longueur.reelleCm, 0)} cm de haut${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
+          ? html`<${Snood3D} key="snood" projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
+            <div class="chiffres-cles chiffres-snood">
+              <div><strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong><span>tour × hauteur</span></div>
+              <div><strong>en ${toursPortes(projet, plan)} tour${toursPortes(projet, plan) > 1 ? "s" : ""}</strong><span>se porte</span></div>
+            </div>`
           : plan
           ? html`<${Onglets} libelle="Où voir l'écharpe" valeur=${pose} surChoix=${setPose}
               choix=${[{ valeur: "barre", libelle: "Sur une barre" }, { valeur: "cou", libelle: "Autour du cou" }]} />
@@ -90,7 +94,7 @@ export function EtapeApercu({ id }) {
             <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
           : html`<${Encart} type="brique">${snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
 
-        ${corps && !corps.proprietes.reversible &&
+        ${!snood && corps && !corps.proprietes.reversible &&
         html`<${Onglets} libelle=${snood ? "Côté du snood" : "Côté de l'écharpe"} valeur=${face} surChoix=${setFace}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]} />`}
 

@@ -67,6 +67,15 @@ export const LIMITES_SNOOD = { tour: [40, 200], hauteur: [10, 60] };
 export const TOUR_MIN_TETE = 56;
 
 /** Taille d'un snood neuf ou après un changement de public. */
+/** Combien de tours autour du cou : celui de la taille choisie, sinon d'après le tour (au-delà de 110 cm, 2 tours). */
+export function toursPortes(projet, plan) {
+  const preset = projet.taille?.preset;
+  if (preset === "2tours") return 2;
+  if (preset === "1tour") return 1;
+  const tour = plan?.largeur?.reelleCm ?? projet.taille?.tourCm ?? 0;
+  return tour > 110 ? 2 : 1;
+}
+
 export function tailleSnood(pub = "adulte", preset = "1tour") {
   const liste = TAILLES_SNOOD[pub] || TAILLES_SNOOD.adulte;
   const t = liste.find((x) => x.preset === preset) || liste[0];
