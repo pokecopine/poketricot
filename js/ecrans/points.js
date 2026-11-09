@@ -12,7 +12,7 @@ import { EnTete, Onglets, Encart } from "../composants/base.js";
 import { BandeTexture } from "../composants/texture.js";
 import { Echantillon3D } from "../composants/echantillon3d.js";
 import { Vignette3D } from "../composants/vignette3d.js";
-import { IconeChevron, IconeCoeur, IconeEprouvette } from "../composants/icones.js";
+import { IconeCoeur, IconeEprouvette } from "../composants/icones.js";
 import { MARQUES, pointsMarques, estMarque, basculerMarque } from "../donnees/marques.js";
 import { POINTS, FAMILLES, PIECES, pointParId, rechercherPoints, avisPour } from "../catalogue/points.js";
 import { etiquettesProprietes, texteConsommation, texteDensite, texteMultiple, texteOuvragesConseilles } from "../catalogue/fiche.js";
@@ -115,12 +115,6 @@ function MarquesPoint({ point, classe = "marques-point" }) {
 }
 
 /** Dessin du point et sa vignette en échantillon 3D, côte à côte, avant d'ouvrir la fiche. */
-function VisuelCarte({ point, couleur }) {
-  return html`<span class="carte-visuel">
-    <${BandeTexture} point=${point} couleur=${couleur} hauteur=${112} />
-    <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${112} />
-  </span>`;
-}
 
 /** Fiche résumée d'un point (comme dans la maquette « Choix des points »). */
 /** Laine du menu « Dans la couleur de » (catalogue) : celle de la couleur choisie, sinon la première. */
@@ -137,37 +131,150 @@ function LigneLaine({ avis }) {
   return lignes.map((l) => html`<span class=${"ligne-laine " + l.classe}><span class="ligne-laine-pelote" aria-hidden="true"></span>${l.texte}</span>`);
 }
 
-function CartePoint({ point, couleur, piece, zone = "corps", selection, avisLaine = null }) {
-  const avis = selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
-  const choisi = selection && selection.actuel === point.id;
-  // Refusé (bord d'un bonnet avec revers, 0.17.0) : la carte est grisée et ne choisit rien.
-  const refuse = !!selection && avis.avis === "refuse";
-  const { flash } = useApp();
-  return html`
-    <div class=${"carte-point-cadre" + (choisi ? " carte-point-choisie" : "") + (refuse ? " carte-point-refusee" : "")}>
-      <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined} aria-disabled=${refuse ? "true" : undefined}
-        onClick=${() => (refuse ? flash(selection.messageRefus || "Ce point ne peut pas être choisi ici.") : selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
-        <${VisuelCarte} point=${point} couleur=${couleur} />
-        <span class="carte-point-corps">
-          <span class="carte-point-titre">
-            <span class="carte-point-nom">${point.nom}${!choisi && !selection ? html`<span class="carte-point-chevron">${IconeChevron()}</span>` : null}</span>${choisi && html`<span class="badge">Choisi</span>`}
-          </span>
-          <${Etiquettes} point=${point} />
-          <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
-          ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" || refuse ? "brique" : "sauge"}>${avis.raison}<//>`}
-          <${LigneLaine} avis=${avisLaine} />
-        </span>
-      </button>
-      <${MarquesPoint} point=${point} />
-      ${selection && point.source &&
-      html`<a class="carte-point-lien" href=${point.source} target="_blank" rel="noopener">
-        Voir l'article et la vidéo (${nomSource(point.source)})
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M20 4l-9 9"></path><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"></path></svg>
-      </a>`}
-    </div>`;
+// ---------------- Grille des points et volet (0.20.0) ----------------
+
+/** Avis d'un point dans la liste en cours (pièce, zone, ou règle du choix pour un projet). */
+function avisDansLaListe(point, { piece, zone = "corps", selection }) {
+  return selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
 }
 
-function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte, icone, classe = "", avisLaine }) {
+/** Une case de la grille : la vignette 3D et le nom ; une pastille brique si le point est peu adapté (pièce, zone ou laine). */
+function CasePoint({ point, couleur, piece, zone, selection, avisLaine, surOuvrir }) {
+  const avis = avisDansLaListe(point, { piece, zone, selection });
+  const refuse = !!selection && avis.avis === "refuse";
+  const alerte = !refuse && (avis.avis === "deconseille" || avisLaine?.avis === "deconseille");
+  const choisi = !!selection && selection.actuel === point.id;
+  const libelle = point.nom + (choisi ? ", choisi" : "") + (refuse ? ", ne peut pas être choisi ici" : alerte ? ", peu adapté" : "");
+  return html`<button type="button" aria-haspopup="dialog" aria-label=${libelle} onClick=${() => surOuvrir(point.id)}
+    class=${"case-point" + (choisi ? " case-point-choisie" : "") + (refuse ? " case-point-refusee" : "")}>
+    <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${150} />
+    ${alerte && html`<span class="case-point-alerte" aria-hidden="true"></span>`}
+    ${choisi && html`<span class="badge case-point-badge" aria-hidden="true">Choisi</span>`}
+    <span class="case-point-nom" aria-hidden="true">${point.nom}</span>
+  </button>`;
+}
+
+const IconeFleche = (sens) => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d=${sens < 0 ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"}></path></svg>`;
+
+/**
+ * Volet d'un point (0.20.0) : ce que montrait la carte (schéma et 3D, étiquettes, ouvrages, avis, ligne « avec ta laine »),
+ * le cœur et l'éprouvette, le feuilletage dans la famille, et les boutons. Il monte du bas de l'écran, par-dessus la grille.
+ */
+function VoletPoint({ liste, index, titreListe, couleur, piece, zone = "corps", selection, avisLaine, surFeuilleter, surFermer, surAction }) {
+  const point = liste[index];
+  const avis = avisDansLaListe(point, { piece, zone, selection });
+  const refuse = !!selection && avis.avis === "refuse";
+  const { flash } = useApp();
+  const fermer = useRef(null);
+  const depart = useRef(null);
+  const rappels = useRef({});
+  rappels.current = { surFermer, surFeuilleter };
+  useEffect(() => {
+    fermer.current?.focus();
+    const touche = (e) => {
+      if (e.key === "Escape") rappels.current.surFermer();
+      else if (e.key === "ArrowLeft") rappels.current.surFeuilleter(-1);
+      else if (e.key === "ArrowRight") rappels.current.surFeuilleter(1);
+    };
+    document.addEventListener("keydown", touche);
+    const avant = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", touche);
+      document.body.style.overflow = avant;
+    };
+  }, []);
+  // Glisser le doigt de côté : point suivant ou précédent (un geste plus horizontal que vertical, de 50 px au moins).
+  const debutGeste = (e) => {
+    const t = e.touches[0];
+    depart.current = { x: t.clientX, y: t.clientY };
+  };
+  const finGeste = (e) => {
+    if (!depart.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - depart.current.x;
+    const dy = t.clientY - depart.current.y;
+    depart.current = null;
+    if (Math.abs(dx) >= 50 && Math.abs(dx) > 1.5 * Math.abs(dy)) surFeuilleter(dx < 0 ? 1 : -1);
+  };
+  return html`<div class="volet-fond" onClick=${surFermer}>
+    <div class="volet" role="dialog" aria-modal="true" aria-labelledby="titre-volet" onClick=${(e) => e.stopPropagation()}
+      onTouchStart=${debutGeste} onTouchEnd=${finGeste}>
+      <span class="volet-poignee" aria-hidden="true"></span>
+      <div class="detail-point-tete">
+        <h2 class="detail-point-nom" id="titre-volet">${point.nom}</h2>
+        <${MarquesPoint} point=${point} classe="marques-point marques-titre" />
+        <button type="button" class="detail-fermer" ref=${fermer} aria-label="Fermer" onClick=${surFermer}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+      <span class="detail-point-visuel">
+        <span class="carte-visuel" key=${point.id}>
+          <${BandeTexture} point=${point} couleur=${couleur} hauteur=${150} />
+          <${Vignette3D} point=${point} couleur=${couleur} largeur="100%" hauteur=${150} />
+        </span>
+      </span>
+      ${liste.length > 1 && html`<div class="feuilleter">
+        <button type="button" class="bouton-rond" aria-label="Point précédent" disabled=${index === 0} onClick=${() => surFeuilleter(-1)}>${IconeFleche(-1)}</button>
+        <span class="feuilleter-texte" aria-live="polite">${index + 1} sur ${liste.length} · ${titreListe}</span>
+        <button type="button" class="bouton-rond" aria-label="Point suivant" disabled=${index === liste.length - 1} onClick=${() => surFeuilleter(1)}>${IconeFleche(1)}</button>
+      </div>`}
+      <div class="carte-point-corps">
+        <${Etiquettes} point=${point} />
+        <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
+        ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" || refuse ? "brique" : "sauge"}>${avis.raison}<//>`}
+        <${LigneLaine} avis=${avisLaine(point)} />
+        ${selection &&
+        html`<button type="button" class="bouton-principal" aria-disabled=${refuse ? "true" : undefined}
+          onClick=${() => (refuse ? flash(selection.messageRefus || "Ce point ne peut pas être choisi ici.") : surAction(() => selection.choisir(point.id)))}>
+          ${selection.actuel === point.id ? "Garder ce point" : "Choisir ce point"}</button>`}
+        <button type="button" class=${selection ? "bouton-secondaire" : "bouton-principal"}
+          onClick=${() => surAction(() => naviguer("/points/" + point.id))}>Fiche complète et recette</button>
+        ${selection && point.source &&
+        html`<a class="volet-lien" href=${point.source} target="_blank" rel="noopener">
+          Voir l'article et la vidéo (${nomSource(point.source)})
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M20 4l-9 9"></path><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"></path></svg>
+        </a>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+/**
+ * Ouverture du volet, liée au bouton retour du téléphone : ouvrir ajoute une entrée à l'historique (même adresse),
+ * le retour la retire et ferme le volet. Une action qui quitte l'écran (choisir, fiche) retire d'abord cette entrée.
+ */
+function useVolet() {
+  const [ouvert, setOuvert] = useState(null);
+  const ensuite = useRef(null);
+  useEffect(() => {
+    const surRetour = () => {
+      setOuvert(null);
+      const action = ensuite.current;
+      ensuite.current = null;
+      if (action) setTimeout(action, 0);
+    };
+    window.addEventListener("popstate", surRetour);
+    return () => window.removeEventListener("popstate", surRetour);
+  }, []);
+  const ouvrir = (o) => {
+    if (!history.state?.volet) history.pushState({ volet: true }, "");
+    setOuvert(o);
+  };
+  const fermerPuis = (action = null) => {
+    if (history.state?.volet) {
+      ensuite.current = action;
+      history.back();
+    } else {
+      setOuvert(null);
+      if (action) action();
+    }
+  };
+  return { ouvert, ouvrir, setOuvert, fermerPuis };
+}
+
+function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte, icone, classe = "", avisLaine, surOuvrir }) {
   if (points.length === 0) return null;
   return html`
     <details class=${"famille" + (alerte ? " famille-alerte" : "") + (icone ? " famille-marque" : "") + (classe ? " " + classe : "")} open=${ouverte}>
@@ -176,8 +283,8 @@ function Famille({ titre, points, couleur, piece, zone, selection, ouverte, aler
         <span>${titre}</span>
         <span class="famille-nombre">${points.length} point${points.length > 1 ? "s" : ""}</span>
       </summary>
-      <div class="famille-points">
-        ${points.map((p) => html`<${CartePoint} key=${p.id} point=${p} couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} avisLaine=${avisLaine(p)} />`)}
+      <div class="famille-points grille-points">
+        ${points.map((p) => html`<${CasePoint} key=${p.id} point=${p} couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} avisLaine=${avisLaine(p)} surOuvrir=${surOuvrir} />`)}
       </div>
     </details>`;
 }
@@ -190,6 +297,7 @@ export function CataloguePoints({ selection = null } = {}) {
   const [rechercheSelection, setRechercheSelection] = useState("");
   const [couleurChoisie, setCouleur] = useState(memoire.couleur);
   const [criteres, setCriteres] = useState(selection ? [] : memoire.criteres);
+  const volet = useVolet();
   const basculerCritere = (id) => setCriteres((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const piece = selection ? selection.piece : pieceLibre;
   const zone = selection ? selection.zone : "corps";
@@ -305,10 +413,19 @@ export function CataloguePoints({ selection = null } = {}) {
 
         ${familles.map(
           (f) => html`<${Famille} key=${f.id + (piece || "") + recherche + criteres.join() + (laine?.id || "")} titre=${f.titre} points=${f.points} icone=${f.icone} classe=${f.classe}
-            couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} avisLaine=${avisLaine} />`
+            couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} avisLaine=${avisLaine}
+            surOuvrir=${(id) => volet.ouvrir({ famille: f.id, index: f.points.findIndex((p) => p.id === id) })} />`
         )}
+        ${volet.ouvert && (() => {
+          const f = familles.find((x) => x.id === volet.ouvert.famille);
+          if (!f || !f.points[volet.ouvert.index]) return null;
+          return html`<${VoletPoint} liste=${f.points} index=${volet.ouvert.index} titreListe=${f.titre}
+            couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} avisLaine=${avisLaine}
+            surFeuilleter=${(d) => volet.setOuvert((o) => o && { ...o, index: Math.max(0, Math.min(f.points.length - 1, o.index + d)) })}
+            surFermer=${() => volet.fermerPuis()} surAction=${(action) => volet.fermerPuis(action)} />`;
+        })()}
         ${!filtre && !pointsMarques(prefs, "favoris").length && !pointsMarques(prefs, "aTester").length &&
-        html`<p class="note astuce-marques">Touche le ${IconeCoeur({ taille: 15 })} d'un point pour le garder dans « Mes points favoris », ou l'${IconeEprouvette({ taille: 15 })} pour le mettre dans « À tester en priorité ».</p>`}
+        html`<p class="note astuce-marques">Touche un point, puis le ${IconeCoeur({ taille: 15 })} pour le garder dans « Mes points favoris », ou l'${IconeEprouvette({ taille: 15 })} pour le mettre dans « À tester en priorité ».</p>`}
         ${filtre && trouves.length === 0 &&
         html`<p class="note">${criteres.length ? "Aucun point ne remplit tous ces critères" + (recherche.trim() ? " avec ce nom" : "") + " : décoche un critère." : "Aucun point ne porte ce nom pour l'instant."}</p>`}
 
