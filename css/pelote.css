@@ -929,3 +929,36 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .ligne-laine-possible { color: var(--texte-2); }
 .ligne-laine-alerte { color: var(--brique); font-weight: 600; }
 .puce-critere[aria-disabled="true"] { opacity: 0.45; }
+
+/* ---------- Grille des points (maquette, travail/affichage-points) ---------- */
+.grille-points { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; grid-auto-flow: row dense; }
+.case-point {
+  position: relative; display: flex; flex-direction: column; padding: 0; text-align: left;
+  border-radius: 18px; overflow: hidden; background: var(--carte); border: 1px solid var(--bordure); color: inherit;
+}
+.case-point-nom { padding: 9px 11px 11px; font-family: var(--titre); font-size: 15.5px; font-weight: 600; line-height: 1.2; min-height: 2.4em; }
+.case-point-choisie { outline: 2.5px solid var(--accent); outline-offset: -2px; }
+.case-point-ouverte { outline: 2.5px solid var(--texte-2); outline-offset: -2px; }
+.case-point-refusee { opacity: 0.5; filter: grayscale(0.6); }
+.case-point-alerte {
+  position: absolute; top: 8px; right: 8px; width: 14px; height: 14px; border-radius: 7px;
+  background: var(--brique); border: 2px solid var(--carte);
+}
+.case-point-badge { position: absolute; top: 8px; left: 8px; }
+.case-agrandie { grid-column: 1 / -1; }
+.detail-point { display: flex; flex-direction: column; }
+.detail-point-en-ligne { border-radius: 20px; overflow: hidden; background: var(--carte); border: 2.5px solid var(--texte-2); }
+.detail-point-tete { display: flex; align-items: center; gap: 2px; padding: 6px 4px 6px 14px; }
+.detail-point-nom { flex: 1; min-width: 0; margin: 0; font-family: var(--titre); font-size: 20px; font-weight: 600; }
+.detail-fermer { width: 44px; height: 44px; border: none; background: transparent; color: var(--texte-2); display: grid; place-items: center; border-radius: 22px; }
+.detail-point-visuel { display: block; }
+.detail-point .bouton-principal, .detail-point .bouton-secondaire { margin-top: 4px; }
+.volet-fond { position: fixed; inset: 0; z-index: 50; background: var(--voile); display: flex; align-items: flex-end; }
+.volet {
+  width: 100%; max-height: 88vh; overflow-y: auto; background: var(--carte);
+  border-radius: 24px 24px 0 0; padding: 6px 0 calc(10px + env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 20px rgba(43, 38, 34, 0.25);
+}
+.volet-poignee { display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--bordure-champ); margin: 4px auto 2px; }
+.volet .detail-point-visuel { padding: 0 14px; }
+.volet .carte-visuel { border-radius: 14px; overflow: hidden; }

@@ -1,0 +1,55 @@
+import { chromium } from "/opt/npm-tools/node_modules/playwright/index.mjs";
+const B = "http://localhost:8123";
+const out = "/home/claude/maquette/";
+const nav = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const ctx = await nav.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, serviceWorkers: "block" });
+const page = await ctx.newPage();
+page.on("pageerror", (e) => console.log("ERR", e.message));
+await page.goto(B + "/#/");
+await page.waitForTimeout(800);
+await page.evaluate(async () => {
+  const db = await (await import("/js/donnees/db.js")).ouvrirBase();
+  const P = await import("/js/donnees/projets.js");
+  await db.ecrire("laines", { id: "l1", nom: "Sauge", epaisseur: "aran", couleur: "#7E9C86", quantite: { mode: "etiquette", metresParPelote: "100", pelotes: "3" } });
+  const p = P.nouveauProjet({ type: "echarpe", nom: "Écharpe sauge" });
+  Object.assign(p, { id: "p1", laineId: "l1", etape: 4, pointPrincipal: "riz", blocs: P.blocsParDefaut("riz", "echarpe") });
+  await db.ecrire("projets", p);
+});
+async function catalogue(option, famille = "Texturés") {
+  await page.goto(B + "/#/"); await page.waitForTimeout(300);
+  await page.goto(B + "/#/points"); await page.waitForTimeout(600);
+  await page.evaluate((o) => (window.__optionDetail = o), option);
+  await page.locator("summary", { hasText: famille }).click();
+  await page.waitForTimeout(400);
+  await page.locator("summary", { hasText: famille }).evaluate((e) => e.scrollIntoView({ block: "start" }));
+  await page.evaluate(() => window.scrollBy(0, -70));
+  await page.waitForTimeout(9000);
+}
+await catalogue("volet");
+await page.screenshot({ path: out + "1-grille.png" });
+await page.locator(".famille[open] .case-point").nth(0).click();
+await page.waitForTimeout(5000);
+await page.screenshot({ path: out + "2-option-A-volet.png" });
+await catalogue("fiche");
+await page.locator(".famille[open] .case-point").nth(0).click();
+await page.waitForTimeout(5000);
+await page.screenshot({ path: out + "3-option-B-fiche.png" });
+await catalogue("agrandie");
+await page.locator(".famille[open] .case-point").nth(2).click();
+await page.waitForTimeout(5000);
+await page.locator(".case-agrandie").evaluate((e) => { e.scrollIntoView({ block: "start" }); window.scrollBy(0, -170); });
+await page.waitForTimeout(800);
+await page.screenshot({ path: out + "4-option-C-agrandie.png" });
+// Builder
+await page.goto(B + "/#/"); await page.waitForTimeout(300);
+await page.goto(B + "/#/projet/p1/point/corps"); await page.waitForTimeout(800);
+await page.evaluate(() => (window.__optionDetail = "volet"));
+await page.locator("summary", { hasText: "Texturés" }).click();
+await page.waitForTimeout(400);
+await page.locator("summary", { hasText: "Texturés" }).evaluate((e) => { e.scrollIntoView({ block: "start" }); window.scrollBy(0, -70); });
+await page.waitForTimeout(9000);
+await page.screenshot({ path: out + "5-builder-grille.png" });
+await page.locator(".famille[open] .case-point").nth(1).click();
+await page.waitForTimeout(5000);
+await page.screenshot({ path: out + "6-builder-volet.png" });
+await nav.close();
