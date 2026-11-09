@@ -123,10 +123,13 @@ function VisuelCarte({ point, couleur }) {
 function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
   const avis = selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
   const choisi = selection && selection.actuel === point.id;
+  // Refusé (bord d'un bonnet avec revers, 0.17.0) : la carte est grisée et ne choisit rien.
+  const refuse = !!selection && avis.avis === "refuse";
+  const { flash } = useApp();
   return html`
-    <div class=${"carte-point-cadre" + (choisi ? " carte-point-choisie" : "")}>
-      <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined}
-        onClick=${() => (selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
+    <div class=${"carte-point-cadre" + (choisi ? " carte-point-choisie" : "") + (refuse ? " carte-point-refusee" : "")}>
+      <button type="button" class="carte-point" aria-pressed=${selection ? String(choisi) : undefined} aria-disabled=${refuse ? "true" : undefined}
+        onClick=${() => (refuse ? flash(selection.messageRefus || "Ce point ne peut pas être choisi ici.") : selection ? selection.choisir(point.id) : naviguer("/points/" + point.id))}>
         <${VisuelCarte} point=${point} couleur=${couleur} />
         <span class="carte-point-corps">
           <span class="carte-point-titre">
@@ -134,7 +137,7 @@ function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
           </span>
           <${Etiquettes} point=${point} />
           <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
-          ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
+          ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" || refuse ? "brique" : "sauge"}>${avis.raison}<//>`}
         </span>
       </button>
       <${MarquesPoint} point=${point} />
@@ -187,7 +190,7 @@ export function CataloguePoints({ selection = null } = {}) {
   if (filtre) {
     familles = [{ id: "resultats", titre: "Résultats", points: trouves, ouverte: true }];
   } else {
-    const adaptes = (p) => !piece || avis(p) !== "deconseille";
+    const adaptes = (p) => !piece || (avis(p) !== "deconseille" && avis(p) !== "refuse");
     // Tout est fermé au départ (catalogue comme choix d'un point pour un projet) : on ouvre la famille qu'on veut.
     familles = FAMILLES.map((f) => ({
       id: f.id,
@@ -223,6 +226,11 @@ export function CataloguePoints({ selection = null } = {}) {
         ouverte: false,
         alerte: true,
       });
+      // Bord d'un bonnet avec revers : les points non réversibles, grisés, tout en dernier (0.17.0).
+      const refuses = POINTS.filter((p) => avis(p) === "refuse");
+      if (refuses.length) {
+        familles.push({ id: "refuses", titre: selection?.titreRefuses || "Ne conviennent pas ici", points: refuses, ouverte: false, alerte: true });
+      }
     }
   }
 
@@ -401,6 +409,11 @@ const AIDES_ZONES = {
   bande: "Une bande décorative dans la longueur de l'écharpe.",
 };
 
+const AIDES_ZONES_BONNET = {
+  corps: "Le point du corps est aussi le point de ton échantillon. Un point simple continue jusqu'au sommet ; un grand motif passe en jersey au sommet.",
+  bas: "Le bord tient le bonnet sur la tête : les côtes sont élastiques et ne roulent pas.",
+};
+
 const AIDES_ZONES_SNOOD = {
   corps: "Le point du corps est aussi le point de ton échantillon.",
   bas: "La bordure du bas tient le bord du snood : les points qui ne roulent pas sont proposés d'abord.",
@@ -429,7 +442,7 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
       actuel: c.pointId,
       avis: (p) => avisPourBloc(p, projet.type, "corps", { colonne: true }),
       titre: `Point : colonne ${iColonne + 1} ${bloc.section ? `de la ${minusculeNom(nomBloc(bloc, projet))}` : bloc.zone === "corps" ? "du corps" : "de la bande"}`,
-      aide: projet.type === "snood"
+      aide: projet.type === "snood" || projet.type === "bonnet"
         ? "Une colonne autour du tour, à côté des autres : chaque point garde son motif. Un point qui déplace le début du tour prend tout le tour."
         : "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
       secours: retourBuilder,
@@ -444,12 +457,14 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
     zone: zoneAvis(bloc.zone),
     couleur: laine?.couleur,
     actuel: bloc.pointId,
-    avis: (p) => avisPourBloc(p, projet.type, bloc.zone),
-    titrePeuAdaptes: { bas: "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
-    titre: section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
+    avis: (p) => avisPourBloc(p, projet.type, bloc.zone, { revers: projet.type === "bonnet" && !!projet.taille?.revers && bloc.zone === "bas" }),
+    titrePeuAdaptes: { bas: projet.type === "bonnet" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
+    titreRefuses: "Pas réversibles : l'envers se verrait une fois replié",
+    messageRefus: "Avec un revers, choisis un point réversible.",
+    titre: section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : projet.type === "bonnet" && bloc.zone === "bas" ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
     aide: bloc.section && !section1
-      ? `Une section du corps, sur ${projet.type === "snood" ? "tout le tour" : "toute la largeur"} : chaque section a son point.`
-      : (projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
+      ? `Une section du corps, sur ${projet.type === "snood" || projet.type === "bonnet" ? "tout le tour" : "toute la largeur"} : chaque section a son point.`
+      : (projet.type === "bonnet" ? AIDES_ZONES_BONNET : projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
     choisir: async (pointId) => {
       await modifier((p) => avecPointDuBloc(p, blocId, pointId));

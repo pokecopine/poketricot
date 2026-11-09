@@ -7,12 +7,13 @@ import { Encart, Onglets, Fenetre, Pastille } from "../composants/base.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { Piece3D } from "../composants/piece3d.js";
 import { Snood3D } from "../composants/snood3d.js";
+import { Bonnet3D } from "../composants/bonnet3d.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { genererPatron, nouveauSuivi, texteReversible } from "../moteur/patron.js";
-import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet, toursPortes } from "../donnees/projets.js";
+import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet, toursPortes, enRond } from "../donnees/projets.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 const minuscule = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -52,7 +53,8 @@ export function EtapeApercu({ id }) {
   const avertir = etat.possible && (etat.approximatif || manques.length > 0);
   // Seules les laines vraiment utilisées (une laine du projet peut attendre au Matériel sans servir).
   const utilisees = calcul?.parLaine?.length ? calcul.parLaine.map((x) => x.laine) : lainesDuProjet(projet, laines).slice(0, 1);
-  const snood = projet.type === "snood";
+  const bonnet = projet.type === "bonnet";
+  const snood = enRond(projet);
 
   async function creer() {
     if (!etat.possible || enCours) return;
@@ -80,9 +82,16 @@ export function EtapeApercu({ id }) {
 
   return html`
     <main class="ecran">
-      <${EnTeteEtape} titre=${snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
+      <${EnTeteEtape} titre=${bonnet ? "Ton bonnet, terminé" : snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
-        ${plan && snood
+        ${plan && bonnet
+          ? html`<${Bonnet3D} key="bonnet" projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
+            <div class="chiffres-cles chiffres-snood">
+              <div><strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong><span>tour × hauteur</span></div>
+              <div><strong>${formaterNombre(projet.taille.teteCm, 0)} cm</strong><span>sur une tête de</span></div>
+            </div>
+            <p class="note">Le bonnet est posé, bien tendu : il ne glisse pas et ne tombe pas.</p>`
+          : plan && snood
           ? html`<${Snood3D} key="snood" projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
             <div class="chiffres-cles chiffres-snood">
               <div><strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong><span>tour × hauteur</span></div>
@@ -93,7 +102,7 @@ export function EtapeApercu({ id }) {
               choix=${[{ valeur: "barre", libelle: "Sur une barre" }, { valeur: "cou", libelle: "Autour du cou" }]} />
             <${Piece3D} key=${pose} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose=${pose} />
             <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
-          : html`<${Encart} type="brique">${snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
+          : html`<${Encart} type="brique">${bonnet ? "Le bonnet" : snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
 
         ${!snood && corps && !corps.proprietes.reversible &&
         html`<${Onglets} libelle=${snood ? "Côté du snood" : "Côté de l'écharpe"} valeur=${face} surChoix=${setFace}
@@ -132,7 +141,10 @@ export function EtapeApercu({ id }) {
                   : "Pas d'échantillon : il en faut un pour créer le patron"}
           <//>`}
           ${corps && html`<${Coche} ok=${true}>${texteReversible(corps, projet.type)}<//>`}
-          ${calcul?.cable && html`<${Coche} ok=${false}>Ton câble (${formaterNombre(calcul.cable.cableCm, 0)} cm) est plus long que le tour du snood : prends un câble de ${calcul.cable.conseille} cm<//>`}
+          ${calcul?.cable && html`<${Coche} ok=${false}>${calcul.cable.magicLoop
+            ? `Ton câble (${formaterNombre(calcul.cable.cableCm, 0)} cm) est trop court pour le magic loop : prends un câble de ${calcul.cable.conseille} cm`
+            : `Ton câble (${formaterNombre(calcul.cable.cableCm, 0)} cm) est plus long que le tour du snood : prends un câble de ${calcul.cable.conseille} cm`}<//>`}
+          ${bonnet && plan?.sommet && html`<${Coche} ok=${true}>${plan.sommet.jersey ? plan.sommet.raison.replace(/\.$/, "") : `Le sommet continue en ${minuscule(pointParId(plan.sommet.pointId)?.nom || "jersey")} : 8 parts, ${plan.sommet.diminutions} tours de diminutions`}<//>`}
           ${snood && calcul?.echantillon && calcul.echantillon.mode !== "rond" && html`<${Coche} ok=${true}>Échantillon tricoté à plat : en rond, le tricot peut être un peu plus serré<//>`}
         </ul>
         ${!etat.possible && calcul?.ok && html`<${Encart} type="brique">${etat.raison}<//>`}

@@ -64,7 +64,7 @@ export const TECHNIQUES_PATRON = {
   laineRond: {
     titre: "Changer de laine en rond",
     explication:
-      "Au marqueur, laisse pendre 15 cm de la nouvelle laine à l'intérieur du snood et tricote la 1re maille du tour avec elle, en tenant le bout pour qu'il ne file pas ; continue tout le tour avec cette laine. En rond, les tours forment une spirale : au changement de couleur, une petite marche se voit au début du tour. C'est normal ; tirer un peu le fil de la 1re maille au tour suivant l'atténue. L'ancienne laine est coupée à 15 cm, sauf si le patron dit de la laisser en attente.",
+      "Au marqueur, laisse pendre 15 cm de la nouvelle laine à l'intérieur du tricot et tricote la 1re maille du tour avec elle, en tenant le bout pour qu'il ne file pas ; continue tout le tour avec cette laine. En rond, les tours forment une spirale : au changement de couleur, une petite marche se voit au début du tour. C'est normal ; tirer un peu le fil de la 1re maille au tour suivant l'atténue. L'ancienne laine est coupée à 15 cm, sauf si le patron dit de la laisser en attente.",
   },
   porteRond: {
     titre: "Laine en attente au début du tour",
@@ -79,12 +79,32 @@ export const TECHNIQUES_PATRON = {
   filsRond: {
     titre: "Rentrer les fils",
     explication:
-      "Enfile chaque bout de fil dans une aiguille à laine et fais-le passer dans les mailles de l'envers (l'intérieur du snood) sur 5 à 8 cm, en zigzag, de préférence dans une bordure ou dans les mailles de sa couleur. Coupe ce qui dépasse seulement après le blocage.",
+      "Enfile chaque bout de fil dans une aiguille à laine et fais-le passer dans les mailles de l'envers (l'intérieur du tricot) sur 5 à 8 cm, en zigzag, de préférence dans une bordure ou dans les mailles de sa couleur. Coupe ce qui dépasse seulement après le blocage.",
   },
   blocageRond: {
     titre: "Blocage",
     explication:
-      "Laisse tremper le snood un quart d'heure dans de l'eau tiède avec un peu de savon doux, sans frotter. Presse-le dans une serviette (sans tordre), puis pose-le à plat, sans l'étirer, et laisse-le sécher complètement. Les mailles se régularisent et les jours de la dentelle s'ouvrent.",
+      "Laisse tremper le tricot un quart d'heure dans de l'eau tiède avec un peu de savon doux, sans frotter. Presse-le dans une serviette (sans tordre), puis pose-le à plat, sans l'étirer, et laisse-le sécher complètement. Les mailles se régularisent et les jours de la dentelle s'ouvrent.",
+  },
+  magicLoop: {
+    titre: "Magic loop",
+    explication:
+      "Tout se tricote sur une seule aiguille circulaire à long câble (80 cm). Après le montage, fais glisser les mailles sur le câble et sépare-les en deux moitiés égales. Au milieu, tire une boucle de câble entre les deux moitiés. Ramène les deux moitiés sur les pointes, côte à côte, le fil de travail sur la moitié de derrière. Tire la pointe de derrière pour que ses mailles passent sur le câble, et tricote avec elle les mailles de devant. Arrivée au bout, tourne le travail, refais glisser les mailles sur les pointes, et tricote l'autre moitié. Deux moitiés = un tour. Tire bien le fil à chaque changement de moitié pour ne pas faire d'échelle.",
+  },
+  sommet: {
+    titre: "Diminuer au sommet",
+    explication:
+      "Le sommet est partagé en 8 parts égales, comme un gâteau. À chaque tour de diminutions, tricote les mailles de la part comme le patron le dit, puis les 2 dernières mailles de la part ensemble à l'endroit : pique l'aiguille droite dans les 2 mailles à la fois, comme pour une maille endroit, et tricote-les comme une seule. La diminution tombe toujours au même endroit : 8 lignes montent vers le centre. Si tu veux, place un anneau marqueur à la fin de chaque part : la diminution se fait juste avant lui.",
+  },
+  fermeture: {
+    titre: "Fermer le sommet",
+    explication:
+      "Coupe le fil en laissant 20 cm et enfile-le dans une aiguille à laine. Passe-la dans chacune des mailles restantes, comme pour une maille envers, en les faisant tomber de l'aiguille une à une. Tire doucement le fil : les mailles se resserrent en rond et le trou se ferme. Passe l'aiguille à travers le centre vers l'intérieur, fais un ou deux points pour bloquer, puis rentre le fil.",
+  },
+  pompon: {
+    titre: "Faire un pompon",
+    explication:
+      "Découpe deux disques de carton du diamètre du pompon, avec un trou au milieu de la moitié de ce diamètre (une fente d'un côté aide à les sortir). Pose-les l'un sur l'autre et enroule la laine tout autour, en passant par le trou, jusqu'à ce que le trou soit plein. Glisse la pointe des ciseaux entre les deux cartons et coupe tous les fils sur le bord. Passe un fil solide entre les deux cartons, serre très fort et fais deux nœuds. Retire les cartons, secoue le pompon et égalise-le aux ciseaux. Garde les deux bouts du nœud pour le coudre au sommet du bonnet.",
   },
   blocage: {
     titre: "Blocage",
@@ -139,6 +159,7 @@ function etiquetteColonne(s, laine = null) {
  * Les zones voisines tricotées pareil (bordure en mousse et bandes latérales en mousse) sont réunies.
  */
 export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false, laines = null } = {}) {
+  if (rang.sommet) return [{ zone: "corps", etiquette: `Sommet (${rang.sommet.avant} m.)`, texte: texteDuSommet(rang, { abreviations }) }];
   const lignes = [];
   const segments = rang.segments;
   const premier = segments[0]?.lisiere ? segments[0] : null;
@@ -163,6 +184,32 @@ export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false
   }
   if (dernier) lignes.push({ zone: "lisiere", texte: abreviations ? "1 end. (lisière)" : "Tricote la dernière maille à l'endroit (lisière)" });
   return lignes;
+}
+
+/**
+ * Un tour du sommet du bonnet (0.17.0) : « *7 mailles en riz (…), 2 mailles ensemble à l'endroit*, 8 fois » ;
+ * sans diminution : « Tout le tour en riz, sans diminuer (64 mailles) ».
+ */
+export function texteDuSommet(rang, { abreviations = false } = {}) {
+  const { sommet } = rang;
+  const s = rang.segments[0];
+  const point = pointParId(s.pointId);
+  const uni = sommet.base?.length === 1 ? sommet.base[0] : null;
+  const k = sommet.avant / sommet.parts;
+  const n = sommet.diminution ? k - 2 : null;
+  const commentFaire = point && point.id !== "jersey" && sommet.lecture ? ` (${sommet.lecture})` : "";
+  const enPoint = point ? `en ${minuscule(point.nom)}` : "";
+  if (!sommet.diminution) {
+    if (uni) return `Tout le tour ${uni === "end" ? "à l'endroit" : "à l'envers"}, sans diminuer (${sommet.apres} mailles)`;
+    return `Tout le tour ${enPoint}${commentFaire}, sans diminuer (${sommet.apres} mailles)`;
+  }
+  const dim = abreviations ? geste("2ens").abrege : "2 mailles ensemble à l'endroit";
+  let avant = "";
+  if (n > 0) {
+    if (uni) avant = `${texteGestes(Array(n).fill(uni), { abreviations })}, `;
+    else avant = `${n} maille${n > 1 ? "s" : ""} ${enPoint}${commentFaire}, `;
+  }
+  return `*${avant}${dim}*, ${sommet.parts} fois`;
 }
 
 /** Codes des gestes d'un rang, dans l'ordre d'apparition. */
@@ -240,7 +287,8 @@ export function genererPatron({
   const approximatif = !dCorps || dCorps.statut !== "mesuree";
   const rond = plan.mode === "rond";
   const motRang = rond ? "tour" : "rang";
-  const piece = { echarpe: "l'écharpe", snood: "le snood" }[plan.type] || "la pièce";
+  const piece = { echarpe: "l'écharpe", snood: "le snood", bonnet: "le bonnet" }[plan.type] || "la pièce";
+  const bonnet = plan.type === "bonnet";
   const nomBlocDe = (id) => {
     const b = plan.blocs.find((x) => x.id === id);
     if (!b) return "";
@@ -303,8 +351,13 @@ export function genererPatron({
       nouveaux.unshift("marqueur");
     }
     const nomPoint = enColonnes ? `${majuscule(nomBlocDe(r.blocId))} en colonnes` : point ? majuscule(point.nom) : "";
+    if (r.sommet?.diminution && !dejaVus.has("sommet")) {
+      dejaVus.add("sommet");
+      nouveaux.unshift("sommet");
+    }
     let repere;
-    if (r.type === "transition") repere = rond ? "Tour de transition" : "Rang de transition";
+    if (r.sommet) repere = r.sommet.diminution ? `Sommet · diminution ${r.sommet.diminution} sur ${r.sommet.diminutions}` : "Sommet · sans diminuer";
+    else if (r.type === "transition") repere = rond ? "Tour de transition" : "Rang de transition";
     else if (r.type === "miseEnPlace") repere = `${nomPoint} · mise en place`;
     else repere = `${nomPoint} · ${motRang} ${r.numeroMotif} du motif${r.rangsDuMotif > 1 ? ` sur ${r.rangsDuMotif}` : ""}`;
 
@@ -376,6 +429,7 @@ export function genererPatron({
       lignesAbregees: [...avantAbrege, ...lignesDuRang(r, nomBlocDe(r.blocId), { abreviations: true, rond, laines: mesLaines })],
       ...(r.intarsia ? { intarsia: true } : {}),
       ...(r.marqueur ? { marqueur: r.marqueur } : {}),
+      ...(r.sommet ? { sommet: { diminution: r.sommet.diminution, diminutions: r.sommet.diminutions, avant: r.sommet.avant, apres: r.sommet.apres } } : {}),
       techniques: nouveaux,
       longueurCm: Math.round(hauteur * 10) / 10,
     };
@@ -415,8 +469,9 @@ export function genererPatron({
     ...(blocsIntarsia.length
       ? [`De quoi préparer ${nbPelotes} petites pelotes pour l'intarsia (${blocsIntarsia.map((b) => `${majuscule(nomBlocDe(b.id))} : ${textePelotes(b).replace(/^\d+ petites pelotes : /, "")}`).join(" ; ")})`]
       : []),
-    `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (${rond ? "on tricote en rond" : "on tricote à plat, en allers-retours"})`,
+    `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (${bonnet ? "on tricote en rond, en magic loop : câble de 80 cm conseillé" : rond ? "on tricote en rond" : "on tricote à plat, en allers-retours"})`,
     ...(rond ? ["Un marqueur de début de tour (un anneau ou un bout de laine d'une autre couleur)"] : []),
+    ...(bonnet && plan.pompon ? [`Un morceau de carton pour le pompon (deux disques de ${formaterNombre(plan.pompon.cm, 0)} cm)`] : []),
     "Une aiguille à laine pour rentrer les fils",
     "Une paire de ciseaux",
   ];
@@ -424,8 +479,10 @@ export function genererPatron({
   etapes.push(rond
     ? {
       cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles, joindre en rond`,
-      texte: `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour.`,
-      techniques: ["montage", "joindre"],
+      texte: bonnet
+        ? `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Sépare-les en deux moitiés pour le magic loop (${plan.montage.mailles / 2} et ${plan.montage.mailles / 2}). Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour. Tout le bonnet se tricote en magic loop.`
+        : `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour.`,
+      techniques: bonnet ? ["montage", "magicLoop", "joindre"] : ["montage", "joindre"],
     }
     : {
       cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles (montage tricoté)`,
@@ -449,12 +506,30 @@ export function genererPatron({
       texte: `${b.rangs} ${motRang}${b.rangs > 1 ? "s" : ""}, environ ${formaterNombre(b.hauteurCm)} cm${transitions ? `, dont ${transitions} ${motRang} de transition au début` : ""}.${colonnesTexte}${autreLaine ? ` Avec ${guillemets(autreLaine)}, sur ${rond ? "tout le tour" : "toute la largeur"}.` : ""}${
         plan.rangs.some((r, i) => r.blocId === b.id && changements.croisements.has(i))
           ? rond ? " Tous les 2 tours, au début du tour, croise le fil du tour avec la laine en attente." : " Tous les 2 rangs, avant la lisière, croise le fil du rang avec la laine en attente."
-          : ""}${b.marqueur ? " Le motif se décale d'un tour à l'autre : avant certains tours, le patron te dit de déplacer le marqueur." : ""}`,
+          : ""}${b.marqueur ? " Le motif se décale d'un tour à l'autre : avant certains tours, le patron te dit de déplacer le marqueur." : ""}${
+        bonnet && b.zone === "bas" && plan.revers ? " Ce bord se repliera en deux à la fin : c'est le revers." : ""}${
+        b.zone === "sommet" ? ` ${plan.sommet.diminutions} tours de diminutions (8 diminutions chacun), un tour sur deux puis à chaque tour, jusqu'à ${plan.rabattage.mailles} mailles.${plan.sommet.jersey && plan.sommet.raison ? ` ${plan.sommet.raison}` : ""}` : ""}`,
       premierRang: b.premierRang, dernierRang: b.dernierRang, pointId: b.pointId, laineId: autreLaine?.id || null,
     });
   }
   const dernierRang = rangs.at(-1);
-  etapes.push(rond
+  if (bonnet) {
+    etapes.push({
+      cle: "rabattage", titre: "Fermer le sommet",
+      detail: `Passer le fil dans les ${plan.rabattage.mailles} mailles et serrer`,
+      texte: `Il reste ${plan.rabattage.mailles} mailles. Coupe le fil en laissant 20 cm, passe-le dans les ${plan.rabattage.mailles} mailles avec l'aiguille à laine, serre bien, et rentre le fil à l'intérieur.`,
+      techniques: ["fermeture"],
+    });
+    if (plan.pompon) {
+      const lp = nomDeLaine(plan.pompon.laineId);
+      etapes.push({
+        cle: "pompon", titre: "Le pompon",
+        detail: `Pompon de ${formaterNombre(plan.pompon.cm, 0)} cm${plusieurs ? ` en ${guillemets(lp)}` : ""}`,
+        texte: `Fais un pompon de ${formaterNombre(plan.pompon.cm, 0)} cm${plusieurs ? ` avec ${guillemets(lp)}` : ""}, puis couds-le au sommet avec les deux bouts du nœud, en les passant à travers le centre vers l'intérieur.`,
+        techniques: ["pompon"],
+      });
+    }
+  } else etapes.push(rond
     ? {
       cle: "rabattage", titre: "Rabattage",
       detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
@@ -472,8 +547,8 @@ export function genererPatron({
   etapes.push({
     cle: "finitions", titre: "Finitions", detail: "Rentrer les fils, bloquer",
     texte: bouts > 2
-      ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine), chacun dans les mailles de sa couleur, puis bloque ${piece} pour régulariser les mailles.`
-      : `Rentre les deux bouts de fil (début et fin), puis bloque ${piece} pour régulariser les mailles.`,
+      ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine), chacun dans les mailles de sa couleur, puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`
+      : `Rentre les deux bouts de fil (début et fin), puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`,
     techniques: ["fils", "blocage"],
   });
 
@@ -487,6 +562,11 @@ export function genererPatron({
   }
   for (const c of ["rabattageSouple", "filsRond", "blocageRond"]) delete techniques[c];
   if (!rond) for (const c of ["joindre", "marqueur", "laineRond", "porteRond"]) delete techniques[c];
+  if (!bonnet) for (const c of ["magicLoop", "sommet", "fermeture", "pompon"]) delete techniques[c];
+  else {
+    delete techniques.rabattage;
+    if (!plan.pompon) delete techniques.pompon;
+  }
   if (!blocsIntarsia.length) delete techniques.intarsia;
 
   // ---- Copie des points utilisés (recettes figées) ----
@@ -546,7 +626,8 @@ export function genererPatron({
       ...(b.section ? { section: true } : {}),
     })),
     bandesLaterales: plan.bandesLaterales,
-    resume: majuscule(resumeBlocs.join(", ")) + ".",
+    ...(bonnet ? { revers: plan.revers, sommet: plan.sommet, pompon: plan.pompon } : {}),
+    resume: majuscule(resumeBlocs.join(", ")) + (bonnet && plan.pompon ? `, pompon de ${formaterNombre(plan.pompon.cm, 0)} cm` : "") + (bonnet && plan.revers ? ", revers replié" : "") + ".",
     metrage: metrage ? { metres: metrage.metres, methode: metrage.methode } : null,
     laineSuffit: laineSuffit ? { statut: laineSuffit.statut, disponible: laineSuffit.disponible } : null,
     verification: { ok: true, verifieLe: maintenant.toISOString() },
@@ -560,6 +641,11 @@ export function genererPatron({
 
 /** Phrase de vérification pour un point : « le point de riz est réversible ». */
 export function texteReversible(point, piece = "echarpe") {
+  if (piece === "bonnet") {
+    return point.proprietes.reversible
+      ? `${majuscule(nomAvecArticle(point))} est réversible : l'intérieur du bonnet est joli aussi`
+      : `${majuscule(nomAvecArticle(point))} a un envers différent : il reste à l'intérieur du bonnet`;
+  }
   if (piece === "snood") {
     return point.proprietes.reversible
       ? `${majuscule(nomAvecArticle(point))} est réversible : le snood peut se porter retourné`

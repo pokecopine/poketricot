@@ -59,7 +59,8 @@ export function surfacesDuPlan(plan) {
       continue;
     }
     // Largeur du bloc : ses mailles de corps à sa propre densité, plus les lisières.
-    const largeur = (b.maillesCorps * 10) / b.densite.mailles + lisieres(b.densite);
+    // Sommet du bonnet (0.17.0) : son nombre moyen de mailles, pas les 8 de la fin.
+    const largeur = ((b.maillesSurface ?? b.maillesCorps) * 10) / b.densite.mailles + lisieres(b.densite);
     surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.pointId, laineId, cm2: largeur * b.hauteurCm });
   }
   if (plan.bandesLaterales) {
@@ -81,6 +82,20 @@ export function surfacesDuPlan(plan) {
     }
   }
   return surfaces;
+}
+
+/**
+ * Fil (m) d'un pompon de `diametreCm` (0.17.0) : la boule est remplie au tiers environ de brins de laine,
+ * dont le diamètre vaut à peu près 0,45 fois la largeur d'une maille de jersey ; 60 % de plus pour la tonte.
+ * Pour un pompon de 6 cm en laine aran (17 mailles pour 10 cm) : une douzaine de mètres.
+ */
+export function metresPompon(diametreCm, densiteJersey) {
+  if (!(diametreCm > 0) || !densiteJersey?.mailles) return 0;
+  const r = diametreCm / 2;
+  const volume = (4 / 3) * Math.PI * r ** 3;
+  const dFil = 0.45 * (10 / densiteJersey.mailles);
+  const section = Math.PI * (dFil / 2) ** 2;
+  return ((volume * 0.35) / section / 100) * 1.6;
 }
 
 /**
@@ -111,6 +126,11 @@ export function metrageNecessaire({ plan, laine, echantillon, densiteJersey }) {
     });
   } else {
     return null;
+  }
+  // Pompon du bonnet (0.17.0) : dans sa laine, quelle que soit la méthode.
+  if (plan.pompon) {
+    const metres = metresPompon(plan.pompon.cm, densiteJersey);
+    if (metres) parBloc.push({ blocId: "pompon", nom: "pompon", pointId: null, laineId: plan.pompon.laineId || null, cm2: 0, grammes: mPour100g ? (metres * 100) / mPour100g : null, metres });
   }
   const sansMarge = parBloc.reduce((t, b) => t + b.metres, 0);
   // Laine par laine : la longueur de fil dépend des mailles, pas de la marque (laines de même épaisseur).

@@ -4,7 +4,7 @@ import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Encart, Fenetre, EnTete, BoutonRetour, Pastille } from "../composants/base.js";
-import { DessinEcharpe, DessinSnood } from "../composants/piece.js";
+import { DessinEcharpe, DessinSnood, DessinBonnet } from "../composants/piece.js";
 import { ConfirmerSuppression } from "../composants/suppression.js";
 import { pointParId } from "../catalogue/points.js";
 import { nomSource } from "./points.js";
@@ -17,7 +17,9 @@ const minuscule = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
 const cote = (c) => (c === "E" ? "Côté endroit" : "Côté envers");
 
 /** Vocabulaire du patron : « rang » à plat, « tour » en rond. */
-const motsDe = (patron) => (patron?.mode === "rond"
+const motsDe = (patron) => (patron?.type === "bonnet"
+  ? { Rang: "Tour", rang: "tour", rangs: "tours", piece: "le bonnet", Piece: "Le bonnet", ton: "ton bonnet" }
+  : patron?.mode === "rond"
   ? { Rang: "Tour", rang: "tour", rangs: "tours", piece: "le snood", Piece: "Le snood", ton: "ton snood" }
   : { Rang: "Rang", rang: "rang", rangs: "rangs", piece: "l'écharpe", Piece: "L'écharpe", ton: "ton écharpe" });
 
@@ -59,6 +61,7 @@ const planDuPatron = (patron) => ({
   longueur: { reelleCm: patron.dimensions.longueurCm },
   bandesLaterales: patron.bandesLaterales,
   blocs: patron.blocs,
+  sommet: patron.sommet,
 });
 
 /** Pour les écrans de conception d'un projet dont le patron existe déjà. */
@@ -114,7 +117,7 @@ export function EcranPatron({ id }) {
   const codesTechniques = [
     "montage", "joindre", "lisiere",
     ...[...new Set(patron.rangs.flatMap((r) => r.techniques))].filter((c) => c !== "lisiere"),
-    "rabattage", "fils", "blocage",
+    "rabattage", "fermeture", "pompon", "fils", "blocage",
   ].filter((c, i, t) => patron.techniques[c] && t.indexOf(c) === i);
 
   async function dupliquer() {
@@ -140,7 +143,10 @@ export function EcranPatron({ id }) {
       <div class="ecran-contenu">
         <div class="recap-patron">
           <div class="recap-dessin">
-            ${rond
+            ${patron.type === "bonnet"
+              ? html`<${DessinBonnet} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []}
+                  largeurPx=${120} hauteurMinPx=${50} hauteurMaxPx=${80} prefixe="patron" echelleTexture=${0.3} reperes=${false} libelle=${patron.resume} />`
+              : rond
               ? html`<${DessinSnood} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []}
                   largeurPx=${120} hauteurMinPx=${60} hauteurMaxPx=${110} prefixe="patron" echelleTexture=${0.3} reperes=${false} libelle=${patron.resume} />`
               : html`<${DessinEcharpe} projet=${patron.projet} plan=${planDuPatron(patron)} couleur=${couleur} laines=${patron.laines || []} orientation="verticale"
@@ -278,13 +284,14 @@ export function EcranSuivi({ id }) {
   const montage = patron.etapes.find((e) => e.cle === "montage");
   const rabattage = patron.etapes.find((e) => e.cle === "rabattage");
   const finitions = patron.etapes.find((e) => e.cle === "finitions");
+  const pompon = patron.etapes.find((e) => e.cle === "pompon");
   const mots = motsDe(patron);
   const rond = patron.mode === "rond";
 
   async function terminer() {
     await majProjet((p) => ({ ...p, statut: "termine", termineLe: new Date().toISOString() }));
     majSuivi((s) => ({ ...s, termine: true }));
-    flash(rond ? "Bravo, ton snood est terminé !" : "Bravo, ton écharpe est terminée !");
+    flash(patron.type === "bonnet" ? "Bravo, ton bonnet est terminé !" : rond ? "Bravo, ton snood est terminé !" : "Bravo, ton écharpe est terminée !");
     naviguer("/reglages?sauvegarde=1", { remplacer: true });
   }
 
@@ -317,6 +324,7 @@ export function EcranSuivi({ id }) {
           <strong>Avant le ${mots.rang} 1 : le montage</strong>
           <p>${montage.texte}</p>
           <${Technique} code="montage" patron=${patron} />
+          ${patron.techniques.magicLoop && html`<${Technique} code="magicLoop" patron=${patron} />`}
           ${rond && html`<${Technique} code="joindre" patron=${patron} />`}
         </div>`}
 
@@ -325,15 +333,16 @@ export function EcranSuivi({ id }) {
           ${rang.debutBloc && html`<span class="debut-bloc">Nouveau bloc : ${rang.nomBloc}</span>`}
           <div class="carte-rang-titre">
             <h2 id="titre-rang">${mots.Rang} ${rang.numero}</h2>
-            <span class="carte-rang-cote">${rond ? "sur l'endroit" : cote(rang.cote)}</span>
+            <span class="carte-rang-cote">${rang.sommet ? (rang.sommet.diminution ? "sommet · diminutions" : "sommet") : rond ? "sur l'endroit" : cote(rang.cote)}</span>
           </div>
           <${Lignes} rang=${rang} abreviations=${ab} grand=${true} />
           <div class="puces carte-rang-reperes">
             <span class="etiquette">${rang.repere}</span>
+            ${rang.sommet?.diminution && html`<span class="etiquette">${rang.sommet.avant} → ${rang.sommet.apres} mailles</span>`}
             ${rang.intarsia && html`<span class="etiquette">Intarsia : une petite pelote par colonne</span>`}
             ${!rang.intarsia && rang.laineId && patron.laines?.length > 1 &&
             html`<span class="etiquette etiquette-laine"><${Pastille} couleur=${patron.laines.find((l) => l.id === rang.laineId)?.couleur} taille=${12} />${patron.laines.find((l) => l.id === rang.laineId)?.nom}</span>`}
-            <span class="etiquette">${rang.mailles} mailles</span>
+            ${!rang.sommet?.diminution && html`<span class="etiquette">${rang.mailles} mailles</span>`}
             <span class="etiquette">≈ ${formaterNombre(rang.longueurCm, 0)} cm tricotés à la fin du ${mots.rang}</span>
           </div>
           ${rang.techniques.map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
@@ -347,14 +356,19 @@ export function EcranSuivi({ id }) {
             ? `Comme le ${mots.rang} ${suivant.commeLeRang}.`
             : (ab ? suivant.lignesAbregees : suivant.lignes).filter((l) => l.zone !== "lisiere").map((l) => l.texte).join(" · ")}</span>
         </div>`}
-        ${!fini && !suivant && html`<div class="rang-suivant"><span class="rang-suivant-titre">Ensuite</span><span>Le rabattage : c'est le dernier ${mots.rang} !</span></div>`}
+        ${!fini && !suivant && html`<div class="rang-suivant"><span class="rang-suivant-titre">Ensuite</span><span>${patron.type === "bonnet" ? `La fermeture du sommet : c'est le dernier ${mots.rang} !` : `Le rabattage : c'est le dernier ${mots.rang} !`}</span></div>`}
 
         ${fini &&
         html`<div class="carte-etape-suivi">
-          <strong>Rabattage</strong>
-          <p>${rabattage.texte}</p>
-          <${Technique} code="rabattage" patron=${patron} />
+          <strong>${patron.type === "bonnet" ? `Après le ${mots.rang} ${total} : ${minuscule(rabattage.titre)}` : "Rabattage"}</strong>
+          <p>${rabattage.texte}${pompon ? " Puis : le pompon." : ""}</p>
+          ${(rabattage.techniques || ["rabattage"]).map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
         </div>
+        ${pompon && html`<div class="carte-etape-suivi">
+          <strong>${pompon.titre}</strong>
+          <p>${pompon.texte}</p>
+          <${Technique} code="pompon" patron=${patron} />
+        </div>`}
         <div class="carte-etape-suivi">
           <strong>Finitions</strong>
           <p>${finitions.texte}</p>

@@ -16,7 +16,8 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu en 3D (sur une barre ou autour du cou, physique de tissu), patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.9.1) ; reste l'essai 📱 |
 | E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |
 | E3c — Sections, laines du projet, intarsia | Laines du projet choisies au Matériel, corps divisé en sections (point, hauteur et laine par section), damier, intarsia à plat (une laine par colonne, petites pelotes) | ✅ (0.16.0) ; essai 📱 |
-| E4 — Snood | Snood en rond (1 ou 2 tours, enfant ou adulte), déplacement du début du tour (9 points), builder en rond, aperçu 3D en tube rigide (0.15.0), patron et suivi en tours | ✅ (0.14.0, 0.15.0) ; bonnet et couverture à venir |
+| E4 — Snood | Snood en rond (1 ou 2 tours, enfant ou adulte), déplacement du début du tour (9 points), builder en rond, aperçu 3D en tube rigide (0.15.0), patron et suivi en tours | ✅ (0.14.0, 0.15.0) |
+| E4 — Bonnet | Bonnet en rond, tout en magic loop : tailles enfant, femme, homme ou tour de tête mesuré, revers replié (points réversibles), sommet en 8 parts (point simple ou jersey), pompon, aperçu 3D sur une tête de mannequin, patron et suivi | ✅ (0.17.0) ; couverture à venir |
 | E5, E6 | Laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
@@ -42,13 +43,13 @@ sw.js                 fonctionnement hors connexion et mises à jour
 css/pelote.css        couleurs et formes de l'ambiance Pelote (clair et sombre)
 js/app.js             démarrage et navigation
 js/ecrans/            un fichier par écran (projet-*.js : étapes 1 à 5 ; patron.js : patron figé et suivi)
-js/composants/        éléments réutilisables (dont echantillon3d.js et vignette3d.js : photos 3D du catalogue ; piece3d.js : écharpe finie ; snood3d.js : snood fini en tube rigide)
+js/composants/        éléments réutilisables (dont echantillon3d.js et vignette3d.js : photos 3D du catalogue ; piece3d.js : écharpe finie ; snood3d.js : snood fini en tube rigide ; bonnet3d.js : bonnet fini sur une tête)
 js/donnees/           base de données, réserve, sauvegarde, couleurs
 js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), critères de recherche, techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
-                      plan de l'écharpe (plan.js) et du snood en rond (plan-rond.js) et leur vérification,
+                      plan de l'écharpe (plan.js), du snood en rond (plan-rond.js) et du bonnet (plan-bonnet.js : 8 parts, sommet) et leur vérification,
                       métrage, générateur du patron et suivi
-js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (écharpe), tube rigide du snood (tube.js)
+js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (écharpe), tube rigide du snood (tube.js), tête et bonnet rigides (tete.js)
 tests/                tests automatiques
 ```
 

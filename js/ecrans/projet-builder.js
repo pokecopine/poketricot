@@ -6,13 +6,14 @@ import { naviguer } from "../routeur.js";
 import { Encart, Onglets, Fenetre, Pastille } from "../composants/base.js";
 import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { BandeTexture } from "../composants/texture.js";
-import { DessinEcharpe, DessinSnood, couleurDeLaine } from "../composants/piece.js";
+import { DessinEcharpe, DessinSnood, DessinBonnet, couleurDeLaine } from "../composants/piece.js";
 import { IconePlus } from "../composants/icones.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId, avisPour } from "../catalogue/points.js";
 import { etiquettesProprietes } from "../catalogue/fiche.js";
 import { formaterNombre, lireNombre } from "../donnees/reserve.js";
+import { nuancesLaine } from "../donnees/couleur.js";
 import { nomAvecArticle } from "../moteur/dimensions.js";
 import { maillesVoisines, COLONNES_MIN, COLONNES_MAX } from "../moteur/colonnes.js";
 import {
@@ -22,7 +23,8 @@ import {
   coloriable, avecLaineDuBloc, plusieursLaines, laineDuBloc, noteEchantillonEnRond,
   lainesDuProjet, laineDeColonne, avecLaineDeColonne, blocEnIntarsia, petitesPelotes, estSection, sectionsDuProjet, enSections,
   numeroSection, diviserEnSections, sansSections, avecHauteurSection, repartirSections, sectionsFixees, faireUnDamier, defaireLeDamier,
-  estUnDamier, premiereSection, SECTIONS_MIN, SECTIONS_MAX, enRond,
+  estUnDamier, premiereSection, SECTIONS_MIN, SECTIONS_MAX, enRond, nomPiece,
+  avecRevers, avecPompon, bordAvecRevers, LIMITES_BONNET, lainesDuProjet as lainesProjet,
 } from "../donnees/projets.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
@@ -57,12 +59,17 @@ export function EtapeBuilder({ id }) {
     setChoisi(blocId);
     setColonne(colonneId);
   };
-  const bloc = projet.blocs.find((b) => b.id === choisi) || projet.blocs.find((b) => b.zone === "corps");
+  const bonnet = projet.type === "bonnet";
+  // Bonnet : le sommet et le pompon ne sont pas des blocs enregistrés, mais se choisissent comme eux.
+  const virtuel = bonnet && (choisi === "sommet" || choisi === "pompon") ? choisi : null;
+  const bloc = virtuel ? null : projet.blocs.find((b) => b.id === choisi) || projet.blocs.find((b) => b.zone === "corps");
   const couleur = laine?.couleur || COULEUR_PAR_DEFAUT;
   const plan = calcul?.ok ? calcul.plan : null;
   const t = projet.taille;
-  const snood = projet.type === "snood";
+  const snood = enRond(projet);
   const presetSnood = { "1tour": "1 tour", "2tours": "2 tours" }[t.preset];
+  const presetBonnet = { femme: "Adulte femme", homme: "Adulte homme", enfant: "Enfant" }[t.preset] || (t.public === "enfant" ? "Enfant" : "Adulte");
+  const aiguilleTexte = aig ? `${formaterNombre(lireNombre(aig.tailleMm), 2)} mm${lireNombre(aig.cableCm) ? `, câble ${formaterNombre(lireNombre(aig.cableCm), 0)} cm` : ""}` : "";
 
   async function continuer() {
     await modifier((p) => ({ ...p, etape: Math.max(p.etape, 5) }));
@@ -74,23 +81,33 @@ export function EtapeBuilder({ id }) {
       <${EnTeteEtape} titre=${projet.nom} numero=${4} secours=${cheminEtape(projet, 3)} />
       <div class="ecran-contenu">
         <p class="note" style="margin-top:-6px">
-          ${snood
+          ${bonnet
+            ? `${presetBonnet} · ${t.teteCm} cm · ${t.hauteurCm} cm de haut${aig ? ` · ${aiguilleTexte} (magic loop)` : ""}`
+            : snood
             ? `${t.public === "enfant" ? "Enfant" : "Adulte"}${presetSnood ? ` · ${presetSnood}` : ""} · ${t.tourCm} × ${t.hauteurCm} cm${aig ? ` · aiguilles ${formaterNombre(lireNombre(aig.tailleMm), 2)} mm${lireNombre(aig.cableCm) ? `, câble ${formaterNombre(lireNombre(aig.cableCm), 0)} cm` : ""}` : ""}`
             : `${t.public === "enfant" ? "Enfant" : "Adulte"} · ${t.largeurCm} × ${t.longueurCm} cm${aig ? ` · aiguilles ${formaterNombre(lireNombre(aig.tailleMm), 2)} mm` : ""}`}
         </p>
 
         <${BandeauEstimation} projet=${projet} calcul=${calcul} aiguilles=${aig} />
 
-        <section class="atelier" aria-label=${snood ? "Le snood" : "L'écharpe"}>
-          ${snood
+        <section class="atelier" aria-label=${bonnet ? "Le bonnet" : snood ? "Le snood" : "L'écharpe"}>
+          ${bonnet
+            ? html`<${DessinBonnet} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines}
+                blocChoisi=${virtuel || bloc?.id} colonneChoisie=${colonne} surChoix=${choisir} prefixe="builder"
+                libelle=${`Le bonnet ouvert et posé à plat : ${blocsHorizontaux(projet).map((b) => `${minuscule(nomBloc(b, projet))} en ${minuscule(pointParId(b.pointId)?.nom || "point à choisir")}`).join(", ")}, sommet en 8 parts${t.pompon ? ", pompon au-dessus" : ""} ; le début du tour est sur le bord droit`} />`
+            : snood
             ? html`<${DessinSnood} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines}
                 blocChoisi=${bloc?.id} colonneChoisie=${colonne} surChoix=${choisir} prefixe="builder"
                 libelle=${`Le snood ouvert et posé à plat : ${blocsHorizontaux(projet).map((b) => `${minuscule(nomBloc(b, projet))} en ${minuscule(pointParId(b.pointId)?.nom || "point à choisir")}`).join(", ")} ; le début du tour est sur le bord droit`} />`
             : html`<${DessinEcharpe} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} orientation=${orientation}
                 blocChoisi=${bloc?.id} colonneChoisie=${colonne} surChoix=${choisir} prefixe="builder"
                 libelle=${`L'écharpe : ${blocsHorizontaux(projet).map((b) => `${minuscule(nomBloc(b, projet))} en ${minuscule(pointParId(b.pointId)?.nom || "point à choisir")}`).join(", ")}`} />`}
-          <${LegendeBloc} bloc=${bloc} plan=${plan} projet=${projet} orientation=${orientation} />
-          <${RangEnMailles} projet=${projet} bloc=${bloc} plan=${plan} calcul=${calcul} colonne=${colonne} />
+          ${bonnet
+            ? html`<p class="atelier-legende">Le bonnet ouvert et posé à plat · sommet en 8 parts</p>`
+            : html`<${LegendeBloc} bloc=${bloc} plan=${plan} projet=${projet} orientation=${orientation} />`}
+          ${bonnet && (!bloc || bloc.zone === "corps" || bloc.zone === "bas") && !(bloc?.colonnes?.length >= COLONNES_MIN)
+            ? html`<${TourEnParts} plan=${plan} calcul=${calcul} bloc=${bloc} />`
+            : html`<${RangEnMailles} projet=${projet} bloc=${bloc} plan=${plan} calcul=${calcul} colonne=${colonne} />`}
           <div class="atelier-boutons">
             <button type="button" onClick=${() => setLoupe(true)}>Zoom texture</button>
             ${snood
@@ -117,13 +134,16 @@ export function EtapeBuilder({ id }) {
               <span>${nomCourtBloc(b, projet)}</span>
             </button>`;
           })}
-          <button type="button" class="bloc bloc-ajout" aria-label="Ajouter un bloc" onClick=${() => setAjout(true)}>${IconePlus()}</button>
+          ${bonnet && html`<${BlocsDuBonnet} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} virtuel=${virtuel} choisir=${choisir} />`}
+          ${!bonnet && html`<button type="button" class="bloc bloc-ajout" aria-label="Ajouter un bloc" onClick=${() => setAjout(true)}>${IconePlus()}</button>`}
         </div>
         ${snood
-          ? html`<p class="note">Pas de bandes latérales ni de lisières : en rond, il n'y a pas de bord.</p>`
+          ? !bonnet && html`<p class="note">Pas de bandes latérales ni de lisières : en rond, il n'y a pas de bord.</p>`
           : !blocLateral(projet) &&
             html`<button type="button" class="bouton-lien" onClick=${() => modifier(avecBandesLaterales)}>Remettre des bandes latérales</button>`}
 
+        ${virtuel === "sommet" && html`<${ReglagesSommet} projet=${projet} plan=${plan} couleur=${couleurDeLaine(laineDuBloc(projet, projet.blocs.filter((b) => b.zone === "corps").at(-1), laines), couleur, laines)} />`}
+        ${virtuel === "pompon" && html`<${ReglagesPompon} projet=${projet} laines=${laines} calcul=${calcul} modifier=${modifier} />`}
         ${bloc && html`<${ReglagesBloc} key=${bloc.id} projet=${projet} bloc=${bloc} plan=${plan} calcul=${calcul}
           laines=${laines} couleur=${couleur} colonne=${colonne} surColonne=${(c) => setColonne(c)}
           modifier=${modifier} surSuppression=${() => choisir("corps")} />`}
@@ -139,10 +159,12 @@ export function EtapeBuilder({ id }) {
         <${Verifications} calcul=${calcul} />
         ${calcul?.avertissements?.map((a) => html`<${Encart} type="brique">${a}<//>`)}
         <${JaugeLaine} calcul=${calcul} laine=${laine} piece=${projet.type} />
+        ${bonnet && calcul?.metrage?.parBloc?.some((b) => b.blocId === "pompon") &&
+        html`<p class="note" style="margin-top:-6px">Pompon compris (environ ${Math.ceil(calcul.metrage.parBloc.find((b) => b.blocId === "pompon").metres)} m).</p>`}
       </div>
 
       <div class="ecran-pied">
-        <button type="button" class="bouton-principal" disabled=${!calcul?.ok} onClick=${continuer}>${snood ? "Voir le snood fini" : "Voir l'écharpe finie"}</button>
+        <button type="button" class="bouton-principal" disabled=${!calcul?.ok} onClick=${continuer}>${bonnet ? "Voir le bonnet fini" : snood ? "Voir le snood fini" : "Voir l'écharpe finie"}</button>
       </div>
 
       <${Fenetre} ouverte=${loupe} titre=${bloc ? `${nomBloc(bloc, projet)} · ${minuscule(pointParId(bloc.pointId)?.nom || "")}` : "Texture"}
@@ -190,7 +212,7 @@ function LegendeBloc({ bloc, plan, projet, orientation = "horizontale" }) {
   } else {
     texte = pb ? `${formaterNombre(pb.hauteurCm)} cm` : `${bloc.hauteurCm || 0} cm`;
   }
-  if (projet.type === "snood") {
+  if (enRond(projet)) {
     if (bloc.zone === "corps" && !estSection(bloc) && plan) texte = `${formaterNombre(plan.blocs.filter((b) => b.zone === "corps").reduce((s, b) => s + b.hauteurCm, 0), 0)} cm`;
     return html`<p class="atelier-legende">Le snood ouvert et posé à plat · ${minuscule(nomBloc(bloc, projet))} : ${texte}${enSections(projet) ? " · la section 1 est en bas" : ""}</p>`;
   }
@@ -220,16 +242,17 @@ function BandeauEstimation({ projet, calcul, aiguilles }) {
 function ReglagesBloc({ projet, bloc, plan, calcul, laines, couleur, colonne, surColonne, modifier, surSuppression }) {
   const point = pointParId(bloc.pointId);
   const enColonnes = bloc.colonnes?.length >= COLONNES_MIN;
-  const avis = point ? avisPourBloc(point, projet.type, bloc.zone) : null;
+  const avis = point ? avisPourBloc(point, projet.type, bloc.zone, { revers: bordAvecRevers(projet, bloc) }) : null;
+  const bonnet = projet.type === "bonnet";
   const pb = plan?.blocs.find((b) => b.id === bloc.id);
   const adresseChoix = `/projet/${encodeURIComponent(projet.id)}/point/${encodeURIComponent(bloc.id)}`;
   const section = estSection(bloc);
   const sections = sectionsDuProjet(projet);
   const section1 = section && numeroSection(projet, bloc) === 1;
   const corpsEntier = bloc.zone === "corps" && !section;
-  const supprimable = bloc.zone !== "corps";
+  const supprimable = bloc.zone !== "corps" && projet.type !== "bonnet";
   const densite = calcul?.densites?.[bloc.pointId];
-  const snood = projet.type === "snood";
+  const snood = enRond(projet);
   const titre = section ? `Section ${numeroSection(projet, bloc)} sur ${sections.length}` : nomBloc(bloc, projet);
 
   return html`
@@ -238,7 +261,7 @@ function ReglagesBloc({ projet, bloc, plan, calcul, laines, couleur, colonne, su
         <h2 id="titre-bloc" style="font-size:19px">${titre} · ${enColonnes ? `${bloc.colonnes.length} colonnes` : point ? minuscule(point.nom) : "point à choisir"}</h2>
       </div>
       ${!enColonnes && point && html`<span class="proprietes">${etiquettesProprietes(point).join(" · ")}</span>`}
-      ${!enColonnes && avis && avis.avis !== "conseille" && html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
+      ${!enColonnes && avis && avis.avis !== "conseille" && html`<${Encart} type=${avis.avis === "deconseille" || avis.avis === "refuse" ? "brique" : "sauge"}>${avis.avis === "refuse" ? `${point.nom} : ${minuscule(avis.raison)} Change de point.` : avis.raison}<//>`}
 
       ${(!enColonnes || (bloc.zone === "corps" && (!section || section1))) &&
       html`<div class="rangee-boutons">
@@ -266,7 +289,7 @@ function ReglagesBloc({ projet, bloc, plan, calcul, laines, couleur, colonne, su
       ${corpsEntier && !enColonnes && !snood &&
       html`<p class="note">La longueur du corps s'ajuste toute seule : il complète la longueur de l'écharpe${plan && plan.blocs.filter((b) => b.zone === "corps").length > 1 ? ", partagée entre ses parties" : ""}. C'est aussi le point de ton échantillon.</p>`}
       ${corpsEntier && !enColonnes && snood &&
-      html`<p class="note">La hauteur du corps s'ajuste toute seule : il complète la hauteur du snood${plan && plan.blocs.filter((b) => b.zone === "corps").length > 1 ? ", partagée entre ses parties" : ""}. C'est aussi le point de ton échantillon${noteEchantillonEnRond(projet, calcul?.echantillon) ? " (tricoté à plat : en rond, le tricot peut être un peu plus serré)" : ""}.</p>`}
+      html`<p class="note">La hauteur du corps s'ajuste toute seule : il complète la hauteur ${bonnet ? "du bonnet, sommet compris" : "du snood"}${plan && plan.blocs.filter((b) => b.zone === "corps").length > 1 ? ", partagée entre ses parties" : ""}. C'est aussi le point de ton échantillon${noteEchantillonEnRond(projet, calcul?.echantillon) ? " (tricoté à plat : en rond, le tricot peut être un peu plus serré)" : ""}.</p>`}
 
       ${["bas", "haut", "bande"].includes(bloc.zone) &&
       html`<div class="reglage">
@@ -278,7 +301,13 @@ function ReglagesBloc({ projet, bloc, plan, calcul, laines, couleur, colonne, su
           <button type="button" aria-label="1 cm de plus" onClick=${() => modifier((p) => avecHauteurBloc(p, bloc.id, (bloc.hauteurCm || 0) + 1))}>+</button>
         </div>
       </div>
-      ${pb && html`<p class="note">Motif complet : ${pb.rangs} ${snood ? "tour" : "rang"}${pb.rangs > 1 ? "s" : ""}, soit environ ${formaterNombre(pb.hauteurCm)} cm.</p>`}`}
+      ${pb && html`<p class="note">Motif complet : ${pb.rangs} ${snood ? "tour" : "rang"}${pb.rangs > 1 ? "s" : ""}, soit environ ${formaterNombre(pb.hauteurCm)} cm.</p>`}
+      ${bonnet && bloc.zone === "bas" && html`
+        <label class="case carte-option">
+          <input type="checkbox" checked=${!!projet.taille.revers} onChange=${(e) => { const v = e.currentTarget.checked; modifier((p) => avecRevers(p, v)); }} />
+          <span><strong>Revers replié</strong> ${projet.taille.revers ? `Les ${formaterNombre(bloc.hauteurCm, 0)} cm se replient en deux : il reste ${formaterNombre(bloc.hauteurCm / 2, 1)} cm visibles.` : "Le bord fera 10 cm et se repliera en deux."}</span>
+        </label>
+        ${projet.taille.revers && html`<p class="note">Avec un revers, l'intérieur du bord se voit une fois replié : seuls les <strong>points réversibles</strong> sont proposés (côtes, mousse, riz, blé…). Les autres sont grisés.</p>`}`}`}
 
       ${bloc.zone === "cotes" &&
       html`<div class="reglage">
@@ -316,7 +345,7 @@ function DiviserCorps({ projet, bloc, plan, modifier }) {
   let phrase;
   if (sens === "sections") {
     phrase = longueurCorps
-      ? `${nombre} sections d'environ ${formaterNombre(longueurCorps / nombre, 0)} cm, empilées ${projet.type === "snood" ? "du bas vers le haut, chacune sur tout le tour" : "dans la longueur, chacune sur toute la largeur"}. Chacune peut avoir son point et sa laine.`
+      ? `${nombre} sections d'environ ${formaterNombre(longueurCorps / nombre, 0)} cm, empilées ${enRond(projet) ? "du bas vers le haut, chacune sur tout le tour" : "dans la longueur, chacune sur toute la largeur"}. Chacune peut avoir son point et sa laine.`
       : `${nombre} sections empilées dans la longueur, chacune avec son point et sa laine.`;
   } else {
     phrase = !total
@@ -341,7 +370,7 @@ function DiviserCorps({ projet, bloc, plan, modifier }) {
       </div>
     </div>
     <p class="note">${phrase}${sens === "colonnes" ? " Les colonnes paires partent avec un autre point ; tu choisis ensuite le point de chaque colonne." : " La section 1 est en bas, au début du tricot, dans ton point principal ; les sections paires partent avec un autre point."}
-      ${sens === "colonnes" && projet.type === "snood" ? " Les colonnes font tout le tour ; la première part du marqueur. Un point qui déplace le début du tour (point d'étoile, jours obliques…) prend tout le tour." : ""}</p>
+      ${sens === "colonnes" && enRond(projet) ? " Les colonnes font tout le tour ; la première part du marqueur. Un point qui déplace le début du tour (point d'étoile, jours obliques…) prend tout le tour." : ""}</p>
     <button type="button" class="bouton-secondaire"
       onClick=${() => modifier((p) => (sens === "sections" ? diviserEnSections(p, n) : diviserBloc(p, bloc.id, n)))}>
       Diviser en ${n} ${mot}s
@@ -351,7 +380,7 @@ function DiviserCorps({ projet, bloc, plan, modifier }) {
 
 /** Hauteur d'une section, au motif près. */
 function HauteurSection({ projet, bloc, pb, modifier }) {
-  const motRang = projet.type === "snood" ? "tour" : "rang";
+  const motRang = enRond(projet) ? "tour" : "rang";
   if (!pb) return null;
   const motif = pb.colonnes ? null : pointParId(bloc.pointId)?.rangs.length;
   const pas = motif ? (motif * 10) / pb.densite.rangs : Math.max(1, pb.hauteurCm / Math.max(1, pb.rangs / 8));
@@ -453,8 +482,104 @@ function UneJauge({ x, plusieurs, piece }) {
       <div class="jauge-plein" style=${`width:${Math.round(part * 100)}%`}></div>
       ${manque && html`<div class="jauge-manque"></div>`}
     </div>
-    ${manque && html`<${Encart} type="brique">Il manque environ ${Math.ceil(c.manque)} m de « ${x.laine?.nom} ». ${x.principale ? (piece === "snood" ? "Rends le snood moins haut ou moins large, ou choisis un point moins gourmand." : "Raccourcis l'écharpe, ou choisis un point moins gourmand.") : "Réduis la hauteur des blocs dans cette laine, ou prévois une pelote de plus."}<//>`}
+    ${manque && html`<${Encart} type="brique">Il manque environ ${Math.ceil(c.manque)} m de « ${x.laine?.nom} ». ${x.principale ? (piece === "bonnet" ? "Rends le bonnet moins haut, enlève le pompon, ou choisis un point moins gourmand." : piece === "snood" ? "Rends le snood moins haut ou moins large, ou choisis un point moins gourmand." : "Raccourcis l'écharpe, ou choisis un point moins gourmand.") : "Réduis la hauteur des blocs dans cette laine, ou prévois une pelote de plus."}<//>`}
     ${c.statut === "juste" && html`<p class="note">Ça devrait suffire, mais de justesse.</p>`}
+  </div>`;
+}
+
+/** Bonnet : les blocs « Sommet » et « Pompon » (ils suivent le corps et la taille). */
+function BlocsDuBonnet({ projet, plan, couleur, laines, virtuel, choisir }) {
+  const haut = projet.blocs.filter((b) => b.zone === "corps").at(-1);
+  const idSommet = plan?.sommet?.pointId || (haut?.pointId && !(haut.colonnes?.length >= COLONNES_MIN) ? haut.pointId : "jersey");
+  const pSommet = pointParId(idSommet);
+  const t = projet.taille;
+  const couleurPompon = couleurDeLaine(t.pomponLaineId && t.pomponLaineId !== projet.laineId ? t.pomponLaineId : null, couleur, laines);
+  return html`
+    <button type="button" class="bloc" aria-pressed=${String(virtuel === "sommet")} onClick=${() => choisir("sommet")}
+      aria-label=${`Sommet : ${pSommet ? minuscule(pSommet.nom) : "jersey"}`}>
+      ${pSommet && html`<${BandeTexture} point=${pSommet} couleur=${couleurDeLaine(laineDuBloc(projet, haut, laines), couleur, laines)} hauteur=${20} rayon=${5} echelle=${0.6} />`}
+      <span>Sommet</span>
+    </button>
+    <button type="button" class="bloc" aria-pressed=${String(virtuel === "pompon")} onClick=${() => choisir("pompon")}
+      aria-label=${t.pompon ? `Pompon de ${t.pomponCm} cm` : "Pompon : pas de pompon"}>
+      <span style="height:20px;width:100%;display:flex;justify-content:center">
+        <span style=${`width:20px;height:20px;border-radius:50%;background:${t.pompon ? `radial-gradient(circle at 38% 35%, ${nuancesLaine(couleurPompon).eclat}, ${nuancesLaine(couleurPompon).maille} 55%, ${nuancesLaine(couleurPompon).contour})` : "transparent"};${t.pompon ? "" : "border:2px dashed var(--bordure)"}`}></span>
+      </span>
+      <span>Pompon</span>
+    </button>`;
+}
+
+/** Bonnet : le sommet suit le point de la dernière partie du corps, ou passe en jersey (décision du 06/11). */
+function ReglagesSommet({ projet, plan, couleur }) {
+  const s = plan?.sommet;
+  const haut = projet.blocs.filter((b) => b.zone === "corps").at(-1);
+  const point = pointParId(s?.pointId || "jersey");
+  const pointCorps = pointParId(haut?.pointId);
+  const pb = plan?.blocs.find((b) => b.zone === "sommet");
+  return html`<section class="carte-bloc reglages-bloc" aria-labelledby="titre-sommet">
+    <div class="titre-section" style="margin:0"><h2 id="titre-sommet" style="font-size:19px">Sommet · ${point ? minuscule(point.nom) : "jersey"}</h2></div>
+    ${point && html`<${BandeTexture} point=${point} couleur=${couleur} hauteur=${22} rayon=${5} echelle=${0.6} />`}
+    ${s?.jersey
+      ? html`<${Encart}>${s.raison || "Au sommet, le motif passe en jersey : il se casserait avec les diminutions."}<//>
+          <p class="note">Les points simples (4 mailles de large au plus, seulement des mailles endroit et envers) continuent jusqu'en haut.</p>`
+      : s && pointCorps && html`<p class="note">${majuscule(nomAvecArticle(pointCorps))} est un point simple : il continue jusqu'en haut.</p>`}
+    ${s && pb && html`<p class="note">${pb.rangs} tours, 8 diminutions par tour de diminutions${s.transition ? " (après un tour de transition)" : ""}, jusqu'à ${plan.rabattage.mailles} mailles. Environ ${formaterNombre(pb.hauteurCm)} cm.</p>`}
+    ${!s && html`<p class="note">Le sommet se calcule dès que l'outil connaît le nombre de mailles.</p>`}
+    <p class="note">Il prend la laine ${enSections(projet) ? "de la dernière section" : "du corps"} ; pour changer son point, change celui ${enSections(projet) ? "de la dernière section" : "du corps"}.</p>
+  </section>`;
+}
+
+/** Bonnet : le pompon (oui ou non, taille, laine). */
+function ReglagesPompon({ projet, laines, calcul, modifier }) {
+  const t = projet.taille;
+  const lainesP = lainesProjet(projet, laines);
+  const choisie = t.pomponLaineId || projet.laineId;
+  const metres = calcul?.metrage?.parBloc?.find((b) => b.blocId === "pompon")?.metres;
+  return html`<section class="carte-bloc reglages-bloc" aria-labelledby="titre-pompon">
+    <div class="titre-section" style="margin:0"><h2 id="titre-pompon" style="font-size:19px">Pompon</h2></div>
+    <label class="case carte-option">
+      <input type="checkbox" checked=${!!t.pompon} onChange=${(e) => { const v = e.currentTarget.checked; modifier((p) => avecPompon(p, { pompon: v })); }} />
+      <span><strong>Un pompon</strong> au sommet du bonnet.</span>
+    </label>
+    ${t.pompon && html`
+      <div class="reglage">
+        <span>Taille</span>
+        <div class="compteur">
+          <button type="button" aria-label="Pompon plus petit" disabled=${t.pomponCm <= LIMITES_BONNET.pompon[0]} onClick=${() => modifier((p) => avecPompon(p, { pomponCm: (t.pomponCm || 6) - 1 }))}>−</button>
+          <output aria-live="polite">${t.pomponCm} cm</output>
+          <button type="button" aria-label="Pompon plus grand" disabled=${t.pomponCm >= LIMITES_BONNET.pompon[1]} onClick=${() => modifier((p) => avecPompon(p, { pomponCm: (t.pomponCm || 6) + 1 }))}>+</button>
+        </div>
+      </div>
+      <div class="sous-section">
+        <h3 style="font-size:16px;margin:0">Laine du pompon</h3>
+        ${lainesP.length > 1
+          ? html`<div class="choix-laines-bloc" role="group" aria-label="Laine du pompon">
+              ${lainesP.map((l) => html`<button type="button" aria-pressed=${String(l.id === choisie)}
+                onClick=${() => modifier((p) => avecPompon(p, { pomponLaineId: l.id }))}>
+                <${Pastille} couleur=${l.couleur} taille=${28} /> ${l.nom}${l.id === projet.laineId ? " (principale)" : ""}
+              </button>`)}
+            </div>`
+          : html`<p class="note">Ta laine principale. <a href=${"#" + cheminEtape(projet, 2)}>Ajoute d'autres laines à l'étape Matériel</a> pour le faire dans une autre couleur.</p>`}
+      </div>
+      ${metres && html`<p class="note">Il faut environ ${Math.ceil(metres)} m de laine pour le pompon (compris dans la jauge).</p>`}`}
+  </section>`;
+}
+
+/** Bonnet : un tour du corps, découpé en 8 parts (maquette du 09/11). */
+function TourEnParts({ plan, calcul, bloc }) {
+  if (!calcul) return html`<p class="note rang-mailles-vide">Le nombre de mailles s'affiche dès que l'outil peut calculer (échantillon, étape 2).</p>`;
+  if (!plan) return null;
+  const pb = plan.blocs.find((b) => b.id === bloc?.id) || plan.blocs.find((b) => b.zone === "corps");
+  const n = pb.maillesCorps;
+  const parts = n % 8 === 0 ? n / 8 : null;
+  return html`<div class="rang-mailles" role="group" aria-label=${`Un tour : ${n} mailles${parts ? `, 8 parts de ${parts}` : ""}`}>
+    <div class="rang-mailles-titre"><span>Un tour ${bloc?.zone === "bas" ? "du bord" : "du corps"}</span><strong>${n} mailles</strong></div>
+    ${parts
+      ? html`<div class="rang-mailles-ligne" aria-hidden="true">
+          ${Array.from({ length: 8 }, (_, i) => html`<span class="rang-morceau rang-morceau-milieu" style="flex-grow:1"><strong>${parts}</strong>${i === 0 ? html`<span>part</span>` : ""}</span>`)}
+        </div>
+        <p class="note" style="margin-top:6px">${n} = 8 parts de ${parts} : ${plan.sommet?.jersey ? "le point et le sommet tombent juste" : "le point, le bord et le sommet tombent juste"}.</p>`
+      : html`<p class="note">${n} mailles : un tour de transition au début du sommet ramène à ${plan.sommet?.mailles} mailles (8 parts de ${plan.sommet ? plan.sommet.mailles / 8 : "?"}).</p>`}
   </div>`;
 }
 
@@ -478,7 +603,7 @@ function RangEnMailles({ projet, bloc, plan, calcul, colonne }) {
     lis ? { cle: "lg", nom: "lisière", n: lis } : null,
   ].filter(Boolean);
   const nomDuBloc = estSection(horizontal) ? `de la ${minuscule(nomBloc(horizontal, projet))}` : horizontal.zone === "corps" ? "du corps" : `de ${minuscule(nomBloc(horizontal)) === "bande" ? "la bande" : minuscule(nomBloc(horizontal))}`;
-  const motRang = projet.type === "snood" ? "tour" : "rang";
+  const motRang = enRond(projet) ? "tour" : "rang";
   return html`<div class="rang-mailles" role="group" aria-label=${`Un ${motRang} ${nomDuBloc} : ${morceaux.map((m) => `${m.nom} ${m.n}`).join(", ")}, ${total} mailles en tout`}>
     <div class="rang-mailles-titre">
       <span>Un ${motRang} ${nomDuBloc}</span>
@@ -488,7 +613,7 @@ function RangEnMailles({ projet, bloc, plan, calcul, colonne }) {
       ${morceaux.map((m) => html`<span class=${"rang-morceau" + (m.milieu ? " rang-morceau-milieu" : "") + (m.choisi ? " rang-morceau-choisi" : "")}
         style=${`flex-grow:${m.n}`}><strong>${m.n}</strong><span>${m.nom}</span></span>`)}
     </div>
-    ${pb.colonnes && html`<p class="note">${projet.type === "snood" ? "Tout le tour" : "Corps de ce bloc"} : ${pb.maillesCorps} mailles = ${pb.colonnes.map((c) => c.mailles).join(" + ")}.</p>`}
+    ${pb.colonnes && html`<p class="note">${enRond(projet) ? "Tout le tour" : "Corps de ce bloc"} : ${pb.maillesCorps} mailles = ${pb.colonnes.map((c) => c.mailles).join(" + ")}.</p>`}
   </div>`;
 }
 
@@ -522,7 +647,7 @@ function Colonnes({ projet, bloc, plan, couleur, laines = [], titre = "Diviser e
               : `${nombre} colonnes de ${apercu.mailles.join(" · ")} mailles (${total} en tout) ; l'outil cherchera des colonnes égales en ajustant un peu la largeur. `
             : `Pour ${total} mailles, l'outil ajustera un peu la largeur pour que les ${nombre} colonnes tombent juste. `}
         Les colonnes paires partent avec un autre point ; tu choisis ensuite le point de chaque colonne.
-        ${projet.type === "snood" ? " Les colonnes font tout le tour ; la première part du marqueur. Un point qui déplace le début du tour (point d'étoile, jours obliques…) prend tout le tour." : ""}
+        ${enRond(projet) ? " Les colonnes font tout le tour ; la première part du marqueur. Un point qui déplace le début du tour (point d'étoile, jours obliques…) prend tout le tour." : ""}
       </p>
       <button type="button" class="bouton-secondaire" onClick=${() => modifier((p) => diviserBloc(p, bloc.id, nombre))}>
         Diviser en ${nombre} colonnes
@@ -533,7 +658,7 @@ function Colonnes({ projet, bloc, plan, couleur, laines = [], titre = "Diviser e
   const actuelles = pb?.colonnes?.map((c) => c.mailles) || null;
   const fixees = bloc.colonnes.some((c) => Number.isInteger(c.mailles));
   const egales = actuelles && actuelles.every((m) => m === actuelles[0]);
-  const options = !egales && !fixees && total ? colonnesEgalesPossibles(bloc, total, projet.type === "snood" ? "rond" : "plat") : null;
+  const options = !egales && !fixees && total ? colonnesEgalesPossibles(bloc, total, enRond(projet) ? "rond" : "plat") : null;
   const estimeLargeur = (t) => {
     const corpsCm = pb.colonnes.reduce((s, c) => s + c.largeurCm, 0);
     return plan.largeur.reelleCm + ((t - total) * corpsCm) / total;
@@ -551,14 +676,14 @@ function Colonnes({ projet, bloc, plan, couleur, laines = [], titre = "Diviser e
           onClick=${() => modifier((p) => diviserBloc(p, bloc.id, bloc.colonnes.length + 1))}>+</button>
       </div>
     </div>
-    <p class="note">${projet.type === "snood"
+    <p class="note">${enRond(projet)
       ? "Les colonnes font tout le tour : la colonne 1 part du marqueur, la dernière revient jusqu'à lui. En rond, une colonne garde la laine de sa section : l'intarsia ne se tricote pas en rond."
       : "De la colonne 1 (bord droit, là où commencent les rangs endroit) à la dernière. Touche la pastille d'une colonne pour lui donner une autre laine (intarsia)."}</p>
     <ul class="liste-colonnes">
       ${bloc.colonnes.map((c, j) => {
         const point = pointParId(c.pointId);
         const m = actuelles?.[j];
-        const modeCol = projet.type === "snood" ? "rond" : "plat";
+        const modeCol = enRond(projet) ? "rond" : "plat";
         const plus = m && point && maillesVoisines(point, m, 1, modeCol);
         const moins = m && point && maillesVoisines(point, m, -1, modeCol);
         const changer = (sens) => modifier((p) => changerLargeurColonne(p, bloc.id, c.id, sens, { total, actuelles }));
@@ -592,8 +717,8 @@ function Colonnes({ projet, bloc, plan, couleur, laines = [], titre = "Diviser e
     ${fixees && html`<p class="note">* largeur choisie par toi ; les autres colonnes se partagent le reste.</p>`}
     ${options && (options.dessous || options.dessus) &&
     html`<p class="note">Pour des colonnes toutes égales, il faudrait ${[options.dessous, options.dessus].filter(Boolean)
-      .map((o) => `${o.total} mailles (${o.parColonne} par colonne, ${projet.type === "snood" ? "tour" : "écharpe"} d'environ ${formaterNombre(estimeLargeur(o.total), 0)} cm)`)
-      .join(" ou ")} : change ${projet.type === "snood" ? "le tour" : "la largeur"} à l'étape 3, ou choisis des points qui s'accordent.</p>`}
+      .map((o) => `${o.total} mailles (${o.parColonne} par colonne, ${enRond(projet) ? "tour" : "écharpe"} d'environ ${formaterNombre(estimeLargeur(o.total), 0)} cm)`)
+      .join(" ou ")} : change ${enRond(projet) ? "le tour" : "la largeur"} à l'étape 3, ou choisis des points qui s'accordent.</p>`}
     <div class="rangee-boutons">
       ${fixees && html`<button type="button" class="bouton-secondaire" onClick=${() => modifier((p) => repartirEgalement(p, bloc.id))}>Répartir également</button>`}
       <button type="button" class="bouton-secondaire" onClick=${() => { surColonne(null); modifier((p) => nePlusDiviser(p, bloc.id)); }}>${estSection(bloc) ? "Plus de colonnes" : "Ne plus diviser"}</button>
@@ -618,7 +743,7 @@ function LaineDuBloc({ projet, bloc, laines, calcul, modifier }) {
     ${lainesP.length < 2
       ? html`<p class="note">Ajoute d'autres laines à l'<a href=${"#" + cheminEtape(projet, 2)}>étape Matériel</a> pour changer de couleur.</p>`
       : actuelle !== projet.laineId
-        ? html`<p class="note">${projet.type === "snood" ? "La couleur change sur tout le tour, au début du tour." : "La couleur change sur toute la largeur du rang, bandes latérales comprises."}${besoin ? ` Il en faut environ ${besoin.metres} m.` : ""}</p>`
+        ? html`<p class="note">${enRond(projet) ? "La couleur change sur tout le tour, au début du tour." : "La couleur change sur toute la largeur du rang, bandes latérales comprises."}${besoin ? ` Il en faut environ ${besoin.metres} m.` : ""}</p>`
         : null}
   </div>`;
 }
@@ -674,7 +799,7 @@ function AjoutBloc({ projet, couleur, surFermeture, surAjout }) {
         </button>
       </div>
       <div class="atelier">
-        ${projet.type === "snood"
+        ${enRond(projet)
           ? html`<${DessinSnood} projet=${apercu.projet} plan=${null} couleur=${couleur} blocChoisi=${apercu.blocId}
               largeurPx=${280} prefixe="ajout" reperes=${false} libelle="Aperçu du snood avec le nouveau bloc" />`
           : html`<${DessinEcharpe} projet=${apercu.projet} plan=${null} couleur=${couleur} blocChoisi=${apercu.blocId}

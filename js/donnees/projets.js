@@ -6,6 +6,7 @@ import { pointParId, avisPour } from "../catalogue/points.js";
 import { echantillonsCorrespondants, densitesDuProjet } from "../moteur/densite.js";
 import { planEcharpe, MAILLES_MAX_BANDE_LATERALE } from "../moteur/plan.js";
 import { planSnood, cableTropLong } from "../moteur/plan-rond.js";
+import { planBonnet, cableMagicLoop } from "../moteur/plan-bonnet.js";
 import { maillesMinimum, maillesConviennent, convertirEnRond } from "../moteur/simulateur.js";
 import { repartirMailles, maillesVoisines, totauxEgaux, COLONNES_MIN, COLONNES_MAX } from "../moteur/colonnes.js";
 import { metrageNecessaire, comparerALaLaine } from "../moteur/metrage.js";
@@ -25,10 +26,63 @@ export const ETAPES = [
 export const etapeParCle = (cle) => ETAPES.find((e) => e.cle === cle) || ETAPES[0];
 export const cheminEtape = (projet, numero = projet.etape) => `/projet/${encodeURIComponent(projet.id)}/${ETAPES[numero - 1].cle}`;
 
-export const TYPES_DISPONIBLES = ["echarpe", "snood"];
+export const TYPES_DISPONIBLES = ["echarpe", "snood", "bonnet"];
 
 /** La pièce se tricote-t-elle en rond ? */
-export const enRond = (projet) => projet?.type === "snood" || projet?.mode === "rond";
+export const enRond = (projet) => projet?.type === "snood" || projet?.type === "bonnet" || projet?.mode === "rond";
+
+/** Nom de la pièce pour les phrases : « le snood », « le bonnet », « l'écharpe ». */
+export const nomPiece = (projet) => ({ snood: "le snood", bonnet: "le bonnet", couverture: "la couverture" })[projet?.type] || "l'écharpe";
+
+// ---------------- Bonnet (E4, 0.17.0) ----------------
+
+/** Le bonnet est tricoté 5 cm plus petit que la tête : il serre un peu pour tenir (aisance négative). */
+export const AISANCE_BONNET = 5;
+
+/** Tailles de bonnet (PRD, 09/11) : tour de tête, hauteur portée sans le revers, taille du pompon. */
+export const TAILLES_BONNET = {
+  adulte: [
+    { preset: "femme", nom: "Femme", detail: "Tour de tête moyen", teteCm: 56, hauteurCm: 22, pomponCm: 6 },
+    { preset: "homme", nom: "Homme", detail: "Tour de tête moyen", teteCm: 60, hauteurCm: 24, pomponCm: 6 },
+  ],
+  enfant: [{ preset: "enfant", nom: "Enfant", detail: "Environ 3 à 10 ans", teteCm: 51, hauteurCm: 20, pomponCm: 4 }],
+};
+
+export const LIMITES_BONNET = { tete: [40, 66], hauteur: [15, 32], pompon: [4, 8] };
+
+/** Bord du bonnet : 5 cm, ou 10 cm avec le revers (il se replie en deux). */
+export const BORD_BONNET = { simple: 5, revers: 10 };
+
+export function tailleBonnet(pub = "adulte", preset = null) {
+  const liste = TAILLES_BONNET[pub] || TAILLES_BONNET.adulte;
+  const t = liste.find((x) => x.preset === preset) || liste[0];
+  return { public: pub, preset: t.preset, teteCm: t.teteCm, hauteurCm: t.hauteurCm, revers: false, pompon: true, pomponCm: t.pomponCm };
+}
+
+/** Tour tricoté du bonnet (cm) : tour de tête − 5 cm. */
+export const tourDuBonnet = (projet) => (projet?.taille?.teteCm || 0) - AISANCE_BONNET;
+
+/** Revers coché ou non : le bord passe de 5 à 10 cm (et inversement), sauf si sa hauteur a été changée à la main. */
+export function avecRevers(projet, revers) {
+  const avant = revers ? BORD_BONNET.simple : BORD_BONNET.revers;
+  const apres = revers ? BORD_BONNET.revers : BORD_BONNET.simple;
+  return {
+    ...projet,
+    taille: { ...projet.taille, revers },
+    blocs: projet.blocs.map((b) => (b.zone === "bas" && (b.hauteurCm === avant || !b.hauteurCm) ? { ...b, hauteurCm: apres } : b)),
+  };
+}
+
+/** Le pompon : { pompon, pomponCm, pomponLaineId } (partiel). */
+export function avecPompon(projet, reglages) {
+  const t = { ...projet.taille, ...reglages };
+  t.pomponCm = Math.min(LIMITES_BONNET.pompon[1], Math.max(LIMITES_BONNET.pompon[0], Math.round(t.pomponCm || 6)));
+  if (!t.pomponLaineId || t.pomponLaineId === projet.laineId) delete t.pomponLaineId;
+  return { ...projet, taille: t };
+}
+
+/** Le bord d'un bonnet avec revers n'accepte que des points réversibles (décision du 06/11). */
+export const bordAvecRevers = (projet, bloc) => projet?.type === "bonnet" && !!projet.taille?.revers && bloc?.zone === "bas";
 
 /** Tailles d'écharpe (PRD) : longueurs proposées et largeur par défaut. */
 export const TAILLES_ECHARPE = {
@@ -87,6 +141,13 @@ export function tailleSnood(pub = "adulte", preset = "1tour") {
  * Écharpe : bordures et bandes latérales en point mousse ; snood : bordures en côtes 1/1 (décision du 02/11), sans bandes latérales.
  */
 export function blocsParDefaut(pointPrincipal = "", type = "echarpe") {
+  if (type === "bonnet") {
+    // Bonnet (0.17.0) : un bord de 5 cm en côtes 1/1, puis le corps ; le sommet suit le corps.
+    return [
+      { id: "bas", zone: "bas", pointId: "cotes-1-1", hauteurCm: BORD_BONNET.simple },
+      { id: "corps", zone: "corps", pointId: pointPrincipal },
+    ];
+  }
   if (type === "snood") {
     return [
       { id: "bas", zone: "bas", pointId: "cotes-1-1", hauteurCm: 3 },
@@ -103,6 +164,25 @@ export function blocsParDefaut(pointPrincipal = "", type = "echarpe") {
 }
 
 export function nouveauProjet({ type = "echarpe", nom = "" } = {}) {
+  if (type === "bonnet") {
+    return {
+      nom: nom.trim() || "Bonnet",
+      nomAuto: !nom.trim(),
+      type,
+      statut: "conception",
+      etape: 1,
+      laineId: "",
+      autresLaines: [],
+      aiguillesId: "",
+      pointPrincipal: "",
+      echantillonId: "",
+      sansEchantillon: false,
+      taille: tailleBonnet(),
+      mode: "rond",
+      lisieres: "aucune",
+      blocs: blocsParDefaut("", "bonnet"),
+    };
+  }
   if (type === "snood") {
     return {
       nom: nom.trim() || "Snood",
@@ -209,7 +289,11 @@ export const zoneAvis = (zone) => (zone === "bas" || zone === "haut" ? "bordure"
  * Avis sur un point pour un bloc : celui du catalogue (pièce et zone),
  * et pour les bandes latérales, les motifs trop larges sont écartés.
  */
-export function avisPourBloc(point, piece, zone, { colonne = false } = {}) {
+export function avisPourBloc(point, piece, zone, { colonne = false, revers = false } = {}) {
+  // Bord d'un bonnet avec revers : l'intérieur du bord se voit une fois replié (décision du 06/11).
+  if (revers && zone === "bas" && !point.proprietes?.reversible) {
+    return { avis: "refuse", raison: "Pas réversible : l'envers se verrait une fois le bord replié." };
+  }
   if (colonne && (piece === "snood" || piece === "bonnet") && convertirEnRond(point).marqueur) {
     return { avis: "deconseille", raison: "Il déplace le début du tour : il prend tout le tour, pas une colonne." };
   }
@@ -279,6 +363,7 @@ export function idsLainesDuProjet(projet) {
   const ajouter = (id) => { if (id && !ids.includes(id)) ids.push(id); };
   ajouter(projet.laineId);
   (projet.autresLaines || []).forEach(ajouter);
+  ajouter(projet.taille?.pomponLaineId);
   for (const b of projet.blocs || []) {
     ajouter(b.laineId);
     (b.colonnes || []).forEach((c) => ajouter(c.laineId));
@@ -312,7 +397,8 @@ export function avecLaineDuProjet(projet, laineId) {
 
 /** Blocs (et colonnes) qui utilisent une laine : combien reprendront la laine principale si on la retire. */
 export function blocsDeLaLaine(projet, laineId) {
-  return projet.blocs.filter((b) => b.laineId === laineId || (b.colonnes || []).some((c) => c.laineId === laineId)).length;
+  return projet.blocs.filter((b) => b.laineId === laineId || (b.colonnes || []).some((c) => c.laineId === laineId)).length
+    + (projet.taille?.pomponLaineId === laineId ? 1 : 0);
 }
 
 /** Retire une laine du projet : ses blocs et ses colonnes reprennent la laine principale. */
@@ -324,9 +410,11 @@ export function sansLaineDuProjet(projet, laineId) {
     const { laineId: _, ...reste } = o;
     return reste;
   };
+  const taille = projet.taille?.pomponLaineId === laineId ? (({ pomponLaineId, ...t }) => t)(projet.taille) : projet.taille;
   return {
     ...projet,
     autresLaines: autres,
+    taille,
     blocs: projet.blocs.map((b) => {
       const c = sans(b);
       return c.colonnes ? { ...c, colonnes: c.colonnes.map(sans) } : c;
@@ -400,7 +488,17 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
     pointIds: [...new Set(blocs.flatMap(pointsDuBloc))], laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon,
   });
   if (Object.values(densites).some((d) => !d)) return null;
-  const r = projet.type === "snood"
+  const pomponLaine = projet.taille?.pomponLaineId && reserve.some((l) => l.id === projet.taille.pomponLaineId) && projet.taille.pomponLaineId !== projet.laineId
+    ? projet.taille.pomponLaineId : null;
+  const r = projet.type === "bonnet"
+    ? planBonnet({
+      tourCm: tourDuBonnet(projet), hauteurCm: projet.taille.hauteurCm, revers: !!projet.taille.revers,
+      blocs: blocs.filter((b) => b.zone === "bas" || b.zone === "corps"), densites,
+      // Le jersey sert au sommet quand le point du corps ne peut pas y continuer.
+      densiteJersey: densites.jersey || densitePoint({ pointId: "jersey", laine, tailleAiguille: taille, echantillons, echantillonPrincipal: echantillon }),
+      pompon: projet.taille.pompon ? { cm: projet.taille.pomponCm || 6, laineId: pomponLaine } : null,
+    })
+    : projet.type === "snood"
     ? planSnood({ tourCm: projet.taille.tourCm, hauteurCm: projet.taille.hauteurCm, blocs: blocs.filter((b) => b.zone !== "cotes"), densites })
     : planEcharpe({
       largeurCm: projet.taille.largeurCm, longueurCm: projet.taille.longueurCm,
@@ -435,6 +533,10 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
   if (projet.type === "snood") {
     cable = cableTropLong(lireNombre(aiguilles?.cableCm), projet.taille.tourCm);
     if (cable) cable = { ...cable, cableCm: lireNombre(aiguilles.cableCm), tourCm: projet.taille.tourCm };
+  } else if (projet.type === "bonnet") {
+    // Bonnet : tout en magic loop, il faut un câble assez long (décision du 06/11).
+    cable = cableMagicLoop(lireNombre(aiguilles?.cableCm));
+    if (cable) cable = { ...cable, cableCm: lireNombre(aiguilles.cableCm), magicLoop: true };
   }
   return {
     ...r, densites, echantillon, metrage, laineSuffit, parLaine, avertissements, cable,
@@ -484,12 +586,14 @@ export const blocLateral = (projet) => projet.blocs.find((b) => b.zone === "cote
 /** Nom d'un bloc pour l'écran : « Bordure du bas », « Corps », « Bande », « Bandes latérales ». */
 export function nomBloc(bloc, projet = null) {
   if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
+  if (projet?.type === "bonnet" && bloc.zone === "bas") return projet.taille?.revers ? "Bord et revers" : "Bord";
   return { bas: "Bordure du bas", corps: "Corps", bande: "Bande", haut: "Bordure du haut", cotes: "Bandes latérales" }[bloc.zone] || "Bloc";
 }
 
 /** Nom court pour les pastilles des blocs. */
 export function nomCourtBloc(bloc, projet = null) {
   if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
+  if (projet?.type === "bonnet" && bloc.zone === "bas") return projet.taille?.revers ? "Bord et revers" : "Bord";
   return { bas: "Bordure", corps: "Corps", bande: "Bande", haut: "Bordure", cotes: "Côtés" }[bloc.zone] || "Bloc";
 }
 

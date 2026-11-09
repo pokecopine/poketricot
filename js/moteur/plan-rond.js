@@ -61,7 +61,7 @@ function tourDuPoint(recette, t, n) {
  *   densites: { [pointId]: { mailles, rangs, statut } },
  * }
  */
-export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
+export function planSnood({ tourCm, hauteurCm, blocs, densites, multiple = 1, nomPiece = "le snood" }) {
   const erreurs = [];
   const explications = [];
   const echec = (message, bloc = null) => {
@@ -120,6 +120,12 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
   // ---- Le tour : le corps décide ----
   const corps = horizontaux[corpsIndex];
   const iCorps = infos.get(corps.id);
+  // Bonnet (0.17.0) : le tour du corps doit aussi se partager en `multiple` parts égales (8 pour le sommet).
+  if (multiple > 1) {
+    const { convient, convientEgal } = iCorps;
+    iCorps.convient = (n) => n % multiple === 0 && convient(n);
+    if (convientEgal) iCorps.convientEgal = (n) => n % multiple === 0 && convientEgal(n);
+  }
   const voulu = Math.max(1, Math.round((tourCm * iCorps.densite.mailles) / 10));
   const mailles = new Array(horizontaux.length);
   // D'abord, un nombre qui convient à tous les blocs, à 5 % du tour voulu (des colonnes égales si possible).
@@ -229,7 +235,7 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
     autresCm += h.hauteurCm;
   });
   const corpsVoulu = hauteurCm - autresCm;
-  if (corpsVoulu < 2 * partiesCorps.length) return echec("Les bordures et les bandes sont plus hautes que le snood : le corps n'a plus de place.", corps);
+  if (corpsVoulu < 2 * partiesCorps.length) return echec(`Les bordures et les bandes sont plus hautes que ${nomPiece} : le corps n'a plus de place.`, corps);
   const parts = repartirLeCorps(partiesCorps, corpsVoulu, (b, cm) => rangsPourHauteurMotif(motifDuBloc(infos.get(b.id)), cm, infos.get(b.id).densite));
   if (parts.erreur) return echec(parts.erreur, corps);
   for (const [id, h] of parts.hauteurs) hauteurs.set(id, h);
@@ -342,7 +348,7 @@ export function planSnood({ tourCm, hauteurCm, blocs, densites }) {
     explications,
   };
   const verification = verifierPlanRond(plan);
-  return { ok: verification.ok, erreurs: verification.erreurs, explications, plan, grille: verification.grille };
+  return { ok: verification.ok, erreurs: verification.erreurs, explications, plan, grille: verification.grille, debut: verification.debut ?? 0 };
 }
 
 /**
@@ -377,7 +383,7 @@ export function verifierPlanRond(plan) {
       }
       gestes.push(...s.gestes);
     }
-    if (consomme(gestes) !== n) return erreur(rang, `le snood a ${n} mailles mais le tour en tricote ${consomme(gestes)}`);
+    if (consomme(gestes) !== n) return erreur(rang, `${plan.type === "bonnet" ? "le bonnet" : "le snood"} a ${n} mailles mais le tour en tricote ${consomme(gestes)}`);
     if (rang.marqueur) {
       const { mailles: m, sens } = rang.marqueur;
       if (!(m > 0 && m < n)) return erreur(rang, `déplacement du marqueur impossible : ${m} mailles sur ${n}`);
@@ -392,8 +398,8 @@ export function verifierPlanRond(plan) {
     debut = t.debut;
     if (n !== rang.mailles) return erreur(rang, `le tour annonce ${rang.mailles} mailles, il en reste ${n}`);
     const fin = plan.blocs.find((b) => b.dernierRang === rang.numero);
-    if (fin && n !== fin.maillesCorps) return erreur(rang, `à la fin du bloc, le snood devrait avoir ${fin.maillesCorps} mailles, il en a ${n}`);
+    if (fin && n !== fin.maillesCorps) return erreur(rang, `à la fin du bloc, ${plan.type === "bonnet" ? "le bonnet" : "le snood"} devrait avoir ${fin.maillesCorps} mailles, il en a ${n}`);
   }
   if (n !== plan.rabattage.mailles) return erreur(plan.rangs.at(-1), `le rabattage annonce ${plan.rabattage.mailles} mailles, il en reste ${n}`);
-  return { ok: true, erreurs: [], grille };
+  return { ok: true, erreurs: [], grille, debut };
 }

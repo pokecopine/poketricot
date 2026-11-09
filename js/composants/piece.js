@@ -7,6 +7,7 @@ import { html } from "../html.js";
 import { pointParId } from "../catalogue/points.js";
 import { tuileSVG } from "../rendu/texture.js";
 import { nuancesLaine } from "../donnees/couleur.js";
+import { pointSimpleAuSommet } from "../moteur/plan-bonnet.js";
 
 const f = (n) => Math.round(n * 100) / 100;
 
@@ -338,6 +339,141 @@ export function DessinSnood({
         ${reperes && html`
           <text x=${W - 2} y=${H + 22} text-anchor="end" font-size="12" font-weight="700" fill="var(--accent)" font-family="var(--corps)">début du tour ↑</text>
           <text x="0" y=${H + 22} font-size="12" fill="var(--texte-2)" font-family="var(--corps)">← le tour continue</text>`}
+      </g>
+    </svg>`;
+}
+
+/** Point du sommet d'un bonnet sans plan calculé : celui de la dernière partie du corps s'il est simple, sinon le jersey. */
+function pointDuSommetSansPlan(projet) {
+  const haut = projet.blocs.filter((b) => b.zone === "corps").at(-1);
+  return haut?.pointId && !(haut.colonnes?.length >= 2) && pointSimpleAuSommet(pointParId(haut.pointId)) ? haut.pointId : "jersey";
+}
+
+/**
+ * Géométrie du bonnet ouvert et posé à plat (0.17.0) : le bord et le corps comme un snood (largeur = tour),
+ * puis le sommet (sa hauteur, son point, sa laine) et le pompon.
+ */
+export function geometrieBonnet(projet, plan) {
+  const sommetPlan = plan?.blocs.find((b) => b.zone === "sommet");
+  const basCorps = plan ? plan.blocs.filter((b) => b.zone !== "sommet").reduce((t, b) => t + b.hauteurCm, 0) : null;
+  const tour = plan ? plan.largeur.reelleCm : (projet.taille.teteCm || 56) - 5;
+  const sommetCm = sommetPlan?.hauteurCm ?? 6;
+  const corps = geometrieSnood(
+    { ...projet, taille: { tourCm: tour, hauteurCm: Math.max(4, (projet.taille.hauteurCm || 22) - sommetCm + (projet.taille.revers ? 5 : 0)) } },
+    plan ? { ...plan, longueur: { reelleCm: basCorps } } : null,
+  );
+  const haut = projet.blocs.filter((b) => b.zone === "corps").at(-1);
+  return {
+    ...corps,
+    sommet: { blocId: "sommet", pointId: plan?.sommet?.pointId || pointDuSommetSansPlan(projet), laineId: haut?.laineId || null, h: sommetCm },
+    pompon: projet.taille.pompon ? { cm: projet.taille.pomponCm || 6, laineId: projet.taille.pomponLaineId || null } : null,
+    revers: !!projet.taille.revers,
+  };
+}
+
+/**
+ * Le bonnet dessiné ouvert et posé à plat (maquette validée le 09/11) : le bord (avec le repli du revers),
+ * le corps, le sommet en 8 pointes, le pompon au-dessus ; le début du tour sur le bord droit.
+ */
+export function DessinBonnet({
+  projet, plan, couleur, laines = [], blocChoisi = null, colonneChoisie = null, surChoix = null,
+  largeurPx = 300, hauteurMinPx = 90, hauteurMaxPx = 190, echelleTexture = 0.42, prefixe = "bonnet", libelle, reperes = true,
+}) {
+  const geo = geometrieBonnet(projet, plan);
+  const teinte = (r) => couleurDeLaine(r.laineId, couleur, laines);
+  const motifs = useMotifs(
+    [...geo.rects.map((r) => ({ pointId: r.pointId, couleur: teinte(r) })), { pointId: geo.sommet.pointId, couleur: teinte(geo.sommet) }],
+    echelleTexture, prefixe,
+  );
+  const c = nuancesLaine(couleur);
+  const W = largeurPx;
+  const H = Math.min(hauteurMaxPx, Math.max(hauteurMinPx, (W * geo.hauteur) / geo.tour));
+  const minBloc = 12;
+  const hPx = geo.rangees.map((r) => (r.zone === "corps" ? 0 : Math.max(minBloc, (r.hauteur * H) / geo.hauteur)));
+  const fixe = hPx.reduce((t, h) => t + h, 0);
+  const corpsBrut = geo.rangees.reduce((t, r) => t + (r.zone === "corps" ? r.hauteur : 0), 0) || 1;
+  geo.rangees.forEach((r, i) => {
+    if (r.zone === "corps") hPx[i] = (r.hauteur * Math.max(0, H - fixe)) / corpsBrut;
+  });
+  const hSommet = Math.max(30, Math.min(70, (geo.sommet.h * H) / geo.hauteur));
+  const hPompon = geo.pompon ? 34 : 0;
+  const haut = hPompon + hSommet;
+  const yPx = [];
+  let cumul = 0;
+  geo.rangees.forEach((r, i) => {
+    yPx[i] = haut + H - cumul - hPx[i];
+    cumul += hPx[i];
+  });
+  const mx = 6;
+  const my = 6;
+  const bas = reperes ? 24 : 0;
+  const formes = geo.rects.map((r) => {
+    const l = (r.l / geo.tour) * W;
+    const x = W - (r.x / geo.tour) * W - l;
+    return { ...r, couleur: teinte(r), px: { x: f(x), y: f(yPx[r.rangee]), l: f(l), h: f(hPx[r.rangee]) } };
+  });
+  const remplir = (pointId, coul) => {
+    const m = motifDe(motifs, pointId, coul);
+    return m ? `url(#${m.id})` : nuancesLaine(coul).maille;
+  };
+  // Les 8 pointes du sommet : chaque part se resserre jusqu'à une petite pointe.
+  const yS = hPompon;
+  const pointes = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i * W) / 8;
+    const b = ((i + 1) * W) / 8;
+    const m = (a + b) / 2;
+    pointes.push(`${f(a)},${f(yS + hSommet)} ${f(m - W * 0.012)},${f(yS + 2)} ${f(m + W * 0.012)},${f(yS + 2)}`);
+  }
+  const couleurSommet = teinte(geo.sommet);
+  const choisis = blocChoisi === "sommet" || blocChoisi === "pompon" ? [] : formes.filter((r) => r.blocId === blocChoisi && (!colonneChoisie || r.colonneId === colonneChoisie));
+  const contour = choisis.length ? boite(choisis) : null;
+  const iBord = geo.rangees.findIndex((r) => r.zone === "bas");
+  const yRepli = iBord >= 0 ? yPx[iBord] + hPx[iBord] / 2 : null;
+  const couleurPompon = geo.pompon ? couleurDeLaine(geo.pompon.laineId, couleur, laines) : null;
+  const np = couleurPompon ? nuancesLaine(couleurPompon) : null;
+  const total = haut + H;
+  return html`
+    <svg width=${W + 2 * mx} height=${total + 2 * my + bas} viewBox=${`0 0 ${W + 2 * mx} ${total + 2 * my + bas}`} role="img"
+      aria-label=${libelle || "Le bonnet ouvert et posé à plat : le bord en bas, le sommet en 8 parts en haut, le pompon au-dessus ; le début du tour est sur le bord droit"}
+      style="max-width:100%;height:auto;display:block;margin:0 auto">
+      <defs>
+        ${Object.values(motifs).map(
+          (m) => html`<pattern id=${m.id} patternUnits="userSpaceOnUse" width=${f(m.l)} height=${f(m.h)}>
+            <image href=${m.url} width=${f(m.l)} height=${f(m.h)} preserveAspectRatio="none" />
+          </pattern>`
+        )}
+        <clipPath id=${`${prefixe}-corps`}><rect x="0" y=${haut} width=${W} height=${H} rx="5" /></clipPath>
+        ${np && html`<radialGradient id=${`${prefixe}-pompon`} cx="0.38" cy="0.35" r="0.7">
+          <stop offset="0" stop-color=${np.eclat} /><stop offset="0.55" stop-color=${np.maille} /><stop offset="1" stop-color=${np.contour} />
+        </radialGradient>`}
+      </defs>
+      <g transform=${`translate(${mx} ${my})`}>
+        ${geo.pompon && html`<circle cx=${f(W / 2)} cy=${f(hPompon / 2 + 1)} r=${f(hPompon / 2 - 2)} fill=${`url(#${prefixe}-pompon)`}
+          stroke=${blocChoisi === "pompon" ? "var(--accent)" : np.contour} stroke-width=${blocChoisi === "pompon" ? 3 : 1}
+          style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix("pompon") : undefined} />`}
+        <polygon points=${pointes.join(" ") + ` ${f(W)},${f(yS + hSommet)}`} fill=${remplir(geo.sommet.pointId, couleurSommet)}
+          stroke=${blocChoisi === "sommet" ? "var(--accent)" : nuancesLaine(couleurSommet).contour} stroke-width=${blocChoisi === "sommet" ? 2.5 : 0.8} stroke-linejoin="round"
+          style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix("sommet") : undefined} />
+        <g clip-path=${`url(#${prefixe}-corps)`}>
+          ${formes.map(
+            (r) => html`<rect x=${r.px.x} y=${r.px.y} width=${r.px.l} height=${f(r.px.h + 0.4)} fill=${remplir(r.pointId, r.couleur)}
+              style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix(r.blocId, r.colonneId) : undefined} />`
+          )}
+          ${geo.rangees.slice(1).map((r, i) => html`<line x1="0" x2=${W} y1=${f(yPx[i + 1] + hPx[i + 1])} y2=${f(yPx[i + 1] + hPx[i + 1])} stroke=${c.contour} stroke-width="0.8" opacity="0.6" />`)}
+          ${formes.filter((r) => r.colonne > 1).map(
+            (r) => html`<line x1=${f(r.px.x + r.px.l)} x2=${f(r.px.x + r.px.l)} y1=${r.px.y} y2=${f(r.px.y + r.px.h)} stroke=${nuancesLaine(r.couleur).contour} stroke-width="0.8" opacity="0.7" />`
+          )}
+        </g>
+        <rect x="0" y=${haut} width=${W} height=${H} rx="5" fill="none" stroke=${c.contour} stroke-opacity="0.35" />
+        ${contour && html`<rect x=${f(contour.x + 1.5)} y=${f(contour.y + 1.5)} width=${f(contour.l - 3)} height=${f(contour.h - 3)}
+          rx="4" fill="none" stroke="var(--accent)" stroke-width="3" pointer-events="none" />`}
+        ${geo.revers && yRepli !== null && html`
+          <line x1="-5" x2=${W + 5} y1=${f(yRepli)} y2=${f(yRepli)} stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 4" pointer-events="none" />
+          ${reperes && html`<text x=${W - 4} y=${f(yRepli - 5)} text-anchor="end" font-size="12" font-weight="700" fill="var(--accent)" font-family="var(--corps)"
+            paint-order="stroke" stroke="var(--fond)" stroke-width="4">repli du revers</text>`}`}
+        <line x1=${W} x2=${W} y1=${haut} y2=${total + 6} stroke="var(--texte-2)" stroke-width="1.5" stroke-dasharray="4 4" />
+        ${reperes && html`<text x=${W - 2} y=${total + 20} text-anchor="end" font-size="12" fill="var(--texte-2)" font-family="var(--corps)">début du tour ↑</text>`}
       </g>
     </svg>`;
 }

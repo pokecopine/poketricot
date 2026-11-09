@@ -10,6 +10,7 @@ import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { etiquettesProprietes } from "../catalogue/fiche.js";
+import { cableMagicLoop, CABLE_MAGIC_LOOP } from "../moteur/plan-bonnet.js";
 import { trierLaines, trierAiguilles, titreAiguilles, lireNombre, formaterNombre, EPAISSEURS } from "../donnees/reserve.js";
 import { texteDate, estPese } from "../donnees/echantillons.js";
 import {
@@ -69,6 +70,9 @@ export function EtapeMateriel({ id }) {
           )}
         </div>
         ${conseil && html`<${Encart} type=${conseil.ok ? "sauge" : "brique"}>${conseil.texte}<//>`}
+        ${projet.type === "bonnet" && (aig && cableMagicLoop(lireNombre(aig.cableCm))
+          ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(lireNombre(aig.cableCm), 0)} cm est trop court pour le magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.<//>`
+          : html`<p class="note">Tout le bonnet se tricote en magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.</p>`)}
 
         <div class="titre-section">
           <h2>3. Point principal</h2>
@@ -79,7 +83,7 @@ export function EtapeMateriel({ id }) {
           : html`<button type="button" class="bouton-secondaire" onClick=${() => naviguer(`/projet/${encodeURIComponent(projet.id)}/point/corps`)}>
               Choisir le point principal
             </button>
-            <p class="note">C'est le point du corps ${projet.type === "snood" ? "du snood" : "de l'écharpe"} : ton échantillon se tricote dans ce point.</p>`}
+            <p class="note">C'est le point du corps ${{ snood: "du snood", bonnet: "du bonnet" }[projet.type] || "de l'écharpe"} : ton échantillon se tricote dans ce point.</p>`}
 
         <${CarteEchantillon} projet=${projet} laine=${laine} point=${point} taille=${taille} echantillon=${echantillon}
           adresse=${adresseEchantillon} modifier=${modifier} />
@@ -100,7 +104,7 @@ function CartePointPrincipal({ point, couleur, type }) {
         <span class="carte-point-titre"><span>${point.nom}</span></span>
         <div class="puces" style="gap:6px">${etiquettesProprietes(point).map((t) => html`<span class="etiquette">${t}</span>`)}</div>
         ${avis.avis === "conseille"
-          ? html`<span class="note">Conseillé pour ${type === "snood" ? "un snood" : "une écharpe"}. C'est le point du corps : ton échantillon se tricote dans ce point.</span>`
+          ? html`<span class="note">Conseillé pour ${{ snood: "un snood", bonnet: "un bonnet" }[type] || "une écharpe"}. C'est le point du corps : ton échantillon se tricote dans ce point.</span>`
           : html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
       </span>
     </div>`;
