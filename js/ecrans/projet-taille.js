@@ -10,6 +10,7 @@ import { pointParId } from "../catalogue/points.js";
 import {
   TAILLES_ECHARPE, LIMITES_ECHARPE, TAILLES_SNOOD, LIMITES_SNOOD, TOUR_MIN_TETE, tailleSnood, cheminEtape, calculerProjet, etapeParCle,
   TAILLES_BONNET, LIMITES_BONNET, AISANCE_BONNET, tailleBonnet, tourDuBonnet, avecRevers, avecPompon, BORD_BONNET,
+  LONGUEURS_JAMBIERES, LIMITES_JAMBIERES, AISANCE_JAMBIERES, EXEMPLAIRES_JAMBIERES, tourDesJambieres, presetJambieres, avecModeJambieres,
 } from "../donnees/projets.js";
 
 const borner = (v, [min, max]) => Math.min(max, Math.max(min, v));
@@ -20,6 +21,7 @@ export function EtapeTaille({ id }) {
   if (!projet) return null;
   if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
 
+  if (projet.type === "jambieres") return html`<${TailleJambieres} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
   if (projet.type === "bonnet") return html`<${TailleBonnet} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
   if (projet.type === "snood") return html`<${TailleSnood} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
   const t = projet.taille;
@@ -242,6 +244,99 @@ function TailleBonnet({ projet, laines, aiguilles, echantillons, modifier }) {
           ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(calcul.cable.cableCm, 0)} cm est trop court pour le magic loop : prends un câble de ${calcul.cable.conseille} cm.<//>`
           : html`<${Encart}>Tout le bonnet se tricote en <strong>magic loop</strong>${tailleMm ? `, sur ton aiguille de ${tailleMm} mm${aig?.cableCm ? ` à câble de ${formaterNombre(Number(aig.cableCm), 0)} cm` : ""}` : ""}.<//>`}
         <p class="note">Le bord (${pointBord ? pointBord.nom.charAt(0).toLowerCase() + pointBord.nom.slice(1) : "côtes 1/1"}) et le sommet sont compris ; tu pourras les changer à l'étape suivante.</p>
+      </div>
+      <div class="ecran-pied">
+        <button type="button" class="bouton-principal" onClick=${continuer}>Construire ma pièce</button>
+      </div>
+    </main>`;
+}
+
+/**
+ * Étape 3 des jambières (maquettes validées le 09/11) : tour du mollet et longueur, raccourcis de longueur,
+ * puis en magic loop ou à plat avec une couture.
+ */
+function TailleJambieres({ projet, laines, aiguilles, echantillons, modifier }) {
+  const t = projet.taille;
+  const laine = laines.find((l) => l.id === projet.laineId);
+  const aig = aiguilles.find((a) => a.id === projet.aiguillesId);
+  const calcul = calculerProjet({ projet, laine, aiguilles: aig, echantillons, laines });
+  const plat = projet.mode === "plat";
+  const majTaille = (patch) => modifier((p) => ({ ...p, taille: { ...p.taille, ...patch } }));
+  const changerMollet = (d) => majTaille({ molletCm: borner(t.molletCm + d, LIMITES_JAMBIERES.mollet) });
+  const changerLongueur = (d) => {
+    const longueurCm = borner(t.longueurCm + d, LIMITES_JAMBIERES.longueur);
+    majTaille({ longueurCm, preset: presetJambieres(longueurCm) || "libre" });
+  };
+  async function continuer() {
+    await modifier((p) => ({ ...p, etape: Math.max(p.etape, 4) }));
+    naviguer(cheminEtape(projet, 4));
+  }
+  const tour = tourDesJambieres(projet);
+  const tailleMm = aig ? formaterNombre(Number(String(aig.tailleMm).replace(",", ".")), 2) : null;
+  const bordures = projet.blocs.filter((b) => b.zone === "bas" || b.zone === "haut");
+  const plan = calcul?.ok ? calcul.plan : null;
+  return html`
+    <main class="ecran">
+      <${EnTeteEtape} titre=${projet.nom} numero=${3} secours=${cheminEtape(projet, 2)} />
+      <div class="ecran-contenu">
+        <section class="carte-bloc" aria-labelledby="titre-mesures">
+          <h2 id="titre-mesures" style="font-size:18px">Tes mesures</h2>
+          <div class="reglage">
+            <span>Tour du mollet</span>
+            <div class="compteur">
+              <button type="button" aria-label="Tour du mollet plus petit de 1 cm" onClick=${() => changerMollet(-1)}>−</button>
+              <output aria-live="polite">${t.molletCm} cm</output>
+              <button type="button" aria-label="Tour du mollet plus grand de 1 cm" onClick=${() => changerMollet(1)}>+</button>
+            </div>
+          </div>
+          <p class="note" style="margin-top:-4px">À l'endroit le plus large du mollet.</p>
+          <div class="reglage">
+            <span>Longueur</span>
+            <div class="compteur">
+              <button type="button" aria-label="Plus courte de 1 cm" onClick=${() => changerLongueur(-1)}>−</button>
+              <output aria-live="polite">${t.longueurCm} cm</output>
+              <button type="button" aria-label="Plus longue de 1 cm" onClick=${() => changerLongueur(1)}>+</button>
+            </div>
+          </div>
+          <p class="note" style="margin-top:-4px">Depuis la cheville.</p>
+        </section>
+
+        <h2 style="font-size:17px">Jusqu'où ?</h2>
+        ${LONGUEURS_JAMBIERES.map(
+          (l) => html`<button type="button" class="choix-taille" aria-pressed=${String(t.longueurCm === l.longueurCm)}
+            onClick=${() => majTaille({ preset: l.preset, longueurCm: l.longueurCm })}>
+            <span class="ligne-element-texte">
+              <span class="ligne-element-nom">${l.nom}</span>
+              <span class="ligne-element-detail">Depuis la cheville</span>
+            </span>
+            <span style=${t.longueurCm === l.longueurCm ? "font-weight:700" : "color:var(--texte-2)"}>${l.longueurCm} cm</span>
+          </button>`
+        )}
+
+        ${!calcul
+          ? html`<${Resultat} calcul=${calcul} />`
+          : !calcul.ok
+          ? html`<${Encart} type="brique">${calcul.erreurs[0]?.message}<//>`
+          : html`<div aria-live="polite" style="display:flex;flex-direction:column;gap:8px">
+              <${Encart}>
+                Tes jambières feront <strong>${formaterNombre(tour, 0)} cm de tour</strong> : ${AISANCE_JAMBIERES} cm de moins que le mollet, pour qu'elles tiennent.
+                ${calcul.echantillon ? " Avec ton échantillon : " : " Estimation, en attendant ton échantillon : "}
+                <strong>${plan.montage.mailles} mailles</strong> ${plat ? "à monter" : "en rond"}, environ <strong>${plan.rangs.length} ${plat ? "rangs" : "tours"}</strong>, <strong>× ${EXEMPLAIRES_JAMBIERES} jambières</strong>.
+              <//>
+              <p class="note">Dimensions réelles : ${formaterNombre(plan.largeur.reelleCm)} cm de tour × ${formaterNombre(plan.longueur.reelleCm, 0)} cm de long.</p>
+              ${calcul.explications.map((e) => html`<p class="note">${e.charAt(0).toUpperCase() + e.slice(1)}${e.endsWith(".") ? "" : "."}</p>`)}
+            </div>`}
+
+        <h2 style="font-size:17px">Comment les tricoter ?</h2>
+        <${Onglets} libelle="Comment les tricoter ?" valeur=${plat ? "plat" : "rond"} surChoix=${(m) => modifier((p) => avecModeJambieres(p, m))}
+          choix=${[{ valeur: "rond", libelle: "En magic loop" }, { valeur: "plat", libelle: "À plat, avec une couture" }]} />
+        ${plat
+          ? html`<${Encart}>Un rectangle tricoté en allers-retours, puis fermé par une <strong>couture invisible</strong> (point de matelas). Une <strong>maille de couture</strong> de chaque côté disparaît dans la couture. N'importe quelle aiguille circulaire convient.<//>
+            <p class="note">À plat, tu peux aussi faire des colonnes de couleurs (intarsia).</p>`
+          : calcul?.cable?.magicLoop
+          ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(calcul.cable.cableCm, 0)} cm est trop court pour le magic loop : prends un câble de ${calcul.cable.conseille} cm.<//>`
+          : html`<${Encart}>En rond, sans couture : tout se tricote en <strong>magic loop</strong>${tailleMm ? `, sur ton aiguille de ${tailleMm} mm${aig?.cableCm ? ` à câble de ${formaterNombre(Number(aig.cableCm), 0)} cm` : ""}` : ""}.<//>`}
+        <p class="note">${texteBordures(bordures).replace("Les bordures", "Les bords").replace("sont comprises", "sont compris")} Tu peux changer de façon de tricoter jusqu'au patron.</p>
       </div>
       <div class="ecran-pied">
         <button type="button" class="bouton-principal" onClick=${continuer}>Construire ma pièce</button>

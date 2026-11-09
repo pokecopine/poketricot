@@ -8,6 +8,7 @@ import { EnTeteEtape, useProjet } from "../composants/etape.js";
 import { Piece3D } from "../composants/piece3d.js";
 import { Snood3D } from "../composants/snood3d.js";
 import { Bonnet3D } from "../composants/bonnet3d.js";
+import { Jambiere3D } from "../composants/jambiere3d.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
@@ -54,6 +55,7 @@ export function EtapeApercu({ id }) {
   // Seules les laines vraiment utilisées (une laine du projet peut attendre au Matériel sans servir).
   const utilisees = calcul?.parLaine?.length ? calcul.parLaine.map((x) => x.laine) : lainesDuProjet(projet, laines).slice(0, 1);
   const bonnet = projet.type === "bonnet";
+  const jambieres = projet.type === "jambieres";
   const snood = enRond(projet);
 
   async function creer() {
@@ -82,9 +84,16 @@ export function EtapeApercu({ id }) {
 
   return html`
     <main class="ecran">
-      <${EnTeteEtape} titre=${bonnet ? "Ton bonnet, terminé" : snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
+      <${EnTeteEtape} titre=${jambieres ? "Tes jambières, terminées" : bonnet ? "Ton bonnet, terminé" : snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
-        ${plan && bonnet
+        ${plan && jambieres
+          ? html`<${Jambiere3D} key=${`jambiere-${projet.mode}`} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
+            <div class="chiffres-cles chiffres-snood">
+              <div><strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong><span>tour × longueur</span></div>
+              <div><strong>× ${plan.exemplaires}</strong><span>une paire à tricoter</span></div>
+            </div>
+            <p class="note">Sur une jambe de mannequin (mollet de ${formaterNombre(projet.taille.molletCm, 0)} cm)${projet.mode === "plat" ? ", tricotée à plat : la couture est à l'arrière du mollet" : ""}. Une seule jambière est montrée : l'autre est la même.</p>`
+          : plan && bonnet
           ? html`<${Bonnet3D} key="bonnet" projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
             <div class="chiffres-cles chiffres-snood">
               <div><strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong><span>tour × hauteur</span></div>
@@ -102,9 +111,9 @@ export function EtapeApercu({ id }) {
               choix=${[{ valeur: "barre", libelle: "Sur une barre" }, { valeur: "cou", libelle: "Autour du cou" }]} />
             <${Piece3D} key=${pose} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose=${pose} />
             <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
-          : html`<${Encart} type="brique">${bonnet ? "Le bonnet" : snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
+          : html`<${Encart} type="brique">${jambieres ? "La jambière" : bonnet ? "Le bonnet" : snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
 
-        ${!snood && corps && !corps.proprietes.reversible &&
+        ${!snood && !jambieres && corps && !corps.proprietes.reversible &&
         html`<${Onglets} libelle=${snood ? "Côté du snood" : "Côté de l'écharpe"} valeur=${face} surChoix=${setFace}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]} />`}
 
@@ -117,7 +126,7 @@ export function EtapeApercu({ id }) {
         ${plan &&
         html`<div class="chiffres-cles">
           <div><strong>${plan.montage.mailles}</strong><span>mailles à monter</span></div>
-          <div><strong>${plan.rangs.length}</strong><span>${snood ? "tours" : "rangs"}</span></div>
+          <div><strong>${plan.rangs.length}</strong><span>${snood ? "tours" : "rangs"}${jambieres ? " × 2" : ""}</span></div>
           <div><strong>${m ? `≈ ${m.metres} m` : "?"}</strong><span>${calcul.parLaine?.length > 1 ? `de laine en tout (${calcul.parLaine.length} laines)` : c?.disponible ? `sur ${c.disponible} m` : "de laine"}</span></div>
         </div>`}
 

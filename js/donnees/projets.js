@@ -675,7 +675,7 @@ export function nomBloc(bloc, projet = null) {
 export function nomCourtBloc(bloc, projet = null) {
   if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
   if (projet?.type === "bonnet" && bloc.zone === "bas") return projet.taille?.revers ? "Bord et revers" : "Bord";
-  if (projet?.type === "jambieres" && (bloc.zone === "bas" || bloc.zone === "haut")) return "Bord";
+  if (projet?.type === "jambieres" && (bloc.zone === "bas" || bloc.zone === "haut")) return bloc.zone === "bas" ? "Bord du bas" : "Bord du haut";
   return { bas: "Bordure", corps: "Corps", bande: "Bande", haut: "Bordure", cotes: "Côtés" }[bloc.zone] || "Bloc";
 }
 

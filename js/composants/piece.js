@@ -230,8 +230,10 @@ export function DessinEcharpe({
  * (le début du tour), y depuis le bas. Les colonnes partent du marqueur, vers la gauche.
  */
 export function geometrieSnood(projet, plan) {
-  const tour = plan ? plan.largeur.reelleCm : projet.taille.tourCm;
-  const hauteur = plan ? plan.longueur.reelleCm : projet.taille.hauteurCm;
+  // Jambières (0.19.0) : tour = mollet − 2 cm, hauteur = longueur.
+  const tour = plan ? plan.largeur.reelleCm : projet.taille.tourCm ?? (projet.taille.molletCm || 0) - 2;
+  const hauteur = plan ? plan.longueur.reelleCm : projet.taille.hauteurCm ?? projet.taille.longueurCm;
+  const aPlat = projet.mode === "plat";
   const horizontaux = projet.blocs.filter((b) => b.zone !== "cotes");
   let hauteurs;
   if (plan) {
@@ -256,7 +258,8 @@ export function geometrieSnood(projet, plan) {
       let x = 0;
       colonnes.forEach((c, j) => {
         const l = (poids[j] / somme) * tour;
-        rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId, rangee: i, x, y, l, h });
+        // À plat (jambières), une colonne peut avoir sa laine (intarsia).
+        rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId: aPlat && c.laineId ? c.laineId : laineId, rangee: i, x, y, l, h });
         x += l;
       });
     } else {
@@ -274,6 +277,9 @@ export function geometrieSnood(projet, plan) {
 export function DessinSnood({
   projet, plan, couleur, laines = [], blocChoisi = null, colonneChoisie = null, surChoix = null,
   largeurPx = 300, hauteurMinPx = 84, hauteurMaxPx = 170, echelleTexture = 0.42, prefixe = "snood", libelle, reperes = true,
+  // Jambières (0.19.0) : `couture` dessine les mailles de couture sur les deux bords (à plat) au lieu du début du tour ;
+  // `extremites` = { haut, bas } écrits à gauche du dessin (« genou », « cheville »).
+  couture = false, extremites = null,
 }) {
   const geo = geometrieSnood(projet, plan);
   const teinte = (r) => couleurDeLaine(r.laineId, couleur, laines);
@@ -294,7 +300,7 @@ export function DessinSnood({
     yPx[i] = H - cumul - hPx[i];
     cumul += hPx[i];
   });
-  const mx = 4;
+  const mx = extremites ? 58 : 4;
   const my = 8;
   const bas = reperes ? 26 : 0;
   const formes = geo.rects.map((r) => {
@@ -310,7 +316,7 @@ export function DessinSnood({
   };
   return html`
     <svg width=${W + 2 * mx} height=${H + 2 * my + bas} viewBox=${`0 0 ${W + 2 * mx} ${H + 2 * my + bas}`} role="img"
-      aria-label=${libelle || "Le snood ouvert et posé à plat, avec ses blocs ; le début du tour est sur le bord droit"}
+      aria-label=${libelle || (couture ? "La jambière à plat, avant la couture, avec ses blocs" : "Le snood ouvert et posé à plat, avec ses blocs ; le début du tour est sur le bord droit")}
       style="max-width:100%;height:auto;display:block;margin:0 auto">
       <defs>
         ${Object.values(motifs).map(
@@ -335,10 +341,23 @@ export function DessinSnood({
         <rect x="0" y="0" width=${W} height=${H} rx="6" fill="none" stroke=${c.contour} stroke-opacity="0.35" />
         ${contour && html`<rect x=${f(contour.x + 1.5)} y=${f(contour.y + 1.5)} width=${f(contour.l - 3)} height=${f(contour.h - 3)}
           rx="4" fill="none" stroke="var(--accent)" stroke-width="3" pointer-events="none" />`}
-        <line x1=${W} x2=${W} y1="-6" y2=${H + 6} stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" />
-        ${reperes && html`
-          <text x=${W - 2} y=${H + 22} text-anchor="end" font-size="12" font-weight="700" fill="var(--accent)" font-family="var(--corps)">début du tour ↑</text>
-          <text x="0" y=${H + 22} font-size="12" fill="var(--texte-2)" font-family="var(--corps)">← le tour continue</text>`}
+        ${couture
+          ? html`
+            <rect x="0" y="0" width="5" height=${H} fill="#FFFDF8" opacity="0.55" pointer-events="none" />
+            <rect x=${W - 5} y="0" width="5" height=${H} fill="#FFFDF8" opacity="0.55" pointer-events="none" />
+            <line x1="5" x2="5" y1="0" y2=${H} stroke=${c.contour} stroke-width="1.2" stroke-dasharray="4 3" />
+            <line x1=${W - 5} x2=${W - 5} y1="0" y2=${H} stroke=${c.contour} stroke-width="1.2" stroke-dasharray="4 3" />
+            ${reperes && html`
+              <text x="0" y=${H + 22} font-size="12" fill="var(--texte-2)" font-family="var(--corps)">↑ couture</text>
+              <text x=${W} y=${H + 22} text-anchor="end" font-size="12" fill="var(--texte-2)" font-family="var(--corps)">couture ↑</text>`}`
+          : html`
+            <line x1=${W} x2=${W} y1="-6" y2=${H + 6} stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" />
+            ${reperes && html`
+              <text x=${W - 2} y=${H + 22} text-anchor="end" font-size="12" font-weight="700" fill="var(--accent)" font-family="var(--corps)">début du tour ↑</text>
+              <text x="0" y=${H + 22} font-size="12" fill="var(--texte-2)" font-family="var(--corps)">← le tour continue</text>`}`}
+        ${extremites && html`
+          <text x="-8" y="16" text-anchor="end" font-size="12" fill="var(--texte-2)" font-family="var(--corps)">${extremites.haut}</text>
+          <text x="-8" y=${H - 6} text-anchor="end" font-size="12" fill="var(--texte-2)" font-family="var(--corps)">${extremites.bas}</text>`}
       </g>
     </svg>`;
 }

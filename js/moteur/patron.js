@@ -684,6 +684,11 @@ export function genererPatron({
 
 /** Phrase de vérification pour un point : « le point de riz est réversible ». */
 export function texteReversible(point, piece = "echarpe") {
+  if (piece === "jambieres") {
+    return point.proprietes.reversible
+      ? `${majuscule(nomAvecArticle(point))} est réversible : les jambières peuvent se porter retournées`
+      : `${majuscule(nomAvecArticle(point))} a un envers différent : il reste à l'intérieur des jambières`;
+  }
   if (piece === "bonnet") {
     return point.proprietes.reversible
       ? `${majuscule(nomAvecArticle(point))} est réversible : l'intérieur du bonnet est joli aussi`

@@ -174,3 +174,19 @@ test("suivi de la paire : 1re jambière, une pause, puis la 2e depuis le rang 1"
   assert.equal(texteSuivi(projet, { rangsFaits: n }), `1re jambière terminée · ${Math.floor((n / (2 * n + 1)) * 100)} %`);
   assert.match(texteSuivi(projet, { rangsFaits: n + 1 }), /^2e jambière · rang 1 sur/);
 });
+
+test("la jambe de mannequin : mollet au bon tour, jambière moulée dessus, un peu lâche à la cheville", async () => {
+  const { profilDeJambe, rayonDeJambiere, nappeDeJambiere, tranchesDeJambiere, CHEVILLE, ECART_JAMBIERE } = await import("../js/rendu/jambe.js");
+  const j = profilDeJambe(40);
+  assert.ok(Math.abs(2 * Math.PI * j.molletR - 40) < 0.1);
+  // Au mollet, la jambière (plus petite) est tendue sur la jambe ; à la cheville, elle reste un peu plus large.
+  const rMollet = rayonDeJambiere(j, 32, 38);
+  assert.ok(Math.abs(rMollet - (j.rayon(32) + ECART_JAMBIERE)) < 1e-9);
+  const rCheville = rayonDeJambiere(j, CHEVILLE, 38);
+  assert.ok(rCheville > j.rayon(CHEVILLE) + ECART_JAMBIERE && rCheville < 38 / (2 * Math.PI));
+  const n = nappeDeJambiere({ profil: j, tourCm: 38, v0: 0, v1: 5, tuile: { l: 2, h: 1 } });
+  assert.equal(n.positions.length / 3, n.uv.length / 2);
+  // Le nombre de mailles est constant : u fait tout le tour en tour ÷ largeur du motif.
+  assert.ok(Math.abs(Math.max(...n.uv.filter((_, i) => i % 2 === 0)) - 19) < 1e-9);
+  assert.deepEqual(tranchesDeJambiere([{ id: "a", zone: "bas", hauteurCm: 5 }, { id: "b", zone: "corps", hauteurCm: 25 }], 30).map((t) => [t.v0, t.v1]), [[0, 5], [5, 30]]);
+});

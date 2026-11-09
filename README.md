@@ -18,6 +18,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E3c — Sections, laines du projet, intarsia | Laines du projet choisies au Matériel, corps divisé en sections (point, hauteur et laine par section), damier, intarsia à plat (une laine par colonne, petites pelotes) | ✅ (0.16.0) ; essai 📱 |
 | E4 — Snood | Snood en rond (1 ou 2 tours, enfant ou adulte), déplacement du début du tour (9 points), builder en rond, aperçu 3D en tube rigide (0.15.0), patron et suivi en tours | ✅ (0.14.0, 0.15.0) |
 | Conseils | Aiguille conseillée dans la fourchette de l'étiquette selon la pièce et le point ; avis des points selon la grosseur de la laine (mention sur les cartes, tri, critère « Pour ma laine »), motif qui tient assez de fois dans le bloc | ✅ (0.18.0) ; essai 📱 |
+| E4 — Jambières | Tube droit, de la cheville vers le genou, à tricoter 2 fois : tour du mollet et longueur mesurés (25, 35 ou 45 cm), en magic loop ou à plat avec une maille de couture de chaque côté et un assemblage au point de matelas, aperçu 3D sur une jambe de mannequin, patron et suivi de la paire | ✅ (0.19.0) ; essai 📱 |
 | E4 — Bonnet | Bonnet en rond, tout en magic loop : tailles enfant, femme, homme ou tour de tête mesuré, revers replié (points réversibles), sommet en 8 parts (point simple ou jersey), pompon, aperçu 3D sur une tête de mannequin, patron et suivi | ✅ (0.17.0) ; couverture à venir |
 | E5, E6 | Laine insuffisante, bibliothèque | À venir |
 
@@ -44,13 +45,13 @@ sw.js                 fonctionnement hors connexion et mises à jour
 css/pelote.css        couleurs et formes de l'ambiance Pelote (clair et sombre)
 js/app.js             démarrage et navigation
 js/ecrans/            un fichier par écran (projet-*.js : étapes 1 à 5 ; patron.js : patron figé et suivi)
-js/composants/        éléments réutilisables (dont echantillon3d.js et vignette3d.js : photos 3D du catalogue ; piece3d.js : écharpe finie ; snood3d.js : snood fini en tube rigide ; bonnet3d.js : bonnet fini sur une tête)
+js/composants/        éléments réutilisables (dont echantillon3d.js et vignette3d.js : photos 3D du catalogue ; piece3d.js : écharpe finie ; snood3d.js : snood fini en tube rigide ; bonnet3d.js : bonnet fini sur une tête ; jambiere3d.js : jambière finie sur une jambe)
 js/donnees/           base de données, réserve, sauvegarde, couleurs
-js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), avis selon la laine (laine.js), critères de recherche, techniques, consignes écrites
+js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), avis selon la laine (laine.js), avis pour des jambières (jambieres.js), critères de recherche, techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
-                      plan de l'écharpe (plan.js), du snood en rond (plan-rond.js) et du bonnet (plan-bonnet.js : 8 parts, sommet) et leur vérification,
+                      plan de l'écharpe (plan.js), du snood en rond (plan-rond.js) du bonnet (plan-bonnet.js : 8 parts, sommet) et des jambières (plan-jambieres.js : en rond ou à plat avec couture, la paire) et leur vérification,
                       conseil d'aiguille dans la fourchette (aiguille.js), métrage, générateur du patron et suivi
-js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (écharpe), tube rigide du snood (tube.js), tête et bonnet rigides (tete.js)
+js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (écharpe), tube rigide du snood (tube.js), tête et bonnet rigides (tete.js), jambe et jambière rigides (jambe.js)
 tests/                tests automatiques
 ```
 

@@ -79,6 +79,7 @@ export function EtapeMateriel({ id }) {
         ${projet.type === "bonnet" && (aig && cableMagicLoop(lireNombre(aig.cableCm))
           ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(lireNombre(aig.cableCm), 0)} cm est trop court pour le magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.<//>`
           : html`<p class="note">Tout le bonnet se tricote en magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.</p>`)}
+        ${projet.type === "jambieres" && html`<p class="note">En magic loop, prends un câble de ${CABLE_MAGIC_LOOP} cm ; à plat, n'importe quelle aiguille circulaire convient. Tu choisiras à l'étape Taille.</p>`}
 
         <div class="titre-section">
           <h2>3. Point principal</h2>
@@ -89,7 +90,7 @@ export function EtapeMateriel({ id }) {
           : html`<button type="button" class="bouton-secondaire" onClick=${() => naviguer(`/projet/${encodeURIComponent(projet.id)}/point/corps`)}>
               Choisir le point principal
             </button>
-            <p class="note">C'est le point du corps ${{ snood: "du snood", bonnet: "du bonnet" }[projet.type] || "de l'écharpe"} : ton échantillon se tricote dans ce point.</p>`}
+            <p class="note">C'est le point du corps ${{ snood: "du snood", bonnet: "du bonnet", jambieres: "des jambières" }[projet.type] || "de l'écharpe"} : ton échantillon se tricote dans ce point.</p>`}
 
         <${CarteEchantillon} projet=${projet} laine=${laine} point=${point} taille=${taille} echantillon=${echantillon}
           adresse=${adresseEchantillon} modifier=${modifier} />
@@ -110,7 +111,7 @@ function CartePointPrincipal({ point, couleur, type }) {
         <span class="carte-point-titre"><span>${point.nom}</span></span>
         <div class="puces" style="gap:6px">${etiquettesProprietes(point).map((t) => html`<span class="etiquette">${t}</span>`)}</div>
         ${avis.avis === "conseille"
-          ? html`<span class="note">Conseillé pour ${{ snood: "un snood", bonnet: "un bonnet" }[type] || "une écharpe"}. C'est le point du corps : ton échantillon se tricote dans ce point.</span>`
+          ? html`<span class="note">Conseillé pour ${{ snood: "un snood", bonnet: "un bonnet", jambieres: "des jambières" }[type] || "une écharpe"}. C'est le point du corps : ton échantillon se tricote dans ce point.</span>`
           : html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
       </span>
     </div>`;

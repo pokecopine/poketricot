@@ -22,6 +22,10 @@ const PIECES = [
     dessin: html`<path d="M12 38c0-16 7-26 16-26s16 10 16 26"></path><path d="M10 38h36v10H10z"></path><path d="M16 38v10M22 38v10M28 38v10M34 38v10M40 38v10"></path><circle cx="28" cy="9" r="4"></circle>`,
   },
   {
+    id: "jambieres", nom: "Jambières",
+    dessin: html`<path d="M12 8h12v40H12z"></path><path d="M32 8h12v40H32z"></path><path d="M12 14h12M12 42h12M32 14h12M32 42h12"></path>`,
+  },
+  {
     id: "couverture", nom: "Couverture",
     dessin: html`<rect x="8" y="10" width="40" height="36" rx="3"></rect><path d="M8 18h40M8 38h40M16 10v36M40 10v36"></path>`,
   },

@@ -253,7 +253,7 @@ export function CataloguePoints({ selection = null } = {}) {
     if (piece) {
       familles.push({
         id: "peu-adaptes",
-        titre: selection?.titrePeuAdaptes || `Peu adaptés à ${nomPiece === "écharpe" ? "l'écharpe" : nomPiece === "couverture" ? "la couverture" : `au ${nomPiece}`}`,
+        titre: selection?.titrePeuAdaptes || `Peu adaptés à ${nomPiece === "écharpe" ? "l'écharpe" : nomPiece === "couverture" ? "la couverture" : nomPiece === "jambières" ? "des jambières" : `au ${nomPiece}`}`,
         points: POINTS.filter((p) => avis(p) === "deconseille"),
         ouverte: false,
         alerte: true,
@@ -469,6 +469,13 @@ const AIDES_ZONES_SNOOD = {
   bande: "Une bande décorative tout autour du snood.",
 };
 
+const AIDES_ZONES_JAMBIERES = {
+  corps: "Le point du corps est aussi le point de ton échantillon.",
+  bas: "Le bord du bas tient la jambière à la cheville : les côtes sont élastiques et ne roulent pas.",
+  haut: "Le bord du haut tient la jambière sous le genou : les côtes sont élastiques et ne roulent pas.",
+  bande: "Une bande décorative tout autour de la jambière.",
+};
+
 export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
   const { projet, laines, aiguilles, echantillons, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<main class="ecran"><${EnTete} titre="Projet introuvable" secours="/" /></main>`;
@@ -500,10 +507,12 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
       laine,
       motif,
       actuel: c.pointId,
-      avis: (p) => avisPourBloc(p, projet.type, "corps", { colonne: true }),
+      avis: (p) => avisPourBloc(p, projet.type, "corps", { colonne: true, rond: enRond(projet) }),
       titre: `Point : colonne ${iColonne + 1} ${bloc.section ? `de la ${minusculeNom(nomBloc(bloc, projet))}` : bloc.zone === "corps" ? "du corps" : "de la bande"}`,
-      aide: projet.type === "snood" || projet.type === "bonnet"
+      aide: enRond(projet)
         ? "Une colonne autour du tour, à côté des autres : chaque point garde son motif. Un point qui déplace le début du tour prend tout le tour."
+        : projet.type === "jambieres"
+        ? "Une colonne dans la longueur de la jambière, à côté des autres : chaque point garde son motif."
         : "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
       secours: retourBuilder,
       choisir: async (pointId) => {
@@ -520,13 +529,13 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
     motif,
     actuel: bloc.pointId,
     avis: (p) => avisPourBloc(p, projet.type, bloc.zone, { revers: projet.type === "bonnet" && !!projet.taille?.revers && bloc.zone === "bas" }),
-    titrePeuAdaptes: { bas: projet.type === "bonnet" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
+    titrePeuAdaptes: { bas: projet.type === "bonnet" || projet.type === "jambieres" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", haut: projet.type === "jambieres" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
     titreRefuses: "Pas réversibles : l'envers se verrait une fois replié",
     messageRefus: "Avec un revers, choisis un point réversible.",
-    titre: section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : projet.type === "bonnet" && bloc.zone === "bas" ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
+    titre: section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : (projet.type === "bonnet" && bloc.zone === "bas") || (projet.type === "jambieres" && bloc.zone !== "corps" && bloc.zone !== "bande") ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
     aide: bloc.section && !section1
-      ? `Une section du corps, sur ${projet.type === "snood" || projet.type === "bonnet" ? "tout le tour" : "toute la largeur"} : chaque section a son point.`
-      : (projet.type === "bonnet" ? AIDES_ZONES_BONNET : projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
+      ? `Une section du corps, sur ${enRond(projet) || projet.type === "jambieres" ? "tout le tour" : "toute la largeur"} : chaque section a son point.`
+      : (projet.type === "jambieres" ? AIDES_ZONES_JAMBIERES : projet.type === "bonnet" ? AIDES_ZONES_BONNET : projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
     choisir: async (pointId) => {
       await modifier((p) => avecPointDuBloc(p, blocId, pointId));

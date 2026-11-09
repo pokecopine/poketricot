@@ -401,7 +401,11 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       const tr = gestesDeTransition(maillesCorps, mailles[i], cote);
       if (!tr) return echec("L'écart de mailles entre deux blocs est trop grand pour un seul rang de transition.", b);
       ajouterRang({ blocId: b.id, laineId, type: "transition", numeroMotif: null, rangsDuMotif: null }, { pointId: null, rang: null, transition: true, gestes: tr.gestes }, hRang);
-      explications.push(explicationTransition(maillesCorps, mailles[i], info.colonnes ? info.colonnes[0].point : point));
+      const pointSuivant = info.colonnes ? info.colonnes[0].point : point;
+      // Jambières à plat : quelques mailles seulement, pour que le motif tombe juste (pas une question de largeur).
+      explications.push(bordsGardentLeCorps && Math.abs(mailles[i] - maillesCorps) <= 12
+        ? `Rang de transition : ${Math.abs(mailles[i] - maillesCorps) > 1 ? `${Math.abs(mailles[i] - maillesCorps)} ${mailles[i] > maillesCorps ? "augmentations réparties" : "diminutions réparties"}` : `1 ${mailles[i] > maillesCorps ? "augmentation" : "diminution"}`} pour passer de ${maillesCorps} à ${mailles[i]} mailles, pour que ${nomAvecArticle(pointSuivant)} ${pointSuivant.article === "les" ? "tombent" : "tombe"} juste`
+        : explicationTransition(maillesCorps, mailles[i], pointSuivant));
       maillesCorps = mailles[i];
     }
     if (info.colonnes) {
