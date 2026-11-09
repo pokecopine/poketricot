@@ -144,9 +144,12 @@ const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
  *     couture (jambières à plat, 0.19.0) : 1 maille de chaque côté, en jersey (endroit sur l'endroit, envers sur l'envers) ;
  *     elle disparaît dans la couture, donc elle ne compte pas dans la largeur.
  *   bordsGardentLeCorps: les bordures gardent les mailles du corps dès que leur motif y tombe juste (comme en rond).
+ *   bords (couverture, 0.21.0) : { droite, gauche }, chacun { lisiere: "chainette" | "couture" | "aucune", bande: bool } ;
+ *     remplace lisieres et la symétrie des bandes latérales. Une bande en cm (bloc cotes : largeurCm à droite,
+ *     largeurCmG à gauche) est convertie en mailles avec la densité de son point ; laineId du bloc cotes = sa laine.
  * }
  */
-export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres = "chainette", bordsGardentLeCorps = false }) {
+export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres = "chainette", bordsGardentLeCorps = false, bords = null }) {
   const erreurs = [];
   const explications = [];
   const nomDe = (b) => b.nom || NOMS_DES_ZONES[b.zone];
@@ -210,22 +213,40 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   const dCorps = infos.get(corps.id).densite;
 
   // ---- Largeur : lisières, bandes latérales, puis corps ----
-  const nLisiere = lisieres === "chainette" || lisieres === "couture" ? 1 : 0;
+  // Chaque côté : sa lisière (chaînette, couture ou rien) et sa bande latérale (ou non). Par défaut, les deux pareils.
+  const cotes = bords || {
+    droite: { lisiere: lisieres, bande: !!lateral },
+    gauche: { lisiere: lisieres, bande: !!lateral },
+  };
+  const nLis = (c) => (c.lisiere === "chainette" || c.lisiere === "couture" ? 1 : 0);
+  const nLisD = nLis(cotes.droite);
+  const nLisG = nLis(cotes.gauche);
   // Les mailles de couture disparaissent dans la couture : elles ne comptent pas dans la largeur finie.
-  const lisiereCm = lisieres === "couture" ? 0 : (nLisiere * 10) / dCorps.mailles;
-  let nBande = 0;
-  let bandeCm = 0;
-  if (lateral) {
+  const lisCm = (c) => (c.lisiere === "chainette" ? 10 / dCorps.mailles : 0);
+  const lisiereCm = (lisCm(cotes.droite) + lisCm(cotes.gauche)) / 2;
+  const nBordure = (cote) => {
+    if (!cotes[cote].bande) return { n: 0, cm: 0 };
+    if (!lateral) return { erreur: "Il manque le bloc des bandes latérales." };
     const { point, densite } = infos.get(lateral.id);
-    const voulu = Math.max(1, Math.round(lateral.largeurMailles || 0));
-    nBande = maillesLesPlusProches(point, voulu, "plat");
-    if (nBande === null) return echec(`${nomAvecArticle(point)} ne tombe juste sur aucun nombre de mailles proche.`, lateral);
-    const e = explicationAjustement(point, voulu, nBande, " des bandes latérales");
-    if (e) explications.push(e);
-    bandeCm = (nBande * 10) / densite.mailles;
-  }
-  const corpsCm = largeurCm - 2 * bandeCm - 2 * lisiereCm;
-  if (corpsCm < 3) return echec("L'écharpe est trop étroite pour ses bandes latérales.", lateral || corps);
+    const cm = cote === "gauche" && lateral.largeurCmG != null ? lateral.largeurCmG : lateral.largeurCm;
+    const voulu = Math.max(1, Math.round(cm != null ? (cm * densite.mailles) / 10 : lateral.largeurMailles || 0));
+    const n = maillesLesPlusProches(point, voulu, "plat");
+    if (n === null) return { erreur: `${nomAvecArticle(point)} ne tombe juste sur aucun nombre de mailles proche.` };
+    if (cm == null) {
+      const e = explicationAjustement(point, voulu, n, " des bandes latérales");
+      if (e && !explications.includes(e)) explications.push(e);
+    }
+    return { n, cm: (n * 10) / densite.mailles };
+  };
+  const bD = nBordure("droite");
+  const bG = nBordure("gauche");
+  if (bD.erreur || bG.erreur) return echec(bD.erreur || bG.erreur, lateral);
+  const nBandeD = bD.n;
+  const nBandeG = bG.n;
+  const nBande = Math.max(nBandeD, nBandeG);
+  const bandeCm = (bD.cm + bG.cm) / 2;
+  const corpsCm = largeurCm - bD.cm - bG.cm - lisCm(cotes.droite) - lisCm(cotes.gauche);
+  if (corpsCm < 3) return echec("La pièce est trop étroite pour ses bandes latérales.", lateral || corps);
 
   // Un même nombre de mailles pour tous les blocs horizontaux, sinon des rangs de transition.
   const listeH = horizontaux.map((b) => infos.get(b.id));
@@ -342,15 +363,18 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   for (const [id, h] of r.hauteurs) hauteurs.set(id, h);
 
   // ---- Rangs ----
-  const bande = lateral ? infos.get(lateral.id).point : null;
+  const bande = lateral && (nBandeD || nBandeG) ? infos.get(lateral.id).point : null;
   let cote = premierCote(infos.get(horizontaux[0].id).point);
-  let suiteBande = null;
-  if (bande) {
-    const p = preparerPoint(bande, cote, nBande);
+  const suites = {};
+  for (const [zone, n] of [["bandeD", nBandeD], ["bandeG", nBandeG]]) {
+    if (!bande || !n) continue;
+    const p = preparerPoint(bande, cote, n);
     if (p.erreur) return echec(p.erreur, lateral);
-    suiteBande = p;
+    suites[zone] = { p, n };
   }
-  const rangBande = (t) => rangPrepare(bande, suiteBande, t, nBande);
+  const rangBande = (zone, t) => rangPrepare(bande, suites[zone].p, t, suites[zone].n);
+  // Couverture : la bordure de côté a sa propre laine (celle de toute la bordure).
+  const laineBande = lateral && lateral.laineId !== undefined && bords ? lateral.laineId : undefined;
 
   const rangs = [];
   // Chaque segment porte sa laine (null = principale). Les bords droits (lisière, bande latérale) prennent la laine
@@ -363,13 +387,16 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
     const laineGauche = colonnesZ ? laineDe1(colonnesZ.at(-1)) : laineId;
     const laineDe = (zone) => (zone.endsWith("D") ? laineDroite : laineGauche);
     const bandes = (zone) => {
-      if (!bande) return [];
-      const { rang: r, entree } = rangBande(t);
-      return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, entree), laineId: laineDe(zone) }];
+      if (!suites[zone]) return [];
+      const { rang: r, entree } = rangBande(zone, t);
+      return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, entree), laineId: laineBande !== undefined ? laineBande : laineDe(zone), ...(bords ? { bordure: true } : {}) }];
     };
-    const lisiere = (zone, code) => (nLisiere
-      ? [{ zone, pointId: null, rang: null, lisiere: true, ...(lisieres === "couture" ? { couture: true } : {}), gestes: [lisieres === "couture" ? (c === "E" ? "end" : "env") : code], laineId: laineDe(zone) }]
-      : []);
+    const lisiere = (zone, code) => {
+      const type = (zone === "bordD" ? cotes.droite : cotes.gauche).lisiere;
+      if (type !== "chainette" && type !== "couture") return [];
+      const couture = type === "couture";
+      return [{ zone, pointId: null, rang: null, lisiere: true, ...(couture ? { couture: true } : {}), gestes: [couture ? (c === "E" ? "end" : "env") : code], laineId: laineDe(zone) }];
+    };
     // Colonnes : sur un rang endroit, on part du bord droit (colonne 1) ; sur l'envers, de la dernière colonne.
     const corpsZ = colonnesZ
       ? (c === "E" ? colonnesZ : [...colonnesZ].reverse())
@@ -472,21 +499,32 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   }
 
   const montage = {
-    mailles: 2 * nLisiere + 2 * nBande + mailles[0],
-    repartition: { bordD: nLisiere, bandeD: nBande, corps: mailles[0], bandeG: nBande, bordG: nLisiere },
+    mailles: nLisD + nBandeD + mailles[0] + nBandeG + nLisG,
+    repartition: { bordD: nLisD, bandeD: nBandeD, corps: mailles[0], bandeG: nBandeG, bordG: nLisG },
   };
+  const nLisiere = Math.max(nLisD, nLisG);
+  const typeLisiere = bords ? (cotes.droite.lisiere === cotes.gauche.lisiere ? cotes.droite.lisiere : "mixte") : lisieres;
   const derniers = rangs[rangs.length - 1].mailles;
   const plan = {
     type: "echarpe",
     montage,
-    lisieres: { type: lisieres, mailles: nLisiere },
-    bandesLaterales: lateral ? { blocId: lateral.id, pointId: lateral.pointId, mailles: nBande, largeurCm: bandeCm } : null,
+    lisieres: { type: typeLisiere, mailles: nLisiere, droite: nLisD, gauche: nLisG },
+    bords: {
+      droite: { lisiere: cotes.droite.lisiere, mailles: nLisD, bande: nBandeD },
+      gauche: { lisiere: cotes.gauche.lisiere, mailles: nLisG, bande: nBandeG },
+    },
+    bandesLaterales: bande
+      ? {
+        blocId: lateral.id, pointId: lateral.pointId, mailles: nBande, largeurCm: bandeCm,
+        maillesD: nBandeD, maillesG: nBandeG, largeurCmD: bD.cm, largeurCmG: bG.cm, laineId: laineBande,
+      }
+      : null,
     blocs: plansDesBlocs,
     rangs,
     rabattage: { mailles: derniers },
     largeur: {
       viseeCm: largeurCm,
-      reelleCm: largeurBlocCm(corps, corpsIndex) + 2 * bandeCm + 2 * lisiereCm,
+      reelleCm: largeurBlocCm(corps, corpsIndex) + bD.cm + bG.cm + 2 * lisiereCm,
     },
     longueur: { viseeCm: longueurCm, reelleCm: rangs.reduce((t, r) => t + r.hauteurCm, 0) },
     estime: Object.values(densites).some((d) => d && d.statut !== "mesuree"),

@@ -8,6 +8,7 @@ import { planEcharpe, MAILLES_MAX_BANDE_LATERALE } from "../moteur/plan.js";
 import { planSnood, cableTropLong } from "../moteur/plan-rond.js";
 import { planBonnet, cableMagicLoop } from "../moteur/plan-bonnet.js";
 import { planJambiere, AISANCE_JAMBIERES, EXEMPLAIRES_JAMBIERES } from "../moteur/plan-jambieres.js";
+import { planCouverture, montageConseille, PANNEAUX } from "../moteur/plan-couverture.js";
 import { maillesMinimum, maillesConviennent, convertirEnRond } from "../moteur/simulateur.js";
 import { repartirMailles, maillesVoisines, totauxEgaux, COLONNES_MIN, COLONNES_MAX } from "../moteur/colonnes.js";
 import { metrageNecessaire, comparerALaLaine } from "../moteur/metrage.js";
@@ -27,13 +28,120 @@ export const ETAPES = [
 export const etapeParCle = (cle) => ETAPES.find((e) => e.cle === cle) || ETAPES[0];
 export const cheminEtape = (projet, numero = projet.etape) => `/projet/${encodeURIComponent(projet.id)}/${ETAPES[numero - 1].cle}`;
 
-export const TYPES_DISPONIBLES = ["echarpe", "snood", "bonnet", "jambieres"];
+export const TYPES_DISPONIBLES = ["echarpe", "snood", "bonnet", "jambieres", "couverture"];
 
 /** La pièce se tricote-t-elle en rond ? */
 export const enRond = (projet) => projet?.type === "snood" || projet?.type === "bonnet" || projet?.mode === "rond";
 
 /** Nom de la pièce pour les phrases : « le snood », « le bonnet », « l'écharpe ». */
 export const nomPiece = (projet) => ({ snood: "le snood", bonnet: "le bonnet", jambieres: "la jambière", couverture: "la couverture" })[projet?.type] || "l'écharpe";
+
+// ---------------- Couverture (E4, 0.21.0) ----------------
+
+/** Tailles de couverture (maquettes du 09/11) : largeur × longueur, avec le décor de l'aperçu. */
+export const TAILLES_COUVERTURE = [
+  { preset: "plaid", nom: "Plaid", detail: "Pour le canapé", largeurCm: 110, longueurCm: 140, decor: "canape" },
+  { preset: "lit1", nom: "Lit 1 personne", detail: "Lit de 90 cm, retombe sur les côtés", largeurCm: 140, longueurCm: 200, decor: "lit1" },
+  { preset: "lit2", nom: "Lit 2 personnes", detail: "Lit de 140 à 160 cm", largeurCm: 200, longueurCm: 220, decor: "lit2" },
+];
+export const LIMITES_COUVERTURE = { largeur: [50, 260], longueur: [50, 260] };
+/** Bordure tout autour par défaut : 4 cm de point mousse (09/11). */
+export const BORDURE_COUVERTURE = 4;
+export const LIMITES_BORDURE = [1, 15];
+
+export const presetCouverture = (largeurCm, longueurCm) =>
+  TAILLES_COUVERTURE.find((t) => t.largeurCm === largeurCm && t.longueurCm === longueurCm)?.preset || null;
+
+/** Le décor de l'aperçu : celui de la taille, sinon d'après la largeur. */
+export function decorCouverture(taille) {
+  const t = TAILLES_COUVERTURE.find((x) => x.preset === taille?.preset);
+  if (t) return t.decor;
+  const l = taille?.largeurCm || 0;
+  return l < 125 ? "canape" : l < 170 ? "lit1" : "lit2";
+}
+
+export function tailleCouverture(preset = "lit1") {
+  const t = TAILLES_COUVERTURE.find((x) => x.preset === preset) || TAILLES_COUVERTURE[1];
+  return { preset: t.preset, largeurCm: t.largeurCm, longueurCm: t.longueurCm, montage: null, panneaux: 2, panneauxAuto: true, bordureSeparee: false };
+}
+
+/** Change la taille (preset) ou une mesure ; une mesure tapée passe en mesures libres. */
+export function avecTailleCouverture(projet, { preset, largeurCm, longueurCm }) {
+  const t = projet.taille || tailleCouverture();
+  let suite;
+  if (preset) {
+    const x = TAILLES_COUVERTURE.find((y) => y.preset === preset);
+    suite = { ...t, preset, largeurCm: x.largeurCm, longueurCm: x.longueurCm };
+  } else {
+    const l = largeurCm !== undefined ? borne(largeurCm, LIMITES_COUVERTURE.largeur) : t.largeurCm;
+    const h = longueurCm !== undefined ? borne(longueurCm, LIMITES_COUVERTURE.longueur) : t.longueurCm;
+    suite = { ...t, largeurCm: l, longueurCm: h, preset: presetCouverture(l, h) };
+  }
+  const nom = projet.nomAuto && projet.nom ? projet.nom.replace(/^(Couverture|Plaid)\b/, suite.preset === "plaid" ? "Plaid" : "Couverture") : projet.nom;
+  return { ...projet, nom, taille: suite };
+}
+
+/** Montage effectif : celui choisi, sinon le conseil du câble. */
+export function montageCouverture(projet, cableCm) {
+  const t = projet.taille || {};
+  const conseil = montageConseille(t.largeurCm || 0, cableCm);
+  const montage = t.montage || conseil.montage;
+  const panneaux = montage === "panneaux" ? (t.panneauxAuto !== false && conseil.montage === "panneaux" ? conseil.panneaux : t.panneaux || 2) : 1;
+  return { montage, panneaux, conseil };
+}
+
+export function avecMontageCouverture(projet, montage) {
+  return { ...projet, taille: { ...projet.taille, montage } };
+}
+
+export function avecPanneauxCouverture(projet, n) {
+  return { ...projet, taille: { ...projet.taille, montage: "panneaux", panneaux: borne(n, PANNEAUX), panneauxAuto: false } };
+}
+
+const estBordureCouverture = (b) => b.zone === "bas" || b.zone === "haut" || b.zone === "cotes";
+
+/** Le point de la bordure : les quatre côtés ensemble. */
+export function avecPointBordure(projet, pointId) {
+  return { ...projet, blocs: projet.blocs.map((b) => (estBordureCouverture(b) && b.id !== undefined && ["bas", "haut", "cotes"].includes(b.id) ? { ...b, pointId } : b)) };
+}
+
+/** La laine de la bordure : les quatre côtés ensemble (null = principale). */
+export function avecLaineBordure(projet, laineId) {
+  return { ...projet, blocs: projet.blocs.map((b) => (["bas", "haut", "cotes"].includes(b.id) ? { ...b, laineId: laineId || null } : b)) };
+}
+
+/** Largeur de la bordure : les quatre côtés, ou un seul (bas, haut, gauche, droite) quand ils sont réglés à part. */
+export function avecLargeurBordure(projet, cm, cote = null) {
+  const v = borne(cm, LIMITES_BORDURE);
+  const tous = !cote || !projet.taille?.bordureSeparee;
+  return {
+    ...projet,
+    blocs: projet.blocs.map((b) => {
+      if (b.id === "bas" && (tous || cote === "bas")) return { ...b, hauteurCm: v };
+      if (b.id === "haut" && (tous || cote === "haut")) return { ...b, hauteurCm: v };
+      if (b.id === "cotes") {
+        if (tous) return { ...b, largeurCm: v, largeurCmG: v };
+        if (cote === "droite") return { ...b, largeurCm: v };
+        if (cote === "gauche") return { ...b, largeurCmG: v };
+      }
+      return b;
+    }),
+  };
+}
+
+export function avecBordureSeparee(projet, oui) {
+  const suite = { ...projet, taille: { ...projet.taille, bordureSeparee: !!oui } };
+  if (oui) return suite;
+  const bas = projet.blocs.find((b) => b.id === "bas")?.hauteurCm || BORDURE_COUVERTURE;
+  return avecLargeurBordure(suite, bas);
+}
+
+/** Largeurs de la bordure : { bas, haut, gauche, droite } en cm. */
+export function largeursBordure(projet) {
+  const g = (id) => projet.blocs.find((b) => b.id === id);
+  const c = g("cotes");
+  return { bas: g("bas")?.hauteurCm ?? 0, haut: g("haut")?.hauteurCm ?? 0, droite: c?.largeurCm ?? 0, gauche: c?.largeurCmG ?? c?.largeurCm ?? 0 };
+}
 
 // ---------------- Jambières (E4, 0.19.0) ----------------
 
@@ -177,6 +285,14 @@ export function tailleSnood(pub = "adulte", preset = "1tour") {
  * Écharpe : bordures et bandes latérales en point mousse ; snood : bordures en côtes 1/1 (décision du 02/11), sans bandes latérales.
  */
 export function blocsParDefaut(pointPrincipal = "", type = "echarpe") {
+  if (type === "couverture") {
+    return [
+      { id: "bas", zone: "bas", pointId: "mousse", hauteurCm: BORDURE_COUVERTURE },
+      { id: "corps", zone: "corps", pointId: pointPrincipal },
+      { id: "haut", zone: "haut", pointId: "mousse", hauteurCm: BORDURE_COUVERTURE },
+      { id: "cotes", zone: "cotes", pointId: "mousse", largeurCm: BORDURE_COUVERTURE, largeurCmG: BORDURE_COUVERTURE },
+    ];
+  }
   if (type === "jambieres") {
     return [
       { id: "bas", zone: "bas", pointId: "cotes-1-1", hauteurCm: BORD_JAMBIERES },
@@ -207,6 +323,25 @@ export function blocsParDefaut(pointPrincipal = "", type = "echarpe") {
 }
 
 export function nouveauProjet({ type = "echarpe", nom = "" } = {}) {
+  if (type === "couverture") {
+    return {
+      nom: nom.trim() || "Couverture",
+      nomAuto: !nom.trim(),
+      type,
+      statut: "conception",
+      etape: 1,
+      laineId: "",
+      autresLaines: [],
+      aiguillesId: "",
+      pointPrincipal: "",
+      echantillonId: "",
+      sansEchantillon: false,
+      taille: tailleCouverture(),
+      mode: "plat",
+      lisieres: "aucune",
+      blocs: blocsParDefaut("", "couverture"),
+    };
+  }
   if (type === "jambieres") {
     return {
       nom: nom.trim() || "Jambières",
@@ -292,8 +427,10 @@ export function nomCouleurLaine(hex) {
 }
 
 /** « Écharpe terracotta » : le nom proposé, tant que Deborah ne l'a pas changé. */
-export function nomPropose(type, laine) {
-  const base = { echarpe: "Écharpe", snood: "Snood", bonnet: "Bonnet", jambieres: "Jambières", couverture: "Couverture" }[type] || "Projet";
+export function nomPropose(type, laine, taille = null) {
+  const base = type === "couverture" && taille?.preset === "plaid"
+    ? "Plaid"
+    : { echarpe: "Écharpe", snood: "Snood", bonnet: "Bonnet", jambieres: "Jambières", couverture: "Couverture" }[type] || "Projet";
   const c = laine ? nomCouleurLaine(laine.couleur) : "";
   return c ? `${base} ${c}` : base;
 }
@@ -353,6 +490,17 @@ export const zoneAvis = (zone) => (zone === "bas" || zone === "haut" ? "bordure"
  * et pour les bandes latérales, les motifs trop larges sont écartés.
  */
 export function avisPourBloc(point, piece, zone, { colonne = false, revers = false, rond = false } = {}) {
+  // Bordure d'une couverture (0.21.0) : un seul point pour les quatre côtés ; le plus défavorable des deux avis.
+  if (piece === "couverture" && (zone === "bas" || zone === "haut" || zone === "cotes")) {
+    const ordre = { conseille: 0, possible: 1, deconseille: 2 };
+    const a = avisPour(point, piece, "bordure");
+    const b = avisPour(point, piece, "cotes");
+    const min = maillesMinimum(point, "plat");
+    if (min > MAILLES_MAX_BANDE_LATERALE) {
+      return { avis: "deconseille", raison: `Motif trop large pour une bordure de côté : il lui faut au moins ${min} mailles.` };
+    }
+    return ordre[b.avis] > ordre[a.avis] ? b : a;
+  }
   // Bord d'un bonnet avec revers : l'intérieur du bord se voit une fois replié (décision du 06/11).
   if (revers && zone === "bas" && !point.proprietes?.reversible) {
     return { avis: "refuse", raison: "Pas réversible : l'envers se verrait une fois le bord replié." };
@@ -381,7 +529,9 @@ export function avisPointPrincipal(point, type) {
  */
 export function largeurDuBlocCm(projet, bloc, { colonne = false } = {}) {
   if (!projet?.taille || bloc?.zone === "cotes") return null;
-  const total = projet.type === "bonnet" ? tourDuBonnet(projet) : projet.type === "jambieres" ? tourDesJambieres(projet) : projet.type === "snood" ? projet.taille.tourCm : projet.taille.largeurCm;
+  if (projet.type === "couverture" && (bloc?.zone === "bas" || bloc?.zone === "haut")) return null;
+  const parts = projet.type === "couverture" && projet.taille?.montage === "panneaux" ? Math.max(2, projet.taille.panneaux || 2) : 1;
+  const total = projet.type === "bonnet" ? tourDuBonnet(projet) : projet.type === "jambieres" ? tourDesJambieres(projet) : projet.type === "snood" ? projet.taille.tourCm : projet.taille.largeurCm / parts;
   if (!(total > 0)) return null;
   const n = colonne ? bloc?.colonnes?.length || 1 : 1;
   return total / n;
@@ -412,6 +562,8 @@ export function avecPointPrincipal(projet, pointId) {
 export function avecPointDuBloc(projet, blocId, pointId) {
   const bloc = projet.blocs.find((b) => b.id === blocId);
   if (!bloc) return projet;
+  // Couverture (0.21.0) : un seul point pour toute la bordure.
+  if (projet.type === "couverture" && ["bas", "haut", "cotes"].includes(blocId)) return avecPointBordure(projet, pointId);
   if (bloc.zone === "corps" && !(bloc.section && bloc.id !== premiereSection(projet)?.id)) return avecPointPrincipal(projet, pointId);
   return { ...projet, blocs: projet.blocs.map((b) => (b.id === blocId ? { ...b, pointId } : b)) };
 }
@@ -578,6 +730,12 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
       mode: projet.mode === "plat" ? "plat" : "rond", tourCm: tourDesJambieres(projet), longueurCm: projet.taille.longueurCm,
       blocs: blocs.filter((b) => b.zone !== "cotes"), densites,
     })
+    : projet.type === "couverture"
+    ? planCouverture({
+      largeurCm: projet.taille.largeurCm, longueurCm: projet.taille.longueurCm,
+      panneaux: montageCouverture(projet, lireNombre(aiguilles?.cableCm)).panneaux,
+      blocs: blocs.map((b) => (b.zone === "cotes" ? { ...b, laineId: laineDuBloc(projet, b, reserve) } : b)), densites,
+    })
     : projet.type === "snood"
     ? planSnood({ tourCm: projet.taille.tourCm, hauteurCm: projet.taille.hauteurCm, blocs: blocs.filter((b) => b.zone !== "cotes"), densites })
     : planEcharpe({
@@ -617,6 +775,13 @@ export function calculerProjet({ projet, laine, aiguilles, echantillons, laines 
     // Bonnet : tout en magic loop, il faut un câble assez long (décision du 06/11).
     cable = cableMagicLoop(lireNombre(aiguilles?.cableCm));
     if (cable) cable = { ...cable, cableCm: lireNombre(aiguilles.cableCm), magicLoop: true };
+  }
+  // Couverture (0.21.0) : ce que porte le câble, et le montage conseillé.
+  if (projet.type === "couverture") {
+    const cableCm = lireNombre(aiguilles?.cableCm);
+    const m = montageCouverture(projet, cableCm);
+    const aTricoter = m.panneaux > 1 && r.plan?.panneaux ? Math.max(...r.plan.panneaux.map((p) => p.largeur.reelleCm)) : projet.taille.largeurCm;
+    cable = { couverture: true, cableCm, ...m.conseil, montage: m.montage, panneaux: m.panneaux, largeurATricoterCm: aTricoter, tropPourCeMontage: m.conseil.porteeCm !== null && aTricoter > m.conseil.porteeCm };
   }
   return {
     ...r, densites, echantillon, metrage, laineSuffit, parLaine, avertissements, cable,
@@ -668,6 +833,7 @@ export function nomBloc(bloc, projet = null) {
   if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
   if (projet?.type === "bonnet" && bloc.zone === "bas") return projet.taille?.revers ? "Bord et revers" : "Bord";
   if (projet?.type === "jambieres" && (bloc.zone === "bas" || bloc.zone === "haut")) return bloc.zone === "bas" ? "Bord du bas" : "Bord du haut";
+  if (projet?.type === "couverture" && ["bas", "haut", "cotes"].includes(bloc.zone)) return "Bordure tout autour";
   return { bas: "Bordure du bas", corps: "Corps", bande: "Bande", haut: "Bordure du haut", cotes: "Bandes latérales" }[bloc.zone] || "Bloc";
 }
 
@@ -676,6 +842,7 @@ export function nomCourtBloc(bloc, projet = null) {
   if (estSection(bloc) && projet) return `Section ${numeroSection(projet, bloc)}`;
   if (projet?.type === "bonnet" && bloc.zone === "bas") return projet.taille?.revers ? "Bord et revers" : "Bord";
   if (projet?.type === "jambieres" && (bloc.zone === "bas" || bloc.zone === "haut")) return bloc.zone === "bas" ? "Bord du bas" : "Bord du haut";
+  if (projet?.type === "couverture" && ["bas", "haut", "cotes"].includes(bloc.zone)) return "Bordure";
   return { bas: "Bordure", corps: "Corps", bande: "Bande", haut: "Bordure", cotes: "Côtés" }[bloc.zone] || "Bloc";
 }
 
@@ -1047,6 +1214,22 @@ export function texteSuivi(projet, suivi) {
   const fait = suivi?.rangsFaits || 0;
   const tour = enRond(projet);
   if (!total) return "Patron créé";
+  // Couverture en panneaux (0.21.0) : chaque panneau, puis l'assemblage.
+  const panneaux = projet.patron?.panneaux;
+  if (panneaux) {
+    const rangs = panneaux.reduce((t, n) => t + n, 0);
+    if (fait === 0) return `Patron prêt · ${panneaux.length} panneaux de ${panneaux[0]} rangs${projet.patron?.approximatif ? " · tailles approximatives" : ""}`;
+    let f = fait;
+    let faits = 0;
+    for (const [i, n] of panneaux.entries()) {
+      if (f < n) return `Panneau ${i + 1} · rang ${f + 1} sur ${n} · ${Math.floor(((faits + f) / rangs) * 100)} %`;
+      if (f === n) return `Panneau ${i + 1} terminé · ${Math.floor(((faits + n) / rangs) * 100)} %`;
+      f -= n + 1;
+      faits += n;
+    }
+    const a = suivi?.assemblage;
+    return a?.section ? `Assemblage · couture ${a.section} sur ${projet.patron.sections}` : "Assemblage";
+  }
   if (fait === 0) return `Patron prêt · ${total} ${tour ? "tours" : "rangs"}${(projet.patron?.exemplaires || 1) > 1 ? ` × ${projet.patron.exemplaires}` : ""}${projet.patron?.approximatif ? " · tailles approximatives" : ""}`;
   // Jambières (0.19.0) : deux exemplaires, une pause entre les deux.
   const ex = projet.patron?.exemplaires || 1;

@@ -352,7 +352,7 @@ export function CataloguePoints({ selection = null } = {}) {
     }));
     familles = [...marques, ...familles];
     // Choix du point des bandes latérales : les points qui tiennent les bords, en tête et ouverts (0.13.0).
-    if (zone === "cotes") {
+    if (zone === "cotes" || (selection?.piece === "couverture" && (zone === "bas" || zone === "haut"))) {
       familles.unshift({
         id: "pour-cotes", titre: "Conseillés pour les côtés", ouverte: true, classe: "famille-cotes",
         points: POINTS.filter((p) => avis(p) === "conseille"),
@@ -570,6 +570,7 @@ const AIDES_ZONES = {
   corps: "Le point du corps est aussi le point de ton échantillon.",
   bas: "La bordure du bas empêche l'écharpe de rouler : les points qui ne roulent pas sont proposés d'abord.",
   haut: "La bordure du haut empêche l'écharpe de rouler : les points qui ne roulent pas sont proposés d'abord.",
+  bordureCouverture: "Un seul point pour les quatre côtés de la bordure : les points qui tiennent les bords et ne roulent pas sont proposés en tête.",
   cotes: "Les bandes latérales bordent l'écharpe sur toute sa longueur : les points qui tiennent les bords et ne roulent pas sont proposés en tête.",
   bande: "Une bande décorative dans la longueur de l'écharpe.",
 };
@@ -646,12 +647,13 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
     motif,
     actuel: bloc.pointId,
     avis: (p) => avisPourBloc(p, projet.type, bloc.zone, { revers: projet.type === "bonnet" && !!projet.taille?.revers && bloc.zone === "bas" }),
-    titrePeuAdaptes: { bas: projet.type === "bonnet" || projet.type === "jambieres" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", haut: projet.type === "jambieres" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
+    titrePeuAdaptes: projet.type === "couverture" && ["bas", "haut", "cotes"].includes(bloc.zone) ? "Peu adaptés à une bordure" : { bas: projet.type === "bonnet" || projet.type === "jambieres" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", haut: projet.type === "jambieres" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],
     titreRefuses: "Pas réversibles : l'envers se verrait une fois replié",
     messageRefus: "Avec un revers, choisis un point réversible.",
-    titre: section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : (projet.type === "bonnet" && bloc.zone === "bas") || (projet.type === "jambieres" && bloc.zone !== "corps" && bloc.zone !== "bande") ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
+    titre: projet.type === "couverture" && ["bas", "haut", "cotes"].includes(bloc.zone) ? "Point : bordure tout autour" : section1 || (bloc.zone === "corps" && !bloc.section) ? "Point principal" : bloc.section ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : (projet.type === "bonnet" && bloc.zone === "bas") || (projet.type === "jambieres" && bloc.zone !== "corps" && bloc.zone !== "bande") ? `Point : ${minusculeNom(nomBloc(bloc, projet))}` : `Point : ${nomZone}`,
     aide: bloc.section && !section1
       ? `Une section du corps, sur ${enRond(projet) || projet.type === "jambieres" ? "tout le tour" : "toute la largeur"} : chaque section a son point.`
+      : projet.type === "couverture" && ["bas", "haut", "cotes"].includes(bloc.zone) ? AIDES_ZONES.bordureCouverture
       : (projet.type === "jambieres" ? AIDES_ZONES_JAMBIERES : projet.type === "bonnet" ? AIDES_ZONES_BONNET : projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
     choisir: async (pointId) => {

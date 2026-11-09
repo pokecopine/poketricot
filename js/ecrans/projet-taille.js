@@ -11,7 +11,11 @@ import {
   TAILLES_ECHARPE, LIMITES_ECHARPE, TAILLES_SNOOD, LIMITES_SNOOD, TOUR_MIN_TETE, tailleSnood, cheminEtape, calculerProjet, etapeParCle,
   TAILLES_BONNET, LIMITES_BONNET, AISANCE_BONNET, tailleBonnet, tourDuBonnet, avecRevers, avecPompon, BORD_BONNET,
   LONGUEURS_JAMBIERES, LIMITES_JAMBIERES, AISANCE_JAMBIERES, EXEMPLAIRES_JAMBIERES, tourDesJambieres, presetJambieres, avecModeJambieres,
+  TAILLES_COUVERTURE, avecTailleCouverture, avecMontageCouverture, avecPanneauxCouverture, montageCouverture, largeursBordure,
 } from "../donnees/projets.js";
+import { pelotesEtPoids } from "../moteur/metrage.js";
+import { PANNEAUX } from "../moteur/plan-couverture.js";
+import { SchemaPanneaux } from "../composants/piece.js";
 
 const borner = (v, [min, max]) => Math.min(max, Math.max(min, v));
 
@@ -21,6 +25,7 @@ export function EtapeTaille({ id }) {
   if (!projet) return null;
   if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
 
+  if (projet.type === "couverture") return html`<${TailleCouverture} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
   if (projet.type === "jambieres") return html`<${TailleJambieres} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
   if (projet.type === "bonnet") return html`<${TailleBonnet} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
   if (projet.type === "snood") return html`<${TailleSnood} projet=${projet} laines=${laines} aiguilles=${aiguilles} echantillons=${echantillons} modifier=${modifier} />`;
@@ -337,6 +342,135 @@ function TailleJambieres({ projet, laines, aiguilles, echantillons, modifier }) 
           ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(calcul.cable.cableCm, 0)} cm est trop court pour le magic loop : prends un câble de ${calcul.cable.conseille} cm.<//>`
           : html`<${Encart}>En rond, sans couture : tout se tricote en <strong>magic loop</strong>${tailleMm ? `, sur ton aiguille de ${tailleMm} mm${aig?.cableCm ? ` à câble de ${formaterNombre(Number(aig.cableCm), 0)} cm` : ""}` : ""}.<//>`}
         <p class="note">${texteBordures(bordures).replace("Les bordures", "Les bords").replace("sont comprises", "sont compris")} Tu peux changer de façon de tricoter jusqu'au patron.</p>
+      </div>
+      <div class="ecran-pied">
+        <button type="button" class="bouton-principal" onClick=${continuer}>Construire ma pièce</button>
+      </div>
+    </main>`;
+}
+
+// ---------------- Couverture (0.21.0, maquettes 1 et 2 du 09/11) ----------------
+
+const DESSINS_TAILLE = {
+  plaid: html`<path d="M4 22v-8a3 3 0 0 1 3-3h26a3 3 0 0 1 3 3v8"></path><path d="M2 22h36v5H2z"></path><path d="M12 11l4 11M20 11l3 11"></path>`,
+  lit1: html`<path d="M10 4h20v24H10z"></path><path d="M13 7h14v5H13z"></path><path d="M10 16h20"></path>`,
+  lit2: html`<path d="M4 4h32v24H4z"></path><path d="M7 7h12v5H7zM21 7h12v5H21z"></path><path d="M4 16h32"></path>`,
+};
+
+/** « Environ 2,2 kg de laine, soit 22 pelotes d'avoine » ; sans poids d'étiquette, en mètres. */
+export function texteLaineCouverture(metres, laine, { enTout = false } = {}) {
+  if (!metres) return "";
+  const { pelotes, grammes } = pelotesEtPoids(metres, laine);
+  const poids = grammes ? `${formaterNombre(grammes / 1000, 1)} kg` : `${metres} m`;
+  return `Environ ${poids} de laine${enTout ? " en tout" : ""}${pelotes ? `, soit ${pelotes} pelote${pelotes > 1 ? "s" : ""}${laine?.nom ? ` de ${laine.nom}` : ""}` : ""}`;
+}
+
+const poidsSurAiguilles = (metres, laine) => {
+  const { grammes } = pelotesEtPoids(metres, laine);
+  return grammes ? `environ ${formaterNombre(grammes / 1000, 1)} kg sur les aiguilles` : `environ ${metres} m sur les aiguilles`;
+};
+
+function TailleCouverture({ projet, laines, aiguilles, echantillons, modifier }) {
+  const t = projet.taille;
+  const laine = laines.find((l) => l.id === projet.laineId);
+  const aig = aiguilles.find((a) => a.id === projet.aiguillesId);
+  const cableCm = aig ? Number(String(aig.cableCm || "").replace(",", ".")) || null : null;
+  const calcul = calculerProjet({ projet, laine, aiguilles: aig, echantillons, laines });
+  const plan = calcul?.ok ? calcul.plan : null;
+  const m = montageCouverture(projet, cableCm);
+  const conseil = m.conseil;
+  const enPanneaux = m.montage === "panneaux";
+  const metres = calcul?.metrage?.metres || 0;
+  const bordure = largeursBordure(projet);
+  const bordurePoint = pointParId(projet.blocs.find((b) => b.id === "bas")?.pointId);
+  const choisie = TAILLES_COUVERTURE.find((x) => x.preset === t.preset);
+  async function continuer() {
+    await modifier((p) => ({ ...p, etape: Math.max(p.etape, 4), taille: { ...p.taille, montage: m.montage, panneaux: m.panneaux > 1 ? m.panneaux : p.taille.panneaux } }));
+    naviguer(cheminEtape(projet, 4));
+  }
+  const p1 = plan?.panneaux ? plan.panneaux[0] : plan;
+  return html`
+    <main class="ecran">
+      <${EnTeteEtape} titre=${projet.nom} numero=${3} secours=${cheminEtape(projet, 2)} />
+      <div class="ecran-contenu">
+        ${TAILLES_COUVERTURE.map((x) => {
+          const oui = t.preset === x.preset;
+          return html`<button type="button" class="choix-taille choix-couverture" aria-pressed=${String(oui)}
+            onClick=${() => modifier((p) => avecTailleCouverture(p, { preset: x.preset }))}>
+            <svg width="40" height="32" viewBox="0 0 40 32" fill="none" stroke=${oui ? "var(--accent)" : "var(--texte-2)"} stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${DESSINS_TAILLE[x.preset]}</svg>
+            <span class="ligne-element-texte">
+              <span class="ligne-element-nom">${x.nom}</span>
+              <span class="ligne-element-detail">${x.detail}</span>
+            </span>
+            <span style=${oui ? "font-weight:700" : "color:var(--texte-2)"}>${x.largeurCm} × ${x.longueurCm} cm</span>
+          </button>`;
+        })}
+
+        <section class="carte-bloc" aria-labelledby="titre-ajuster">
+          <h2 id="titre-ajuster" style="font-size:18px">Ajuster${choisie ? "" : html` <span class="note" style="font-family:var(--corps);font-weight:400">· mesures libres</span>`}</h2>
+          <div class="reglage">
+            <span>Largeur</span>
+            <div class="compteur">
+              <button type="button" aria-label="Rétrécir de 5 cm" onClick=${() => modifier((p) => avecTailleCouverture(p, { largeurCm: t.largeurCm - 5 }))}>−</button>
+              <output aria-live="polite">${t.largeurCm} cm</output>
+              <button type="button" aria-label="Élargir de 5 cm" onClick=${() => modifier((p) => avecTailleCouverture(p, { largeurCm: t.largeurCm + 5 }))}>+</button>
+            </div>
+          </div>
+          <div class="reglage">
+            <span>Longueur</span>
+            <div class="compteur">
+              <button type="button" aria-label="Raccourcir de 5 cm" onClick=${() => modifier((p) => avecTailleCouverture(p, { longueurCm: t.longueurCm - 5 }))}>−</button>
+              <output aria-live="polite">${t.longueurCm} cm</output>
+              <button type="button" aria-label="Rallonger de 5 cm" onClick=${() => modifier((p) => avecTailleCouverture(p, { longueurCm: t.longueurCm + 5 }))}>+</button>
+            </div>
+          </div>
+          ${plan && html`<div class="resume-couverture" aria-live="polite">
+            <div>${enPanneaux ? "Chaque panneau : " : ""}<strong>${p1.montage.mailles} mailles</strong>${enPanneaux ? "" : " à monter"} · <strong>${p1.rangs.length} rangs</strong></div>
+            <div class="note">${texteLaineCouverture(metres, laine, { enTout: enPanneaux })}</div>
+          </div>`}
+        </section>
+        ${!calcul ? html`<${Resultat} calcul=${calcul} />` : !calcul.ok && html`<${Encart} type="brique">${calcul.erreurs[0]?.message}<//>`}
+
+        ${conseil.trop === false && html`<${Encart}>Ton câble de ${formaterNombre(cableCm, 0)} cm porte cette largeur : tu peux la tricoter en une pièce.<//>`}
+        ${conseil.trop === true && html`<${Encart} type="brique">Ton câble de ${formaterNombre(cableCm, 0)} cm porte environ ${conseil.porteeCm} cm. Pour ${t.largeurCm} cm, tricote en panneaux ou prends un câble de ${conseil.cableConseilleCm} cm.<//>`}
+
+        <h2 style="font-size:18px">Comment la tricoter ?</h2>
+        <div class="choix-montage" role="radiogroup" aria-label="Comment la tricoter ?">
+          <div class=${"carte-montage" + (enPanneaux ? " choisie" : "")}>
+            <label class="carte-montage-titre">
+              <input type="radio" name="montage" checked=${enPanneaux} onChange=${() => modifier((p) => avecMontageCouverture(p, "panneaux"))} />
+              <span>En panneaux cousus</span>
+              ${conseil.trop && html`<span class="badge-conseille">Conseillé</span>`}
+            </label>
+            ${enPanneaux && html`
+              <div class="carte-montage-corps">
+                <${SchemaPanneaux} n=${m.panneaux} largeur=${76} hauteur=${64} libelle=${`Schéma : ${m.panneaux} bandes côte à côte, reliées par ${m.panneaux > 2 ? "des coutures" : "une couture"}`} />
+                <span class="note">Bandes tricotées à part, puis assemblées au point de matelas.${calcul?.metrage?.parPanneau ? ` ${poidsSurAiguilles(calcul.metrage.parPanneau, laine).replace(/^e/, "E")}.` : ""}</span>
+              </div>
+              <div class="reglage" style="border-top:1px solid var(--lin);padding-top:10px">
+                <span>Panneaux</span>
+                <div class="compteur">
+                  <button type="button" aria-label="Un panneau de moins" disabled=${m.panneaux <= PANNEAUX[0]} onClick=${() => modifier((p) => avecPanneauxCouverture(p, m.panneaux - 1))}>−</button>
+                  <output aria-live="polite">${m.panneaux}</output>
+                  <button type="button" aria-label="Un panneau de plus" disabled=${m.panneaux >= PANNEAUX[1]} onClick=${() => modifier((p) => avecPanneauxCouverture(p, m.panneaux + 1))}>+</button>
+                </div>
+              </div>`}
+          </div>
+          <div class=${"carte-montage" + (!enPanneaux ? " choisie" : "")}>
+            <label class="carte-montage-titre">
+              <input type="radio" name="montage" checked=${!enPanneaux} onChange=${() => modifier((p) => avecMontageCouverture(p, "piece"))} />
+              <span>En une pièce</span>
+              ${conseil.trop === false && html`<span class="badge-conseille">Conseillé</span>`}
+            </label>
+            <span class="note">${conseil.trop
+              ? `Câble de ${conseil.cableConseilleCm} cm`
+              : cableCm ? `Ton câble de ${formaterNombre(cableCm, 0)} cm suffit` : "Un long câble"}${metres ? ` · ${poidsSurAiguilles(metres, laine)}` : ""}</span>
+          </div>
+        </div>
+        ${plan && enPanneaux && plan.explications.length > 0 && html`<details class="ajustements"><summary>Ajustements (${plan.explications.length})</summary>
+          ${plan.explications.map((e) => html`<p class="note">${e.charAt(0).toUpperCase() + e.slice(1)}${e.endsWith(".") ? "" : "."}</p>`)}</details>`}
+        ${plan && !enPanneaux && plan.explications.map((e) => html`<p class="note">${e.charAt(0).toUpperCase() + e.slice(1)}${e.endsWith(".") ? "" : "."}</p>`)}
+        <p class="note">La bordure (${bordure.bas === bordure.haut && bordure.haut === bordure.gauche && bordure.gauche === bordure.droite ? `${formaterNombre(bordure.bas)} cm` : "réglée côté par côté"}${bordurePoint ? ` de ${bordurePoint.nom.charAt(0).toLowerCase() + bordurePoint.nom.slice(1)}` : ""} tout autour) est comprise ; tu pourras la changer à l'étape suivante.</p>
       </div>
       <div class="ecran-pied">
         <button type="button" class="bouton-principal" onClick=${continuer}>Construire ma pièce</button>

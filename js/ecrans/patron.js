@@ -4,13 +4,13 @@ import { html } from "../html.js";
 import { useApp } from "../etat.js";
 import { naviguer } from "../routeur.js";
 import { Encart, Fenetre, EnTete, BoutonRetour, Pastille } from "../composants/base.js";
-import { DessinEcharpe, DessinSnood, DessinBonnet } from "../composants/piece.js";
+import { DessinEcharpe, DessinSnood, DessinBonnet, DessinCouverture, SchemaPanneaux } from "../composants/piece.js";
 import { ConfirmerSuppression } from "../composants/suppression.js";
 import { pointParId } from "../catalogue/points.js";
 import { nomSource } from "./points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { texteDate } from "../donnees/echantillons.js";
-import { rangsCondenses, cocherRang, decocherRang, projetVariante, nouveauSuivi, pasDuSuivi, positionSuivi, nomExemplaire } from "../moteur/patron.js";
+import { rangsCondenses, cocherRang, decocherRang, projetVariante, nouveauSuivi, pasDuSuivi, positionSuivi, nomExemplaire, positionPanneaux, rangsDeLaCouverture, assemblageFini } from "../moteur/patron.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 const minuscule = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
@@ -112,6 +112,9 @@ export function EcranPatron({ id }) {
   if (!projet || !patron) {
     return html`<main class="ecran"><${EnTete} titre="Patron introuvable" secours="/" />
       <div class="ecran-contenu"><p>Ce patron n'existe plus.</p></div></main>`;
+  }
+  if (patron.panneaux) {
+    return html`<${PatronEnPanneaux} projet=${projet} patron=${patron} suivi=${suivi} prefs=${prefs} base=${base} flash=${flash} />`;
   }
   const couleur = patron.laine?.couleur || COULEUR_PAR_DEFAUT;
   const total = patron.rangs.length;
@@ -288,6 +291,9 @@ export function EcranSuivi({ id }) {
   if (!projet || !patron) {
     return html`<main class="ecran"><${EnTete} titre="Patron introuvable" secours="/" /></main>`;
   }
+  if (patron.panneaux) {
+    return html`<${SuiviCouverture} projet=${projet} patron=${patron} suivi=${suivi} majSuivi=${majSuivi} majProjet=${majProjet} prefs=${prefs} flash=${flash} />`;
+  }
   // Jambières (0.19.0) : le patron se tricote 2 fois, avec une pause entre les deux (rabattage, couture à plat).
   const n = patron.rangs.length;
   const total = pasDuSuivi(patron);
@@ -313,7 +319,7 @@ export function EcranSuivi({ id }) {
   async function terminer() {
     await majProjet((p) => ({ ...p, statut: "termine", termineLe: new Date().toISOString() }));
     majSuivi((s) => ({ ...s, termine: true }));
-    flash(patron.type === "jambieres" ? "Bravo, tes jambières sont terminées !" : patron.type === "bonnet" ? "Bravo, ton bonnet est terminé !" : rond ? "Bravo, ton snood est terminé !" : "Bravo, ton écharpe est terminée !");
+    flash(patron.type === "couverture" ? "Bravo, ta couverture est terminée !" : patron.type === "jambieres" ? "Bravo, tes jambières sont terminées !" : patron.type === "bonnet" ? "Bravo, ton bonnet est terminé !" : rond ? "Bravo, ton snood est terminé !" : "Bravo, ton écharpe est terminée !");
     naviguer("/reglages?sauvegarde=1", { remplacer: true });
   }
 
@@ -456,4 +462,303 @@ export function EcranSuivi({ id }) {
 function GestesDuRang({ rang, patron }) {
   const utiles = ["lisiere", ...(rang.marqueur ? ["marqueur"] : []), ...(rang.gestes || [])].filter((c, i, t) => patron.techniques[c] && t.indexOf(c) === i);
   return html`${utiles.map((c) => html`<${Technique} code=${c} patron=${patron} />`)}`;
+}
+
+// ---------------- Couverture en panneaux (0.21.0, maquettes 5, 6a et 6b) ----------------
+
+const nomCourtPoint = (id) => {
+  const p = pointParId(id);
+  if (!p) return "";
+  return minuscule(p.nom).replace(/^point /, "");
+};
+
+/** La barre des zones d'un rang, dans l'ordre où on le tricote (un rang endroit part du bord droit). */
+function BarreZones({ panneau, cote: c, pointCorps, pointBordure, maillesCorps }) {
+  const t = panneau.montage.repartition;
+  const zones = [
+    t.bordD ? { cls: "z-couture droite", texte: t.bordD } : null,
+    t.bandeD ? { cls: "z-bordure", texte: `${t.bandeD} ${nomCourtPoint(pointBordure)}` } : null,
+    { cls: "z-corps", texte: `${maillesCorps ?? t.corps} ${pointCorps ? minuscule(pointParId(pointCorps)?.nom || "") : ""}` },
+    t.bandeG ? { cls: "z-bordure", texte: `${t.bandeG} ${nomCourtPoint(pointBordure)}` } : null,
+    t.bordG ? { cls: "z-couture gauche", texte: t.bordG } : null,
+  ].filter(Boolean);
+  const ordre = c === "E" ? zones : [...zones].reverse().map((z) => ({ ...z, cls: z.cls.replace("droite", "x").replace("gauche", "droite").replace("x", "gauche") }));
+  return html`<div class="barre-zones" aria-hidden="true">
+    ${ordre.map((z) => html`<span class=${z.cls} style=${z.cls === "z-corps" ? "background:#CDB48A" : ""}>${z.texte}</span>`)}
+  </div>`;
+}
+
+function texteCotes(panneau) {
+  const b = panneau.bords;
+  const g = b.gauche.bande ? "la bordure à gauche" : "la couture à gauche";
+  const d = b.droite.bande ? "la bordure à droite" : "la couture à droite";
+  return majuscule(`${g}, ${d}.`);
+}
+
+const nomPosition = (p) => ({ gauche: "celui de gauche", milieu: "celui du milieu", droite: "celui de droite" })[p.position] || "";
+
+function EtapesDe({ patron, etapes, prefs, mots }) {
+  return html`<ol class="etapes-patron">
+    ${etapes.map((e, i) => html`<li>
+      <details open=${e.cle === "bloc" && patron.blocs.find((b) => b.id === e.blocId)?.zone === "corps"}>
+        <summary>
+          <span class="etape-numero">${i + 1}</span>
+          <span class="etape-texte"><strong>${e.titre}</strong><span>${e.detail || ""}</span></span>
+        </summary>
+        <div class="etape-corps">
+          ${e.texte && html`<p>${e.texte}</p>`}
+          ${e.bordure && html`<p class="encart-lin">${e.bordure}</p>`}
+          ${(e.techniques || []).map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
+          ${e.cle === "bloc" && html`<${RangsDuBloc} patron=${patron} bloc=${patron.blocs.find((b) => b.id === e.blocId)} abreviations=${prefs.abreviations} mots=${mots} />`}
+        </div>
+      </details>
+    </li>`)}
+  </ol>`;
+}
+
+function PatronEnPanneaux({ projet, patron, suivi, prefs, base, flash }) {
+  const [onglet, setOnglet] = useState(0);
+  const [coches, setCoches] = useState({});
+  const [supprimer, setSupprimer] = useState(false);
+  const n = patron.panneaux.length;
+  const couleur = patron.laine?.couleur || COULEUR_PAR_DEFAUT;
+  const mots = { Rang: "Rang", rang: "rang", rangs: "rangs", piece: "la couverture", Piece: "La couverture", ton: "ta couverture" };
+  const faits = suivi?.rangsFaits || 0;
+  const pos = positionPanneaux(patron, faits);
+  const materiel = patron.etapes.find((e) => e.cle === "materiel");
+  const pointBordure = patron.panneaux[0].bandesLaterales?.pointId || patron.panneaux[0].blocs[0]?.pointId;
+  const corps = patron.points[patron.projet.pointPrincipal];
+  async function dupliquer() {
+    const variante = await base.ecrire("projets", projetVariante(patron));
+    flash("Variante créée : modifie-la librement.");
+    naviguer(`/projet/${encodeURIComponent(variante.id)}/builder`);
+  }
+  const p = onglet < n ? patron.panneaux[onglet] : null;
+  const vue = p ? { ...patron, rangs: p.rangs, blocs: p.blocs } : patron;
+  return html`
+    <main class="ecran">
+      <header class="ecran-entete">
+        <div class="ecran-entete-ligne">
+          <${BoutonRetour} secours="/" libelle="Mes tricots" />
+          <div class="entete-etape">
+            <h1 class="entete-etape-titre">${patron.nom}</h1>
+            <span class="entete-fige">${projet.statut === "termine" ? "Terminé" : "Patron validé, figé"}${patron.approximatif ? " · tailles approximatives" : ""}</span>
+          </div>
+        </div>
+      </header>
+      <div class="ecran-contenu">
+        <div class="ligne-entre"><span class="note">${formaterNombre(patron.dimensions.largeurCm, 0)} × ${formaterNombre(patron.dimensions.longueurCm, 0)} cm</span></div>
+        <div class="puces">
+          <span class="etiquette">${n} panneaux cousus</span>
+          ${corps && html`<span class="etiquette">${corps.nom}</span>`}
+          ${pointBordure && html`<span class="etiquette">Bordure ${nomCourtPoint(pointBordure)}</span>`}
+          ${patron.metrage && html`<span class="etiquette">≈ ${patron.metrage.metres} m</span>`}
+        </div>
+        ${patron.approximatif && html`<${Encart} type="brique">Tailles approximatives : mesure ton tricot après une quinzaine de centimètres ; le suivi indique la longueur attendue à chaque rang.<//>`}
+        <details class="ajustements">
+          <summary>Matériel</summary>
+          ${materiel.liste.map((x, j) => html`<label class="case"><input type="checkbox" checked=${!!coches[j]} onChange=${(ev) => setCoches({ ...coches, [j]: ev.currentTarget.checked })} /> ${x}</label>`)}
+        </details>
+
+        <div class="onglets-parties" role="group" aria-label="Partie du patron">
+          ${patron.panneaux.map((x, i) => html`<button type="button" aria-pressed=${String(onglet === i)} onClick=${() => setOnglet(i)}>Panneau ${i + 1}</button>`)}
+          <button type="button" aria-pressed=${String(onglet === n)} onClick=${() => setOnglet(n)}>Assemblage</button>
+        </div>
+
+        ${p
+          ? html`
+            <div class="carte-panneau">
+              <${SchemaPanneaux} n=${n} enAvant=${onglet + 1} libelle=${`Schéma : ${n} panneaux côte à côte ; le panneau ${onglet + 1} est mis en avant.`} />
+              <div class="carte-panneau-texte">
+                <span class="carte-panneau-titre">${p.nom || `Panneau ${onglet + 1}`}</span>
+                <span><strong>${p.montage.mailles} mailles</strong> · <strong>${p.rangs.length} rangs</strong></span>
+                <span class="note">Environ ${formaterNombre(p.dimensions.largeurCm, 0)} × ${formaterNombre(p.dimensions.longueurCm, 0)} cm. ${texteCotes(p)}</span>
+              </div>
+            </div>
+            ${(() => {
+              const r = p.rangs.find((x) => x.blocId === p.blocs.find((b) => b.zone === "corps")?.id && x.type === "motif");
+              const pc = p.blocs.find((b) => b.zone === "corps");
+              return r && html`<div class="carte-bloc" style="gap:8px">
+                <strong style="color:var(--lien);font-size:13px">Corps · ${pc ? `rangs ${pc.premierRang} à ${pc.dernierRang}` : ""}</strong>
+                <${BarreZones} panneau=${p} cote="E" pointCorps=${pc?.pointId} pointBordure=${pointBordure} maillesCorps=${pc?.colonnes ? null : undefined} />
+                ${["E", "V"].map((c) => {
+                  const x = p.rangs.find((y) => y.blocId === pc?.id && y.type === "motif" && y.cote === c);
+                  return x && html`<p style="margin:0;font-size:15px"><strong>Rang ${c === "E" ? "endroit" : "envers"} :</strong> ${(prefs.abreviations ? x.lignesAbregees : x.lignes).map((l) => l.texte.replace(/\.$/, "")).join(", ")}.</p>`;
+                })}
+              </div>`;
+            })()}
+            <${EtapesDe} patron=${vue} etapes=${p.etapes} prefs=${prefs} mots=${mots} />
+            <${Encart}>${p.miroirDe
+              ? `Le panneau ${p.miroirDe} est le même, en miroir. Même nombre de rangs pour que les panneaux aient la même longueur.`
+              : onglet === 0
+              ? `Le panneau ${n} est le même, en miroir : la couture à gauche, la bordure à droite. Même nombre de rangs pour que les panneaux aient la même longueur.`
+              : "Une maille de couture de chaque côté. Même nombre de rangs que les autres panneaux."}<//>`
+          : html`
+            <div class="carte-panneau">
+              <${SchemaPanneaux} n=${n} reperes=${Math.min(10, patron.assemblage.reperes)} libelle=${`Couture : les panneaux côte à côte, avec ${patron.assemblage.reperes} repères le long de chaque couture.`} />
+              <div class="carte-panneau-texte">
+                <span class="carte-panneau-titre">Couture au point de matelas</span>
+                <span class="note">Du bas vers le haut, l'endroit face à toi. ${patron.assemblage.coutures > 1 ? `${patron.assemblage.coutures} coutures, ` : ""}${patron.assemblage.sections} sections de ${patron.assemblage.pas} rangs.</span>
+              </div>
+            </div>
+            <${EtapesDe} patron=${patron} etapes=${patron.assemblage.etapes} prefs=${prefs} mots=${mots} />`}
+
+        ${patron.explications.length > 0 && html`<details class="ajustements">
+          <summary>Ajustements faits par l'outil (${patron.explications.length})</summary>
+          ${patron.explications.map((e) => html`<p class="note">${e.charAt(0).toUpperCase() + e.slice(1)}${e.endsWith(".") ? "" : "."}</p>`)}
+        </details>`}
+        <p class="note">Patron créé le ${texteDate(patron.creeLe.slice(0, 10))}, vérifié rang par rang par l'outil : ${n} panneaux de ${patron.panneaux[0].rangs.length} rangs.</p>
+        <button type="button" class="bouton-lien bouton-danger" onClick=${() => setSupprimer(true)}>Supprimer ce projet</button>
+      </div>
+      <div class="ecran-pied ecran-pied-pile">
+        ${projet.statut !== "termine" && html`<button type="button" class="bouton-principal" onClick=${() => naviguer(`/projet/${encodeURIComponent(projet.id)}/suivi`)}>
+          ${faits === 0 ? "Valider et commencer le suivi" : pos.assemblage ? "Reprendre l'assemblage" : pos.pause ? `Reprendre : fin du panneau ${pos.panneau}` : `Reprendre au rang ${pos.index + 1} (panneau ${pos.panneau})`}
+        </button>`}
+        <button type="button" class="bouton-secondaire" onClick=${dupliquer}>Dupliquer en variante</button>
+      </div>
+      <${ConfirmerSuppression} projet=${supprimer ? projet : null} suivi=${suivi} surFermeture=${() => setSupprimer(false)} surSuppression=${() => naviguer("/", { remplacer: true })} />
+    </main>`;
+}
+
+function SuiviCouverture({ projet, patron, suivi, majSuivi, majProjet, prefs, flash }) {
+  const [aide, setAide] = useState(false);
+  const n = patron.panneaux.length;
+  const total = pasDuSuivi(patron);
+  const faits = Math.min(suivi.rangsFaits, total);
+  const pos = positionPanneaux(patron, faits);
+  const p = patron.panneaux[pos.panneau - 1];
+  const rang = !pos.pause && !pos.assemblage ? p.rangs[pos.index] : null;
+  const rangsTotal = rangsDeLaCouverture(patron);
+  const pourcent = Math.floor((pos.rangsFaits / rangsTotal) * 100);
+  const pointBordure = patron.panneaux[0].bandesLaterales?.pointId || patron.panneaux[0].blocs[0]?.pointId;
+  const vue = { ...patron, rangs: p.rangs, blocs: p.blocs };
+  const montage = p.etapes.find((e) => e.cle === "montage");
+  const rabattage = p.etapes.find((e) => e.cle === "rabattage");
+  const a = suivi.assemblage || { faits: [], section: 1 };
+  const A = patron.assemblage;
+  const sectionsTotal = A.sections * A.coutures;
+  const majAssemblage = (f) => majSuivi((s) => ({ ...s, assemblage: f(s.assemblage || { faits: [], section: 1 }) }));
+  const basculer = (cle) => majAssemblage((x) => ({ ...x, faits: x.faits.includes(cle) ? x.faits.filter((c) => c !== cle) : [...x.faits, cle] }));
+  const fini = assemblageFini(patron, suivi);
+  const prochainBloc = rang ? p.blocs.find((b) => b.premierRang > rang.numero) : null;
+
+  async function terminer() {
+    await majProjet((x) => ({ ...x, statut: "termine", termineLe: new Date().toISOString() }));
+    majSuivi((s) => ({ ...s, termine: true }));
+    flash("Bravo, ta couverture est terminée !");
+    naviguer("/reglages?sauvegarde=1", { remplacer: true });
+  }
+
+  return html`
+    <main class="ecran ecran-suivi">
+      <header class="ecran-entete">
+        <div class="suivi-entete">
+          <${BoutonRetour} secours="/" libelle="Mes tricots" />
+          <div style="flex-grow:1;display:flex;flex-direction:column">
+            <h1 class="suivi-titre">${patron.nom}</h1>
+            <span class="note">${pos.assemblage ? `Les ${n} panneaux sont tricotés` : `Couverture : ${pos.rangsFaits} rangs sur ${rangsTotal} · ${pourcent} %`}</span>
+          </div>
+          <button type="button" class="bouton-rond" aria-label="Voir le patron" onClick=${() => naviguer(`/projet/${encodeURIComponent(projet.id)}/patron`)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 3h8l4 4v14H7z"></path><path d="M10 12h6M10 16h6"></path></svg>
+          </button>
+        </div>
+      </header>
+      <div class="ecran-contenu">
+        <div class="parties" role="group" aria-label="Partie en cours">
+          ${patron.panneaux.map((x, i) => {
+            const fait = i + 1 < pos.panneau || pos.assemblage;
+            return html`<button type="button" class=${fait ? "fait" : ""} aria-pressed=${String(!pos.assemblage && i + 1 === pos.panneau)} disabled=${!fait && i + 1 !== pos.panneau}>
+              ${fait && html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>`}Panneau ${i + 1}
+            </button>`;
+          })}
+          <button type="button" aria-pressed=${String(pos.assemblage)} disabled=${!pos.assemblage}>Assemblage</button>
+        </div>
+
+        ${!pos.assemblage && html`
+          <div class="carte-panneau">
+            <${SchemaPanneaux} n=${n} avancement=${{ panneau: pos.panneau, part: pos.index / p.rangs.length }}
+              libelle=${`Avancement : ${pos.panneau > 1 ? `${pos.panneau > 2 ? `les panneaux 1 à ${pos.panneau - 1} sont terminés` : "le panneau 1 est terminé"} ; ` : ""}le panneau ${pos.panneau} est tricoté à ${Math.round((pos.index / p.rangs.length) * 100)} %.`} />
+            <div class="carte-panneau-texte">
+              <span class="carte-panneau-titre">Panneau ${pos.panneau} · ${nomPosition(p)}</span>
+              <span class="note">${texteCotes(p)}</span>
+              ${rang && pos.index > 0 && html`<span>À ce rang, il devrait mesurer <strong>environ ${formaterNombre(p.rangs[pos.index - 1].longueurCm, 0)} cm</strong>.</span>`}
+            </div>
+          </div>`}
+
+        ${rang && pos.index === 0 && montage && html`<div class="carte-etape-suivi">
+          <strong>Panneau ${pos.panneau} · avant le rang 1 : le montage</strong>
+          <p>${montage.texte}</p>
+          ${pos.panneau === 1 && html`<${Technique} code="montage" patron=${patron} />`}
+        </div>`}
+
+        ${rang && html`<section class="compteur-rangs" aria-label="Compteur de rangs" aria-live="polite">
+          ${rang.debutBloc && html`<span class="debut-bloc">Nouveau bloc : ${rang.nomBloc}</span>`}
+          <div class="compteur-rangs-tete"><strong>${majuscule(rang.nomBloc)} · rang ${rang.cote === "E" ? "endroit" : "envers"}</strong><span class="note">sur ${p.rangs.length}</span></div>
+          <h2 class="compteur-rangs-numero">Rang ${rang.numero}</h2>
+          <${BarreZones} panneau=${p} cote=${rang.cote} pointCorps=${p.blocs.find((b) => b.id === rang.blocId)?.pointId} pointBordure=${pointBordure} />
+          <${Lignes} rang=${rang} abreviations=${prefs.abreviations} />
+          ${pos.panneau === 1 && rang.techniques.map((c) => html`<${Technique} code=${c} patron=${patron} />`)}
+          <button type="button" class="bouton-lien" onClick=${() => setAide(true)}>Un doute sur un geste de ce rang ?</button>
+          <div class="compteur-rangs-boutons">
+            <button type="button" class="moins" aria-label="Un rang de moins" disabled=${faits === 0} onClick=${() => majSuivi(decocherRang)}>−</button>
+            <button type="button" class="plus" onClick=${() => majSuivi((s) => cocherRang(s, total))}>+ 1 rang</button>
+          </div>
+        </section>
+        <div class="note" style="display:flex;flex-direction:column;gap:4px">
+          ${prochainBloc
+            ? html`<span>Prochaine étape : <strong>${prochainBloc.nom} au rang ${prochainBloc.premierRang}</strong>, dans ${prochainBloc.premierRang - rang.numero} rang${prochainBloc.premierRang - rang.numero > 1 ? "s" : ""}.</span>`
+            : html`<span>Prochaine étape : <strong>le rabattage</strong>, après le rang ${p.rangs.length}.</span>`}
+          ${pos.panneau > 1 && html`<span>Le panneau 1 garde ses ${patron.panneaux[0].rangs.length} rangs : tu peux comparer les longueurs en posant l'un sur l'autre.</span>`}
+        </div>`}
+
+        ${pos.pause && html`<div class="carte-etape-suivi">
+          <strong>Panneau ${pos.panneau} · finir</strong>
+          <p>${rabattage?.texte}</p>
+          ${pos.panneau === 1 && html`<${Technique} code="rabattage" patron=${patron} />`}
+        </div>`}
+
+        ${pos.assemblage && html`
+          <div class="carte-panneau">
+            <${SchemaPanneaux} n=${n} reperes=${Math.min(10, A.reperes)} cousu=${(a.section - 1) / sectionsTotal}
+              libelle=${`Couture : les panneaux côte à côte, avec ${A.reperes} repères ; la section ${a.section} sur ${sectionsTotal} est en cours.`} />
+            <div class="carte-panneau-texte">
+              <span class="carte-panneau-titre">Couture au point de matelas</span>
+              <span class="note">Du bas vers le haut, l'endroit face à toi.</span>
+              <span><strong>Section ${a.section} sur ${sectionsTotal}</strong> en cours</span>
+            </div>
+          </div>
+          <ol class="liste-cocher">
+            ${A.etapes.map((e) => {
+              const fait = (a.faits || []).includes(e.cle);
+              return html`<li class=${(fait ? "fait" : "") + (e.cle === "coudre" && !fait ? " en-cours" : "")}>
+                <label><input type="checkbox" checked=${fait} onChange=${() => basculer(e.cle)} aria-label=${`Fait : ${minuscule(e.titre)}`} /><span>${e.texte}</span></label>
+                ${e.cle === "coudre" && html`
+                  <span class="encart-lin">${e.bordure}</span>
+                  <div class="reglage" style="border-top:1px solid var(--lin);padding-top:10px">
+                    <span>${A.coutures > 1 ? `Couture ${Math.ceil(a.section / A.sections)} · section` : "Section"}</span>
+                    <div class="compteur">
+                      <button type="button" aria-label="Section précédente" disabled=${a.section <= 1} onClick=${() => majAssemblage((x) => ({ ...x, section: Math.max(1, x.section - 1) }))}>−</button>
+                      <output aria-live="polite">${((a.section - 1) % A.sections) + 1} / ${A.sections}</output>
+                      <button type="button" aria-label="Section suivante" onClick=${() => majAssemblage((x) => x.section >= sectionsTotal
+                        ? { ...x, faits: x.faits.includes("coudre") ? x.faits : [...x.faits, "coudre"] }
+                        : { ...x, section: x.section + 1 })}>+</button>
+                    </div>
+                  </div>
+                  <span class="note">À chaque repère, vérifie que les deux marqueurs sont face à face avant de continuer.</span>
+                  ${(e.techniques || []).map((c) => html`<${Technique} code=${c} patron=${patron} />`)}`}
+              </li>`;
+            })}
+          </ol>`}
+      </div>
+      <div class="ecran-pied ecran-pied-pile suivi-pied">
+        ${pos.pause && html`<button type="button" class="bouton-principal bouton-rang" onClick=${() => majSuivi((s) => cocherRang(s, total))}>Panneau ${pos.panneau} terminé</button>
+          <button type="button" class="bouton-lien bouton-retour-rang" onClick=${() => majSuivi(decocherRang)}>Revenir au rang ${p.rangs.length}</button>`}
+        ${pos.assemblage && html`<button type="button" class=${fini ? "bouton-principal" : "bouton-secondaire"} onClick=${terminer}>Ranger dans la bibliothèque</button>
+          <button type="button" class="bouton-lien bouton-retour-rang" onClick=${() => majSuivi(decocherRang)}>Revenir à la fin du panneau ${n}</button>`}
+      </div>
+      <${Fenetre} ouverte=${aide} titre="Les gestes de ce rang" surFermeture=${() => setAide(false)}
+        actions=${html`<button type="button" class="bouton-secondaire" onClick=${() => setAide(false)}>Fermer</button>`}>
+        ${aide && rang && html`<${GestesDuRang} rang=${rang} patron=${vue} />`}
+      <//>
+    </main>`;
 }

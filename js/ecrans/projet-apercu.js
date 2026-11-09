@@ -9,12 +9,15 @@ import { Piece3D } from "../composants/piece3d.js";
 import { Snood3D } from "../composants/snood3d.js";
 import { Bonnet3D } from "../composants/bonnet3d.js";
 import { Jambiere3D } from "../composants/jambiere3d.js";
+import { Couverture3D } from "../composants/couverture3d.js";
+import { texteLaineCouverture } from "./projet-taille.js";
 import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { formaterNombre } from "../donnees/reserve.js";
 import { genererPatron, nouveauSuivi, texteReversible } from "../moteur/patron.js";
-import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet, toursPortes, enRond } from "../donnees/projets.js";
+import { cheminEtape, calculerProjet, etatCreationPatron, lainesDuProjet, toursPortes, enRond, TAILLES_COUVERTURE } from "../donnees/projets.js";
+import { pelotesEtPoids } from "../moteur/metrage.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 const minuscule = (s) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -57,6 +60,7 @@ export function EtapeApercu({ id }) {
   const bonnet = projet.type === "bonnet";
   const jambieres = projet.type === "jambieres";
   const snood = enRond(projet);
+  const couverture = projet.type === "couverture";
 
   async function creer() {
     if (!etat.possible || enCours) return;
@@ -71,7 +75,11 @@ export function EtapeApercu({ id }) {
       await base.ecrire("suivis", nouveauSuivi(patron));
       await modifier((p) => ({
         ...p, statut: "patron", etape: 6, patronId: patron.id,
-        patron: { nbRangs: patron.rangs.length, approximatif: patron.approximatif, creeLe: patron.creeLe, ...(patron.exemplaires > 1 ? { exemplaires: patron.exemplaires } : {}) },
+        patron: {
+          nbRangs: patron.rangs.length, approximatif: patron.approximatif, creeLe: patron.creeLe,
+          ...(patron.exemplaires > 1 ? { exemplaires: patron.exemplaires } : {}),
+          ...(patron.panneaux ? { panneaux: patron.panneaux.map((x) => x.rangs.length), sections: patron.assemblage.sections } : {}),
+        },
       }));
       setConfirmer(false);
       naviguer(`/projet/${encodeURIComponent(projet.id)}/patron`, { remplacer: true });
@@ -84,9 +92,17 @@ export function EtapeApercu({ id }) {
 
   return html`
     <main class="ecran">
-      <${EnTeteEtape} titre=${jambieres ? "Tes jambières, terminées" : bonnet ? "Ton bonnet, terminé" : snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
+      <${EnTeteEtape} titre=${couverture ? projet.nom : jambieres ? "Tes jambières, terminées" : bonnet ? "Ton bonnet, terminé" : snood ? "Ton snood, terminé" : "Ton écharpe, terminée"} numero=${5} secours=${cheminEtape(projet, 4)} />
       <div class="ecran-contenu">
-        ${plan && jambieres
+        ${couverture && html`<p class="note" style="margin-top:-6px">${[corps ? `Corps en ${minuscule(corps.nom)}` : null, pointParId(projet.blocs.find((b) => b.id === "bas")?.pointId) ? `bordure en ${minuscule(pointParId(projet.blocs.find((b) => b.id === "bas").pointId).nom)}` : null].filter(Boolean).join(" · ")}</p>`}
+        ${plan && couverture
+          ? html`<${Couverture3D} key=${`couverture-${plan.panneaux?.length || 1}`} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
+            <div class="carte-bloc carte-taille-couverture">
+              <div class="ligne-entre"><span class="titre-taille">${TAILLES_COUVERTURE.find((x) => x.preset === projet.taille.preset)?.nom || "Mesures libres"}</span>
+                <strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong></div>
+              <span class="note">${plan.panneaux ? `En ${plan.panneaux.length} panneaux cousus` : "En une pièce"}${m && pelotesEtPoids(m.metres, laine).pelotes ? ` · environ ${pelotesEtPoids(m.metres, laine).pelotes} pelotes` : m ? ` · ${texteLaineCouverture(m.metres, laine).toLowerCase()}` : ""}</span>
+            </div>`
+          : plan && jambieres
           ? html`<${Jambiere3D} key=${`jambiere-${projet.mode}`} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} />
             <div class="chiffres-cles chiffres-snood">
               <div><strong>${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm</strong><span>tour × longueur</span></div>
@@ -111,9 +127,9 @@ export function EtapeApercu({ id }) {
               choix=${[{ valeur: "barre", libelle: "Sur une barre" }, { valeur: "cou", libelle: "Autour du cou" }]} />
             <${Piece3D} key=${pose} projet=${projet} plan=${plan} couleur=${couleur} laines=${laines} densites=${calcul.densites} face=${face} pose=${pose} />
             <p class="note vitrine-mesures">${formaterNombre(plan.largeur.reelleCm, 0)} × ${formaterNombre(plan.longueur.reelleCm, 0)} cm${corps ? ` · ${minuscule(corps.nom)}` : ""}</p>`
-          : html`<${Encart} type="brique">${jambieres ? "La jambière" : bonnet ? "Le bonnet" : snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
+          : html`<${Encart} type="brique">${couverture ? "La couverture" : jambieres ? "La jambière" : bonnet ? "Le bonnet" : snood ? "Le snood" : "L'écharpe"} s'affichera en 3D dès que les mailles tombent juste (voir ci-dessous).<//>`}
 
-        ${!snood && !jambieres && corps && !corps.proprietes.reversible &&
+        ${!snood && !jambieres && !couverture && corps && !corps.proprietes.reversible &&
         html`<${Onglets} libelle=${snood ? "Côté du snood" : "Côté de l'écharpe"} valeur=${face} surChoix=${setFace}
           choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]} />`}
 
@@ -125,7 +141,7 @@ export function EtapeApercu({ id }) {
 
         ${plan &&
         html`<div class="chiffres-cles">
-          <div><strong>${plan.montage.mailles}</strong><span>mailles à monter</span></div>
+          <div><strong>${plan.montage.mailles}</strong><span>${plan.panneaux ? "mailles par panneau" : "mailles à monter"}</span></div>
           <div><strong>${plan.rangs.length}</strong><span>${snood ? "tours" : "rangs"}${jambieres ? " × 2" : ""}</span></div>
           <div><strong>${m ? `≈ ${m.metres} m` : "?"}</strong><span>${calcul.parLaine?.length > 1 ? `de laine en tout (${calcul.parLaine.length} laines)` : c?.disponible ? `sur ${c.disponible} m` : "de laine"}</span></div>
         </div>`}
@@ -150,7 +166,9 @@ export function EtapeApercu({ id }) {
                   : "Pas d'échantillon : il en faut un pour créer le patron"}
           <//>`}
           ${corps && html`<${Coche} ok=${true}>${texteReversible(corps, projet.type)}<//>`}
-          ${calcul?.cable && html`<${Coche} ok=${false}>${calcul.cable.magicLoop
+          ${calcul?.cable?.couverture && calcul.cable.tropPourCeMontage && html`<${Coche} ok=${false}>Ton câble de ${formaterNombre(calcul.cable.cableCm, 0)} cm porte environ ${calcul.cable.porteeCm} cm : ${calcul.plan?.panneaux ? "prends un câble plus long ou ajoute un panneau" : `tricote en panneaux ou prends un câble de ${calcul.cable.cableConseilleCm} cm`}<//>`}
+          ${couverture && plan?.panneaux && html`<${Coche} ok=${true}>Les ${plan.panneaux.length} panneaux ont le même nombre de rangs : ils auront la même longueur<//>`}
+          ${calcul?.cable && !calcul.cable.couverture && html`<${Coche} ok=${false}>${calcul.cable.magicLoop
             ? `Ton câble (${formaterNombre(calcul.cable.cableCm, 0)} cm) est trop court pour le magic loop : prends un câble de ${calcul.cable.conseille} cm`
             : `Ton câble (${formaterNombre(calcul.cable.cableCm, 0)} cm) est plus long que le tour du snood : prends un câble de ${calcul.cable.conseille} cm`}<//>`}
           ${bonnet && plan?.sommet && html`<${Coche} ok=${true}>${plan.sommet.jersey ? plan.sommet.raison.replace(/\.$/, "") : `Le sommet continue en ${minuscule(pointParId(plan.sommet.pointId)?.nom || "jersey")} : 8 parts, ${plan.sommet.diminutions} tours de diminutions`}<//>`}

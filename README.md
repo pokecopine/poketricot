@@ -19,6 +19,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | E4 — Snood | Snood en rond (1 ou 2 tours, enfant ou adulte), déplacement du début du tour (9 points), builder en rond, aperçu 3D en tube rigide (0.15.0), patron et suivi en tours | ✅ (0.14.0, 0.15.0) |
 | Conseils | Aiguille conseillée dans la fourchette de l'étiquette selon la pièce et le point ; avis des points selon la grosseur de la laine (mention sur les cartes, tri, critère « Pour ma laine »), motif qui tient assez de fois dans le bloc | ✅ (0.18.0) ; essai 📱 |
 | E4 — Jambières | Tube droit, de la cheville vers le genou, à tricoter 2 fois : tour du mollet et longueur mesurés (25, 35 ou 45 cm), en magic loop ou à plat avec une maille de couture de chaque côté et un assemblage au point de matelas, aperçu 3D sur une jambe de mannequin, patron et suivi de la paire | ✅ (0.19.0) ; essai 📱 |
+| E4 — Couverture | Plaid 110 × 140, lit 1 personne 140 × 200, lit 2 personnes 200 × 220 cm ou mesures libres ; à plat, bordure tout autour (4 cm de point mousse, réglable côté par côté) ; en une pièce ou en 2 à 5 panneaux cousus au point de matelas (conseillés quand le câble est trop court : 80 cm porte environ 140 cm) ; aperçu 3D drapé sur un canapé ou un lit ; patron par panneau, suivi des panneaux puis de l'assemblage | ✅ (0.21.0) ; essai 📱 |
 | E4 — Bonnet | Bonnet en rond, tout en magic loop : tailles enfant, femme, homme ou tour de tête mesuré, revers replié (points réversibles), sommet en 8 parts (point simple ou jersey), pompon, aperçu 3D sur une tête de mannequin, patron et suivi | ✅ (0.17.0) ; couverture à venir |
 | E5, E6 | Laine insuffisante, bibliothèque | À venir |
 
@@ -49,9 +50,9 @@ js/composants/        éléments réutilisables (dont echantillon3d.js et vignet
 js/donnees/           base de données, réserve, sauvegarde, couleurs
 js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), avis selon la laine (laine.js), avis pour des jambières (jambieres.js), critères de recherche, techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
-                      plan de l'écharpe (plan.js), du snood en rond (plan-rond.js) du bonnet (plan-bonnet.js : 8 parts, sommet) et des jambières (plan-jambieres.js : en rond ou à plat avec couture, la paire) et leur vérification,
+                      plan de l'écharpe (plan.js), du snood en rond (plan-rond.js) du bonnet (plan-bonnet.js : 8 parts, sommet) des jambières (plan-jambieres.js : en rond ou à plat avec couture, la paire) et de la couverture (plan-couverture.js : une pièce ou panneaux, portée du câble, repères) et leur vérification,
                       conseil d'aiguille dans la fourchette (aiguille.js), métrage, générateur du patron et suivi
-js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (écharpe), tube rigide du snood (tube.js), tête et bonnet rigides (tete.js), jambe et jambière rigides (jambe.js)
+js/rendu/             textures en SVG ; 3D : chemin du fil, ombres de contact (occlusion.js), lumière et nuances (lumiere.js), cuisson des textures, simulation de tissu (écharpe), tube rigide du snood (tube.js), tête et bonnet rigides (tete.js), jambe et jambière rigides (jambe.js), canapé, lits et couverture drapée (couverture.js)
 tests/                tests automatiques
 ```
 

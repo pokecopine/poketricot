@@ -39,7 +39,7 @@ export function EtapeMateriel({ id }) {
   const fourchette = laine && aig && point ? texteConseilFourchette({ piece: projet.type, point, fourchette: aiguillesEtiquette(laine), tailleChoisie: taille }) : null;
 
   const choisirLaine = (l) =>
-    modifier((p) => ({ ...avecLainePrincipale(p, l.id), echantillonId: "", nom: p.nomAuto ? nomPropose(p.type, l) : p.nom }));
+    modifier((p) => ({ ...avecLainePrincipale(p, l.id), echantillonId: "", nom: p.nomAuto ? nomPropose(p.type, l, p.taille) : p.nom }));
   const choisirAiguilles = (a) => modifier((p) => ({ ...p, aiguillesId: a.id, echantillonId: "" }));
 
   const adresseEchantillon = () => {
@@ -79,6 +79,7 @@ export function EtapeMateriel({ id }) {
         ${projet.type === "bonnet" && (aig && cableMagicLoop(lireNombre(aig.cableCm))
           ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(lireNombre(aig.cableCm), 0)} cm est trop court pour le magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.<//>`
           : html`<p class="note">Tout le bonnet se tricote en magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.</p>`)}
+        ${projet.type === "couverture" && html`<p class="note">Plus le câble est long, plus la couverture peut être large : un câble de 80 cm porte environ 140 cm.</p>`}
         ${projet.type === "jambieres" && html`<p class="note">En magic loop, prends un câble de ${CABLE_MAGIC_LOOP} cm ; à plat, n'importe quelle aiguille circulaire convient. Tu choisiras à l'étape Taille.</p>`}
 
         <div class="titre-section">
@@ -90,7 +91,7 @@ export function EtapeMateriel({ id }) {
           : html`<button type="button" class="bouton-secondaire" onClick=${() => naviguer(`/projet/${encodeURIComponent(projet.id)}/point/corps`)}>
               Choisir le point principal
             </button>
-            <p class="note">C'est le point du corps ${{ snood: "du snood", bonnet: "du bonnet", jambieres: "des jambières" }[projet.type] || "de l'écharpe"} : ton échantillon se tricote dans ce point.</p>`}
+            <p class="note">C'est le point du corps ${{ snood: "du snood", bonnet: "du bonnet", jambieres: "des jambières", couverture: "de la couverture" }[projet.type] || "de l'écharpe"} : ton échantillon se tricote dans ce point.</p>`}
 
         <${CarteEchantillon} projet=${projet} laine=${laine} point=${point} taille=${taille} echantillon=${echantillon}
           adresse=${adresseEchantillon} modifier=${modifier} />
@@ -111,7 +112,7 @@ function CartePointPrincipal({ point, couleur, type }) {
         <span class="carte-point-titre"><span>${point.nom}</span></span>
         <div class="puces" style="gap:6px">${etiquettesProprietes(point).map((t) => html`<span class="etiquette">${t}</span>`)}</div>
         ${avis.avis === "conseille"
-          ? html`<span class="note">Conseillé pour ${{ snood: "un snood", bonnet: "un bonnet", jambieres: "des jambières" }[type] || "une écharpe"}. C'est le point du corps : ton échantillon se tricote dans ce point.</span>`
+          ? html`<span class="note">Conseillé pour ${{ snood: "un snood", bonnet: "un bonnet", jambieres: "des jambières", couverture: "une couverture" }[type] || "une écharpe"}. C'est le point du corps : ton échantillon se tricote dans ce point.</span>`
           : html`<${Encart} type=${avis.avis === "deconseille" ? "brique" : "sauge"}>${avis.raison}<//>`}
       </span>
     </div>`;

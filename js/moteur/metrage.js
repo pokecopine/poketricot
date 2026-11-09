@@ -42,8 +42,11 @@ export function grammesParCm2Jersey(echantillon) {
  * prennent la laine du bloc qu'elles bordent, puisque la couleur change sur toute la largeur du rang.
  */
 export function surfacesDuPlan(plan) {
+  // Couverture en panneaux (0.21.0) : la somme des surfaces de chaque panneau.
+  if (plan.panneaux) return plan.panneaux.flatMap((p) => surfacesDuPlan(p));
   const surfaces = [];
-  const lisieres = (densite) => (2 * plan.lisieres.mailles * 10) / densite.mailles;
+  const nLisieres = plan.lisieres.droite !== undefined ? plan.lisieres.droite + plan.lisieres.gauche : 2 * plan.lisieres.mailles;
+  const lisieres = (densite) => (nLisieres * 10) / densite.mailles;
   for (const b of plan.blocs) {
     const laineId = b.laineId || null;
     if (b.colonnes) {
@@ -63,7 +66,13 @@ export function surfacesDuPlan(plan) {
     const largeur = ((b.maillesSurface ?? b.maillesCorps) * 10) / b.densite.mailles + lisieres(b.densite);
     surfaces.push({ blocId: b.id, nom: b.nom, pointId: b.pointId, laineId, cm2: largeur * b.hauteurCm });
   }
-  if (plan.bandesLaterales) {
+  if (plan.bandesLaterales && plan.bandesLaterales.laineId !== undefined) {
+    // Bordure de côté d'une couverture (0.21.0) : une seule laine, celle de la bordure.
+    surfaces.push({
+      blocId: plan.bandesLaterales.blocId, nom: "bordure", pointId: plan.bandesLaterales.pointId, laineId: plan.bandesLaterales.laineId || null,
+      cm2: 2 * plan.bandesLaterales.largeurCm * plan.longueur.reelleCm,
+    });
+  } else if (plan.bandesLaterales) {
     const bandesCm = 2 * plan.bandesLaterales.largeurCm;
     // Une seule surface par laine (une seule en tout quand l'écharpe est d'une seule laine).
     // Chaque côté compte pour moitié ; en intarsia, il prend la laine de la colonne qu'il touche.
@@ -139,15 +148,21 @@ export function metrageNecessaire({ plan, laine, echantillon, densiteJersey }) {
   if (exemplaires > 1) parBloc = parBloc.map((b) => ({ ...b, metres: b.metres * exemplaires, grammes: b.grammes === null ? null : b.grammes * exemplaires }));
   if (plan.couture?.filCm) {
     const metres = (exemplaires * plan.couture.filCm) / 100;
-    parBloc.push({ blocId: "couture", nom: "couture", pointId: null, laineId: plan.blocs[0]?.laineId || null, cm2: 0, grammes: mPour100g ? (metres * 100) / mPour100g : null, metres });
+    const laineCouture = plan.couture.laineId !== undefined ? plan.couture.laineId : (plan.blocs || plan.panneaux?.[0]?.blocs)?.[0]?.laineId;
+    parBloc.push({ blocId: "couture", nom: "couture", pointId: null, laineId: laineCouture || null, cm2: 0, grammes: mPour100g ? (metres * 100) / mPour100g : null, metres });
   }
   const sansMarge = parBloc.reduce((t, b) => t + b.metres, 0);
   // Laine par laine : la longueur de fil dépend des mailles, pas de la marque (laines de même épaisseur).
   const totaux = new Map();
   for (const b of parBloc) totaux.set(b.laineId, (totaux.get(b.laineId) || 0) + b.metres);
   const parLaine = [...totaux].map(([laineId, m]) => ({ laineId, metresSansMarge: m, metres: Math.ceil(m * (1 + MARGE)) }));
+  // Couverture en panneaux (0.21.0) : le métrage d'un panneau (poids sur les aiguilles).
+  const parPanneau = plan.panneaux
+    ? Math.ceil(parBloc.filter((b) => b.blocId !== "couture").reduce((t, b) => t + b.metres, 0) / plan.panneaux.length * (1 + MARGE))
+    : undefined;
   return {
     metres: Math.ceil(sansMarge * (1 + MARGE)), metresSansMarge: sansMarge, methode, parBloc, parLaine,
+    ...(parPanneau ? { parPanneau } : {}),
     ...(exemplaires > 1 ? { exemplaires, parExemplaire: Math.ceil(parExemplaire * (1 + MARGE)) } : {}),
   };
 }
@@ -163,4 +178,18 @@ export function comparerALaLaine(besoinMetres, laine) {
   if (d < besoinMetres) return { statut: "insuffisant", disponible: d, manque: besoinMetres - d, estime: dispo.estime };
   if (d < besoinMetres * (1 + MARGE)) return { statut: "juste", disponible: d, manque: 0, estime: dispo.estime };
   return { statut: "suffisant", disponible: d, manque: 0, estime: dispo.estime };
+}
+
+/**
+ * Pelotes et poids d'un métrage (0.21.0) : pelotes = mètres ÷ mètres par pelote (arrondi au-dessus),
+ * grammes = d'après le métrage pour 100 g (arrondi aux 100 g). Chacun null s'il ne peut pas être calculé.
+ */
+export function pelotesEtPoids(metres, laine) {
+  const q = laine?.quantite || {};
+  const parPelote = q.mode !== "pesee" ? lireNombre(q.metresParPelote) : null;
+  const m100 = metresPour100g(laine);
+  return {
+    pelotes: parPelote && metres > 0 ? Math.ceil(metres / parPelote) : null,
+    grammes: m100 && metres > 0 ? Math.max(100, Math.round((metres * 100) / m100 / 100) * 100) : null,
+  };
 }

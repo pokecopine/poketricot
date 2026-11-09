@@ -50,7 +50,7 @@ function Formulaire({ titre, type, setType, nom, setNom, erreur, actions, enTete
         </div>
         <div class="encadre-bientot">
           <strong style="font-size:13px">Bientôt</strong>
-          <span>Couverture · pull et t-shirt sans couture · gants, mitaines et chaussettes en magic loop · châle</span>
+          <span>Pull et t-shirt sans couture · gants, mitaines et chaussettes en magic loop · châle</span>
         </div>
         <${Champ} libelle="Nom du projet" valeur=${nom} erreur=${erreur} placeholder="ex. Écharpe d'hiver"
           aide="Tu pourras le changer plus tard." surChangement=${setNom} />

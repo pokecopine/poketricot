@@ -496,3 +496,185 @@ export function DessinBonnet({
       </g>
     </svg>`;
 }
+
+// ---------------- Couverture (0.21.0, maquette 3 du 09/11) ----------------
+
+/**
+ * Géométrie de la couverture debout, en cm, vue de l'endroit (x depuis le bord GAUCHE, y depuis le bas) :
+ * { largeur, longueur, panneaux, rects: [{ blocId, colonneId?, pointId, laineId, x, y, l, h, bordure? }], coutures: [x], numeros: [{ n, x }] }.
+ * La bordure : en bas et en haut de chaque panneau, sur le côté extérieur des panneaux du bord.
+ */
+export function geometrieCouverture(projet, plan) {
+  const largeur = plan ? plan.largeur.reelleCm : projet.taille.largeurCm;
+  const longueur = plan ? plan.longueur.reelleCm : projet.taille.longueurCm;
+  const n = plan?.panneaux ? plan.panneaux.length : 1;
+  const lateral = projet.blocs.find((b) => b.zone === "cotes");
+  const bl = plan?.bandesLaterales;
+  const bordG = plan
+    ? plan.panneaux ? plan.panneaux[0].bandesLaterales?.largeurCmG || 0 : bl?.largeurCmG ?? bl?.largeurCm ?? 0
+    : lateral?.largeurCmG ?? lateral?.largeurCm ?? 0;
+  const bordD = plan
+    ? plan.panneaux ? plan.panneaux.at(-1).bandesLaterales?.largeurCmD || 0 : bl?.largeurCmD ?? bl?.largeurCm ?? 0
+    : lateral?.largeurCm ?? 0;
+  const corpsL = Math.max(1, (largeur - bordG - bordD) / n);
+  const horizontaux = projet.blocs.filter((b) => b.zone !== "cotes");
+  const blocsPlan = plan?.panneaux ? plan.panneaux[0].blocs : plan?.blocs;
+  let hauteurs = horizontaux.map((b) => blocsPlan?.find((p) => p.id === b.id)?.hauteurCm);
+  if (hauteurs.some((h) => h === undefined)) {
+    const fixes = horizontaux.filter((b) => b.zone !== "corps").reduce((t, b) => t + (b.hauteurCm || 0), 0);
+    const nCorps = horizontaux.filter((b) => b.zone === "corps").length || 1;
+    hauteurs = horizontaux.map((b) => (b.zone === "corps" ? Math.max(longueur * 0.2, longueur - fixes) / nCorps : b.hauteurCm || 0));
+  }
+  const total = hauteurs.reduce((t, h) => t + h, 0) || 1;
+  const rects = [];
+  const laineBordure = lateral?.laineId || null;
+  let y = 0;
+  horizontaux.forEach((b, i) => {
+    const h = (hauteurs[i] * longueur) / total;
+    const bordure = b.zone === "bas" || b.zone === "haut";
+    const pb = blocsPlan?.find((p) => p.id === b.id);
+    const colonnes = pb ? pb.colonnes : b.colonnes?.length >= 2 ? b.colonnes : null;
+    for (let k = 0; k < n; k++) {
+      const x0 = bordG + k * corpsL;
+      if (bordure) {
+        // La bordure du bas et du haut couvre aussi les coins.
+        const xa = k === 0 ? 0 : x0;
+        const xb = k === n - 1 ? largeur : x0 + corpsL;
+        rects.push({ blocId: b.id, pointId: b.pointId, laineId: b.laineId || null, x: xa, y, l: xb - xa, h, bordure: true });
+      } else if (colonnes) {
+        const poids = colonnes.map((c) => c.largeurCm || 1);
+        const somme = poids.reduce((t, w) => t + w, 0);
+        // Les colonnes sont numérotées depuis le bord droit du panneau.
+        let x = x0 + corpsL;
+        colonnes.forEach((c, j) => {
+          const l = (poids[j] / somme) * corpsL;
+          x -= l;
+          rects.push({ blocId: b.id, colonneId: c.id, colonne: j + 1, pointId: c.pointId, laineId: c.laineId !== undefined ? c.laineId || null : b.laineId || null, x, y, l, h });
+        });
+      } else {
+        rects.push({ blocId: b.id, pointId: b.pointId, laineId: b.laineId || null, x: x0, y, l: corpsL, h });
+      }
+    }
+    if (!bordure && lateral) {
+      if (bordG) rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId: laineBordure, x: 0, y, l: bordG, h, bordure: true });
+      if (bordD) rects.push({ blocId: lateral.id, pointId: lateral.pointId, laineId: laineBordure, x: largeur - bordD, y, l: bordD, h, bordure: true });
+    }
+    y += h;
+  });
+  const coutures = Array.from({ length: n - 1 }, (_, k) => bordG + (k + 1) * corpsL);
+  const numeros = n > 1 ? Array.from({ length: n }, (_, k) => ({ n: k + 1, x: bordG + (k + 0.5) * corpsL })) : [];
+  return { largeur, longueur, panneaux: n, rects, coutures, numeros, bordG, bordD };
+}
+
+/** La couverture entière, debout, avec sa bordure, ses coutures et les numéros des panneaux. */
+export function DessinCouverture({
+  projet, plan, couleur, laines = [], blocChoisi = null, surChoix = null, largeurMaxPx = 300, hauteurMaxPx = 220,
+  echelleTexture = 0.32, prefixe = "couv", libelle,
+}) {
+  const geo = geometrieCouverture(projet, plan);
+  const teinte = (r) => couleurDeLaine(r.laineId, couleur, laines);
+  const motifs = useMotifs(geo.rects.map((r) => ({ pointId: r.pointId, couleur: teinte(r) })), echelleTexture, prefixe);
+  const k = Math.min(largeurMaxPx / geo.largeur, hauteurMaxPx / geo.longueur);
+  const W = geo.largeur * k;
+  const H = geo.longueur * k;
+  const min = 5;
+  // La bordure reste visible (quelques pixels au moins).
+  const px = (r) => {
+    let x = r.x * k;
+    let l = r.l * k;
+    let yy = H - (r.y + r.h) * k;
+    let h = r.h * k;
+    if (r.bordure && l < min && r.x === 0) l = min;
+    if (r.bordure && l < min && r.x > 0) [x, l] = [W - min, min];
+    if (r.bordure && h < min) {
+      if (r.y === 0) [yy, h] = [H - min, min];
+      else [yy, h] = [0, min];
+    }
+    return { x: f(x), y: f(yy), l: f(l), h: f(h) };
+  };
+  const formes = geo.rects.map((r) => ({ ...r, couleur: teinte(r), px: px(r) }));
+  const ordre = [...formes.filter((r) => !r.bordure), ...formes.filter((r) => r.bordure)];
+  const remplir = (r) => {
+    const m = motifDe(motifs, r.pointId, r.couleur);
+    return m ? `url(#${m.id})` : nuancesLaine(r.couleur).maille;
+  };
+  const bordureChoisie = blocChoisi && ["bas", "haut", "cotes"].includes(blocChoisi);
+  const choisis = formes.filter((r) => (bordureChoisie ? r.bordure : r.blocId === blocChoisi && !r.bordure));
+  const c = nuancesLaine(couleur);
+  const marge = 6;
+  return html`
+    <svg width=${f(W + 2 * marge)} height=${f(H + 2 * marge)} viewBox=${`0 0 ${f(W + 2 * marge)} ${f(H + 2 * marge)}`} role="img"
+      aria-label=${libelle || `Plan de la couverture${geo.panneaux > 1 ? ` : ${geo.panneaux} panneaux côte à côte, cousus` : ""}, entourée d'une bordure sur les quatre côtés.`}
+      style="max-width:100%;height:auto;display:block;margin:0 auto">
+      <defs>
+        ${Object.values(motifs).map(
+          (m) => html`<pattern id=${m.id} patternUnits="userSpaceOnUse" width=${f(m.l)} height=${f(m.h)}>
+            <image href=${m.url} width=${f(m.l)} height=${f(m.h)} preserveAspectRatio="none" />
+          </pattern>`
+        )}
+      </defs>
+      <g transform=${`translate(${marge} ${marge})`}>
+        <rect x="0" y="0" width=${f(W)} height=${f(H)} fill=${c.fond} />
+        ${ordre.map(
+          (r) => html`<rect x=${r.px.x} y=${r.px.y} width=${f(r.px.l + 0.3)} height=${f(r.px.h + 0.3)} fill=${remplir(r)}
+            style=${surChoix ? "cursor:pointer" : ""} onClick=${surChoix ? () => surChoix(r.bordure ? "bas" : r.blocId, r.colonneId) : undefined} />`
+        )}
+        ${ordre.filter((r) => r.bordure).map(
+          (r) => html`<rect x=${r.px.x} y=${r.px.y} width=${r.px.l} height=${r.px.h} fill="#3A2A14" opacity="0.22" pointer-events="none" />`
+        )}
+        <rect x="0" y="0" width=${f(W)} height=${f(H)} fill="none" stroke=${c.contour} stroke-width="1.5" />
+        ${geo.coutures.map(
+          (x) => html`<line x1=${f(x * k)} x2=${f(x * k)} y1="0" y2=${f(H)} stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="5 4" />`
+        )}
+        ${geo.numeros.map(
+          (nm) => html`<text x=${f(nm.x * k)} y=${f(H / 2 + 5)} text-anchor="middle" font-family="Nunito, sans-serif" font-size="14" font-weight="700"
+            fill="#2B2622" paint-order="stroke" stroke="#FFFDF8" stroke-width="3">${nm.n}</text>`
+        )}
+        ${choisis.length > 0 && html`<rect x=${f(Math.min(...choisis.map((r) => r.px.x)) - 2)} y=${f(Math.min(...choisis.map((r) => r.px.y)) - 2)}
+          width=${f(Math.max(...choisis.map((r) => r.px.x + r.px.l)) - Math.min(...choisis.map((r) => r.px.x)) + 4)}
+          height=${f(Math.max(...choisis.map((r) => r.px.y + r.px.h)) - Math.min(...choisis.map((r) => r.px.y)) + 4)}
+          rx="4" fill="none" stroke="var(--accent)" stroke-width="3" pointer-events="none" />`}
+      </g>
+    </svg>`;
+}
+
+/**
+ * Petit schéma des panneaux côte à côte (taille, patron, suivi, assemblage).
+ * enAvant : le panneau mis en avant (1…n) ; avancement : { panneau, part } (0 à 1) ; reperes : nombre de repères ;
+ * cousu : part de la couture déjà faite (0 à 1).
+ */
+export function SchemaPanneaux({ n = 2, enAvant = null, avancement = null, reperes = 0, cousu = null, largeur = 84, hauteur = 88, libelle, bordure = !!enAvant }) {
+  const ecart = 4;
+  const lp = (largeur - 8 - ecart * (n - 1)) / n;
+  const h = hauteur - 8;
+  const x = (i) => 4 + i * (lp + ecart);
+  const plein = "#CDB48A";
+  return html`<svg width=${largeur} height=${hauteur} viewBox=${`0 0 ${largeur} ${hauteur}`} role="img" aria-label=${libelle || `${n} panneaux côte à côte`} style="flex:none">
+    ${Array.from({ length: n }, (_, i) => {
+      const fait = avancement ? i + 1 < avancement.panneau : true;
+      const enCours = avancement && i + 1 === avancement.panneau;
+      const pale = (enAvant && i + 1 !== enAvant) || (avancement && !fait && !enCours);
+      return html`<g>
+        <rect x=${f(x(i))} y="4" width=${f(lp)} height=${h} fill=${pale ? "#EDE4D6" : plein} stroke=${pale ? "#CFC2AF" : "#6E5638"} stroke-width="1.5" />
+        ${enCours && html`<rect x=${f(x(i))} y=${f(4 + h * (1 - avancement.part))} width=${f(lp)} height=${f(h * avancement.part)} fill=${plein} />
+          <line x1=${f(x(i))} x2=${f(x(i) + lp)} y1=${f(4 + h * (1 - avancement.part))} y2=${f(4 + h * (1 - avancement.part))} stroke="#B4532A" stroke-width="2.5" />`}
+        ${bordure && enAvant === i + 1 && html`
+          <rect x=${f(x(i))} y="4" width=${f(lp)} height="6" fill="#9C7F55" />
+          <rect x=${f(x(i))} y=${f(hauteur - 10)} width=${f(lp)} height="6" fill="#9C7F55" />
+          ${i === 0 && html`<rect x=${f(x(i))} y="4" width="6" height=${h} fill="#9C7F55" />`}
+          ${i === n - 1 && html`<rect x=${f(x(i) + lp - 6)} y="4" width="6" height=${h} fill="#9C7F55" />`}`}
+        ${n > 1 && html`<text x=${f(x(i) + lp / 2)} y=${f(4 + h / 2 + 5)} text-anchor="middle" font-family="Nunito, sans-serif" font-size="13"
+          font-weight=${enAvant === i + 1 ? 700 : 400} fill=${pale ? "#6B5F55" : "#2B2622"}>${i + 1}</text>`}
+      </g>`;
+    })}
+    ${Array.from({ length: n - 1 }, (_, i) => {
+      const cx = f(x(i) + lp + ecart / 2);
+      const part = cousu === null ? 0 : i === 0 ? cousu : 0;
+      return html`<g>
+        <path d=${`M${cx} 6v${f(h - 4)}`} stroke=${cousu === null ? "#B4532A" : "#9A8670"} stroke-width="2" stroke-dasharray="3 3" />
+        ${part > 0 && html`<path d=${`M${cx} ${f(4 + h * (1 - part))}V${f(4 + h)}`} stroke="#B4532A" stroke-width="3" />`}
+        ${reperes > 0 && Array.from({ length: reperes }, (_, r) => html`<path d=${`M${f(cx - 4)} ${f(4 + (h * (r + 1)) / (reperes + 1))}h8`} stroke="#2B2622" stroke-width="1.5" />`)}
+      </g>`;
+    })}
+  </svg>`;
+}

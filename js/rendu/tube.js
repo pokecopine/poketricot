@@ -161,7 +161,7 @@ export function pixelsPour10cm({ distance, rayon, hauteurPx, fov = 34 }) {
 }
 
 /** L'échelle affichée : la plus grande longueur ronde (10, 5, 2 ou 1 cm) qui tient dans 130 px. */
-export function echelleAffichee(pxParCm) {
-  for (const cm of [10, 5, 2, 1]) if (cm * pxParCm <= 130) return { cm, px: cm * pxParCm };
+export function echelleAffichee(pxParCm, longueurs = [10, 5, 2, 1]) {
+  for (const cm of [...longueurs].sort((a, b) => b - a)) if (cm * pxParCm <= 130) return { cm, px: cm * pxParCm };
   return { cm: 1, px: pxParCm };
 }

@@ -111,6 +111,16 @@ export const TECHNIQUES_PATRON = {
     explication:
       "La 1re et la dernière maille de chaque rang servent à la couture : tricote-les en jersey, à l'endroit sur un rang endroit et à l'envers sur un rang envers. Ne les glisse pas. Elles forment un bord régulier, où l'aiguille à laine passera facilement, et elles disparaissent à l'intérieur une fois la couture faite.",
   },
+  reperesAssemblage: {
+    titre: "Repères pour coudre",
+    explication:
+      "Compte les rangs le long du bord à coudre et accroche un marqueur (ou noue un bout de laine d'une autre couleur) tous les N rangs indiqués, sur les deux panneaux. En cousant, les marqueurs doivent arriver face à face : sinon, c'est qu'un côté a été pris plus serré, et on rattrape avant d'aller plus loin.",
+  },
+  matelasMousse: {
+    titre: "Coudre dans le point mousse",
+    explication:
+      "Dans le point mousse, il n'y a pas de barre bien nette entre les mailles : regarde le bord, tu vois de petites bosses (comme des grains), une tous les 2 rangs. Prends une bosse d'un côté, puis la bosse d'en face de l'autre côté, et tire le fil : les deux bords se rejoignent à plat.",
+  },
   matelas: {
     titre: "Couture au point de matelas",
     explication:
@@ -193,7 +203,7 @@ export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false
       const laine = rang.intarsia && s.colonne && laines ? laines.get(s.laineId) || laines.values().next().value : null;
       const etiquette = s.colonne
         ? etiquetteColonne(s, laine)
-        : s.zone === "corps" ? (rang.type === "transition" ? (rond ? "Tour de transition" : "Rang de transition") : majuscule(nomBloc)) : NOMS_SEGMENTS[s.zone];
+        : s.zone === "corps" ? (rang.type === "transition" ? (rond ? "Tour de transition" : "Rang de transition") : majuscule(nomBloc)) : s.bordure ? "Bordure" : NOMS_SEGMENTS[s.zone];
       lignes.push({
         zone: s.zone, etiquette: `${etiquette} (${consomme(s.gestes)} m.)`, texte: majuscule(decrireGestes(s.gestes, { abreviations })),
         ...(laine ? { couleur: laine.couleur || null } : {}),
@@ -298,14 +308,23 @@ function lignesChangement(c, laines, { abreviations = false, rond = false } = {}
  * entree = { projet, plan, laine, aiguilles, echantillon, densites, metrage, laineSuffit, laines, parLaine, maintenant }
  * laines : les laines du projet (la principale et celles des blocs) ; parLaine : métrage de chacune (calculerProjet).
  */
-export function genererPatron({
+export function genererPatron(entree) {
+  // Couverture en panneaux (0.21.0) : un patron par panneau, puis l'assemblage.
+  if (entree.plan.panneaux) return patronEnPanneaux(entree);
+  return genererPatronSimple(entree);
+}
+
+function genererPatronSimple({
   projet, plan, laine, aiguilles, echantillon, densites, metrage, laineSuffit, laines = [], parLaine = [], maintenant = new Date(),
 }) {
   const dCorps = densites?.[projet.pointPrincipal];
   const approximatif = !dCorps || dCorps.statut !== "mesuree";
   const rond = plan.mode === "rond";
   const motRang = rond ? "tour" : "rang";
-  const piece = { echarpe: "l'écharpe", snood: "le snood", bonnet: "le bonnet", jambieres: "chaque jambière" }[plan.type] || "la pièce";
+  const piece = { echarpe: "l'écharpe", snood: "le snood", bonnet: "le bonnet", jambieres: "chaque jambière", couverture: "la couverture" }[plan.type] || "la pièce";
+  // Couverture (0.21.0) : une pièce, ou un panneau avec une maille de couture du côté cousu.
+  const couverture = plan.type === "couverture";
+  const cousu = couverture && (plan.bords?.droite?.lisiere === "couture" || plan.bords?.gauche?.lisiere === "couture");
   const bonnet = plan.type === "bonnet";
   // Jambières (0.19.0) : le patron décrit une jambière, à tricoter 2 fois ; à plat, une couture au point de matelas.
   const jambieres = plan.type === "jambieres";
@@ -317,6 +336,7 @@ export function genererPatron({
     const b = plan.blocs.find((x) => x.id === id);
     if (!b) return "";
     if (b.section) return b.nom;
+    if (plan.type === "couverture" && (b.zone === "bas" || b.zone === "haut")) return b.zone === "bas" ? "bordure du bas" : "bordure du haut";
     // Un corps coupé par des bandes : « corps (partie 2) ».
     const parties = plan.blocs.filter((x) => x.zone === "corps");
     if (b.zone === "corps" && parties.length > 1) return `corps, partie ${parties.indexOf(b) + 1}`;
@@ -470,12 +490,13 @@ export function genererPatron({
 
   // ---- Étapes ----
   const t = plan.montage.repartition;
-  const motBord = couture ? ["maille de couture", "mailles de couture"] : ["lisière", "lisières"];
+  const motBord = couture || cousu ? ["maille de couture", "mailles de couture"] : ["lisière", "lisières"];
+  const motBande = couverture ? "de bordure" : "de bande latérale";
   const repartition = [
     t.bordD ? pluriel(t.bordD, ...motBord) : null,
-    t.bandeD ? `${t.bandeD} de bande latérale` : null,
+    t.bandeD ? `${t.bandeD} ${motBande}` : null,
     `${t.corps} pour le corps`,
-    t.bandeG ? `${t.bandeG} de bande latérale` : null,
+    t.bandeG ? `${t.bandeG} ${motBande}` : null,
     t.bordG ? pluriel(t.bordG, ...motBord) : null,
   ].filter(Boolean).join(", ");
 
@@ -568,7 +589,7 @@ export function genererPatron({
     : {
       cle: "rabattage", titre: "Rabattage",
       detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
-      texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage ${jambieres ? "souple" : "simple"}, en tricotant chaque maille comme elle se présente.`,
+      texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage ${jambieres || couverture ? "souple" : "simple"}, en tricotant chaque maille comme elle se présente.${cousu ? " Coupe le fil en gardant 50 cm : il servira pour la couture." : ""}`,
       techniques: ["rabattage"],
     });
   if (couture) {
@@ -586,10 +607,13 @@ export function genererPatron({
     texte: bouts > 2
       ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine)${jambieres ? " de chaque jambière" : ""}, chacun dans les mailles de sa couleur, puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`
       : `Rentre les deux bouts de fil (début et fin)${jambieres ? " de chaque jambière" : ""}, puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`,
+    ...(couverture ? { texte: `Rentre ${bouts > 2 ? `les ${bouts} bouts de fil` : "les deux bouts de fil"} sur l'envers, à l'aiguille à laine. Lave selon l'étiquette de ta laine et fais sécher à plat.` } : {}),
     techniques: ["fils", "blocage"],
   });
 
   if (jambieres) techniques.rabattage = techniques.rabattageJambiere;
+  else if (couverture) techniques.rabattage = { ...techniques.rabattageJambiere, explication: techniques.rabattageJambiere.explication.replace(/le pied|la jambe/g, "le bord") };
+  if (cousu) techniques.lisiere = techniques.couture;
   else if (rond) techniques.rabattage = techniques.rabattageSouple;
   if (couture) techniques.lisiere = techniques.couture;
   if (rond) {
@@ -600,7 +624,7 @@ export function genererPatron({
     delete techniques.porte;
   }
   for (const c of ["rabattageSouple", "rabattageJambiere", "filsRond", "blocageRond", "couture"]) delete techniques[c];
-  if (!couture) delete techniques.matelas;
+  if (!couture && !cousu) delete techniques.matelas;
   if (!rond) for (const c of ["joindre", "marqueur", "laineRond", "porteRond"]) delete techniques[c];
   if (!bonnet) for (const c of [...(magicLoop ? [] : ["magicLoop"]), "sommet", "fermeture", "pompon"]) delete techniques[c];
   else {
@@ -635,7 +659,7 @@ export function genererPatron({
     const autre = b.intarsia ? " en intarsia" : b.laineId && b.laineId !== principaleId ? ` dans ${guillemets(mesLaines.get(b.laineId))}` : "";
     return `${nomBlocDe(b.id)} en ${pts}${autre}`;
   });
-  if (plan.bandesLaterales) resumeBlocs.push(`bandes latérales de ${plan.bandesLaterales.mailles} mailles en ${minuscule(pointParId(plan.bandesLaterales.pointId)?.nom || "")}`);
+  if (plan.bandesLaterales && !couverture) resumeBlocs.push(`bandes latérales de ${plan.bandesLaterales.mailles} mailles en ${minuscule(pointParId(plan.bandesLaterales.pointId)?.nom || "")}`);
 
   return {
     id: projet.id,
@@ -670,7 +694,8 @@ export function genererPatron({
     ...(bonnet ? { revers: plan.revers, sommet: plan.sommet, pompon: plan.pompon } : {}),
     ...(jambieres ? { exemplaires, couture } : {}),
     resume: majuscule(resumeBlocs.join(", ")) + (bonnet && plan.pompon ? `, pompon de ${formaterNombre(plan.pompon.cm, 0)} cm` : "") + (bonnet && plan.revers ? ", revers replié" : "")
-      + (jambieres ? `${couture ? ", à plat avec une couture" : ", en magic loop"} ; à tricoter ${exemplaires} fois` : "") + ".",
+      + (jambieres ? `${couture ? ", à plat avec une couture" : ", en magic loop"} ; à tricoter ${exemplaires} fois` : "")
+      + (couverture && plan.bandesLaterales ? `, bordure de côté de ${plan.bandesLaterales.mailles} mailles` : "") + ".",
     metrage: metrage ? { metres: metrage.metres, methode: metrage.methode } : null,
     laineSuffit: laineSuffit ? { statut: laineSuffit.statut, disponible: laineSuffit.disponible } : null,
     verification: { ok: true, verifieLe: maintenant.toISOString() },
@@ -684,6 +709,11 @@ export function genererPatron({
 
 /** Phrase de vérification pour un point : « le point de riz est réversible ». */
 export function texteReversible(point, piece = "echarpe") {
+  if (piece === "couverture") {
+    return point.proprietes.reversible
+      ? `${majuscule(nomAvecArticle(point))} est réversible : la couverture est belle des deux côtés`
+      : `${majuscule(nomAvecArticle(point))} a un envers différent : la couverture a un beau côté`;
+  }
   if (piece === "jambieres") {
     return point.proprietes.reversible
       ? `${majuscule(nomAvecArticle(point))} est réversible : les jambières peuvent se porter retournées`
@@ -712,12 +742,41 @@ export const exemplairesDuPatron = (patron) => patron?.exemplaires || 1;
  * (rabattage, et couture à plat, avant de repartir au rang 1).
  */
 export function pasDuSuivi(patron) {
+  // Couverture en panneaux (0.21.0) : chaque rang de chaque panneau, plus une pause à la fin de chaque panneau ;
+  // ensuite vient l'assemblage, suivi à part (suivi.assemblage).
+  if (patron.panneaux) return patron.panneaux.reduce((t, p) => t + p.rangs.length + 1, 0);
   const e = exemplairesDuPatron(patron);
   return patron.rangs.length * e + (e - 1);
 }
 
+/** Rangs de toute la couverture (sans les pauses). */
+export const rangsDeLaCouverture = (patron) => (patron.panneaux ? patron.panneaux.reduce((t, p) => t + p.rangs.length, 0) : patron.rangs.length);
+
+/** Couverture en panneaux : { panneau (1…n), index, pause, assemblage, rangsFaits }. */
+export function positionPanneaux(patron, faits) {
+  let f = Math.max(0, faits || 0);
+  let rangsFaits = 0;
+  for (const [i, p] of patron.panneaux.entries()) {
+    const n = p.rangs.length;
+    if (f <= n) return { panneau: i + 1, index: f, pause: f === n, assemblage: false, rangsFaits: rangsFaits + f };
+    f -= n + 1;
+    rangsFaits += n;
+  }
+  return { panneau: patron.panneaux.length, index: patron.panneaux.at(-1).rangs.length, pause: false, assemblage: true, rangsFaits };
+}
+
+/** Étapes de l'assemblage cochées (suivi.assemblage), et l'assemblage est-il fini ? */
+export function assemblageFini(patron, suivi) {
+  const a = suivi?.assemblage || {};
+  return (patron.assemblage?.etapes || []).every((e) => (a.faits || []).includes(e.cle));
+}
+
 /** Où en est le suivi : { exemplaire (1, 2…), index (rang dans l'exemplaire), pause, fini }. */
 export function positionSuivi(patron, faits) {
+  if (patron.panneaux) {
+    const p = positionPanneaux(patron, faits);
+    return { exemplaire: p.panneau, index: p.index, pause: p.pause, fini: p.assemblage, assemblage: p.assemblage, rangsFaits: p.rangsFaits };
+  }
   const n = patron.rangs.length;
   const e = exemplairesDuPatron(patron);
   const total = pasDuSuivi(patron);
@@ -791,4 +850,68 @@ export function rangsCondenses(patron, bloc) {
     });
   }
   return sortie;
+}
+
+/**
+ * Couverture en panneaux (0.21.0) : un patron par panneau (même projet, même laine), puis l'assemblage.
+ * Le patron garde, pour les écrans qui lisent un seul plan, le montage, les blocs et les rangs du panneau 1.
+ */
+function patronEnPanneaux(entree) {
+  const { plan } = entree;
+  const n = plan.panneaux.length;
+  const parties = plan.panneaux.map((p) => genererPatronSimple({ ...entree, plan: p }));
+  const p1 = parties[0];
+  const a = plan.assemblage;
+  const bordure = pointParId(plan.panneaux[0].bandesLaterales?.pointId || plan.panneaux[0].blocs[0]?.pointId);
+  const mousse = bordure?.id === "mousse";
+  const panneaux = parties.map((x, i) => ({
+    numero: i + 1,
+    nom: plan.panneaux[i].nom,
+    position: plan.panneaux[i].position,
+    miroirDe: plan.panneaux[i].miroirDe,
+    bords: plan.panneaux[i].bords,
+    montage: x.montage,
+    rabattage: x.rabattage,
+    blocs: x.blocs,
+    bandesLaterales: x.bandesLaterales,
+    dimensions: x.dimensions,
+    etapes: x.etapes.filter((e) => e.cle !== "materiel" && e.cle !== "finitions"),
+    // Les techniques ne sont expliquées qu'au panneau 1.
+    rangs: i === 0 ? x.rangs : x.rangs.map((r) => ({ ...r, techniques: [] })),
+  }));
+  const coutures = Math.max(1, n - 1);
+  const etapesAssemblage = [
+    { cle: "poser", titre: "Poser les panneaux", texte: "Pose les panneaux côte à côte, endroit vers toi, bordures du bas bien alignées. Le panneau 1 à gauche." },
+    { cle: "reperes", titre: "Placer les repères", texte: `Place un marqueur tous les ${a.pas} rangs sur les deux bords à coudre : ${a.reperes} repères de chaque côté${coutures > 1 ? ", pour chaque couture" : ""}.`, techniques: ["reperesAssemblage"] },
+    {
+      cle: "coudre", titre: coutures > 1 ? `Coudre (${coutures} coutures)` : "Coudre",
+      texte: `Couds au point de matelas, du bas vers le haut, l'endroit face à toi : prends la barre entre la maille de couture et sa voisine, un rang à gauche, puis un rang à droite. Tire le fil tous les 2 ou 3 points. À chaque repère, vérifie que les deux marqueurs sont face à face avant de continuer.${coutures > 1 ? " Couds d'abord les panneaux 1 et 2, puis 2 et 3, et ainsi de suite." : ""}`,
+      sections: a.sections, coutures,
+      bordure: mousse ? "Dans la bordure du bas et du haut, prends les petites bosses du point mousse." : "Dans la bordure du bas et du haut, prends un brin de chaque côté, rang par rang.",
+      techniques: ["matelas", ...(mousse ? ["matelasMousse"] : [])],
+    },
+    { cle: "fils", titre: "Rentrer les fils", texte: "Rentre tous les fils sur l'envers, à l'aiguille à laine.", techniques: ["fils"] },
+    { cle: "laver", titre: "Laver et sécher", texte: "Lave selon l'étiquette de ta laine et fais sécher à plat." },
+  ];
+  const matelas = { ...TECHNIQUES_PATRON.matelas, explication: TECHNIQUES_PATRON.matelas.explication.replace("gardé au montage", "gardé au rabattage") };
+  const techniques = { ...p1.techniques, matelas, reperesAssemblage: TECHNIQUES_PATRON.reperesAssemblage, ...(mousse ? { matelasMousse: TECHNIQUES_PATRON.matelasMousse } : {}) };
+  for (const x of parties.slice(1)) for (const [c, t] of Object.entries(x.techniques)) if (!techniques[c]) techniques[c] = t;
+  const materiel = p1.etapes.find((e) => e.cle === "materiel");
+  const liste = [
+    ...materiel.liste.filter((l) => !l.startsWith("Une aiguille à laine")),
+    `Des marqueurs (anneaux ou bouts de laine d'une autre couleur) pour les repères : ${2 * a.reperes} par couture`,
+    "Une aiguille à laine pour la couture et pour rentrer les fils",
+  ];
+  return {
+    ...p1,
+    type: "couverture",
+    montageCouverture: "panneaux",
+    dimensions: { largeurCm: plan.largeur.reelleCm, longueurCm: plan.longueur.reelleCm, largeurViseeCm: plan.largeur.viseeCm, longueurViseeCm: plan.longueur.viseeCm },
+    panneaux,
+    assemblage: { pas: a.pas, sections: a.sections, reperes: a.reperes, coutures, filCm: plan.couture?.filCm || null, etapes: etapesAssemblage },
+    etapes: [{ ...materiel, liste, detail: liste.join(" · ") }],
+    techniques,
+    explications: [...(plan.explications || [])],
+    resume: `En ${n} panneaux cousus. ${p1.resume}`,
+  };
 }

@@ -40,7 +40,9 @@ export function Accueil() {
     const suivi = p.patronId ? suivis[p.patronId] : null;
     // Jambières : les rangs des deux exemplaires et la pause entre les deux.
     const ex = p.patron?.exemplaires || 1;
-    const total = (p.patron?.nbRangs || 0) * ex + (p.patron?.nbRangs ? ex - 1 : 0);
+    const total = p.patron?.panneaux
+      ? p.patron.panneaux.reduce((t, n) => t + n + 1, 0)
+      : (p.patron?.nbRangs || 0) * ex + (p.patron?.nbRangs ? ex - 1 : 0);
     return html`<div class="carte-projet" key=${p.id}>
     <button type="button" class="carte-accueil" onClick=${() => naviguer(cheminProjet(p, suivi))}>
       <span class="carte-accueil-texture" style="width:72px;height:56px">
