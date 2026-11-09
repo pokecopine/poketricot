@@ -385,7 +385,7 @@ export function FichePoint({ id }) {
           <h2 id="titre-ouvrages">Pour quels ouvrages ?</h2>
           <ul class="liste-avis">
             ${PIECES.map((p) => {
-              const a = point.ouvrages[p.id];
+              const a = avisPour(point, p.id);
               const libelle = { conseille: "Conseillé", possible: "Possible", deconseille: "Peu adapté" }[a.avis];
               return html`<li>
                 <span class=${"avis avis-" + a.avis}>${libelle}</span>

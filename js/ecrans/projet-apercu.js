@@ -69,7 +69,7 @@ export function EtapeApercu({ id }) {
       await base.ecrire("suivis", nouveauSuivi(patron));
       await modifier((p) => ({
         ...p, statut: "patron", etape: 6, patronId: patron.id,
-        patron: { nbRangs: patron.rangs.length, approximatif: patron.approximatif, creeLe: patron.creeLe },
+        patron: { nbRangs: patron.rangs.length, approximatif: patron.approximatif, creeLe: patron.creeLe, ...(patron.exemplaires > 1 ? { exemplaires: patron.exemplaires } : {}) },
       }));
       setConfirmer(false);
       naviguer(`/projet/${encodeURIComponent(projet.id)}/patron`, { remplacer: true });

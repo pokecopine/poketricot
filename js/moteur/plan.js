@@ -140,10 +140,13 @@ const premierCote = (point) => (point.miseEnPlace?.[0] || point.rangs[0]).cote;
  *      avec son point ; mailles fixe la largeur d'une colonne, les autres se partagent le reste.
  *     laineId : une autre laine pour ce bloc (la couleur change sur toute la largeur du rang).
  *   densites: { [pointId]: { mailles, rangs, statut } },
- *   lisieres: "chainette" | "aucune",
+ *   lisieres: "chainette" | "aucune" | "couture",
+ *     couture (jambières à plat, 0.19.0) : 1 maille de chaque côté, en jersey (endroit sur l'endroit, envers sur l'envers) ;
+ *     elle disparaît dans la couture, donc elle ne compte pas dans la largeur.
+ *   bordsGardentLeCorps: les bordures gardent les mailles du corps dès que leur motif y tombe juste (comme en rond).
  * }
  */
-export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres = "chainette" }) {
+export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres = "chainette", bordsGardentLeCorps = false }) {
   const erreurs = [];
   const explications = [];
   const nomDe = (b) => b.nom || NOMS_DES_ZONES[b.zone];
@@ -207,8 +210,9 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
   const dCorps = infos.get(corps.id).densite;
 
   // ---- Largeur : lisières, bandes latérales, puis corps ----
-  const nLisiere = lisieres === "chainette" ? 1 : 0;
-  const lisiereCm = (nLisiere * 10) / dCorps.mailles;
+  const nLisiere = lisieres === "chainette" || lisieres === "couture" ? 1 : 0;
+  // Les mailles de couture disparaissent dans la couture : elles ne comptent pas dans la largeur finie.
+  const lisiereCm = lisieres === "couture" ? 0 : (nLisiere * 10) / dCorps.mailles;
   let nBande = 0;
   let bandeCm = 0;
   if (lateral) {
@@ -245,9 +249,20 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       const info = infos.get(b.id);
       const ideal = (corpsCm * info.densite.mailles) / 10;
       // Une section garde les mailles de son voisin dès que son motif y tombe juste (E3c-2).
-      if (voisin !== undefined && convient(info, voisin) && (b.section || Math.abs(voisin / ideal - 1) <= 0.05)) {
+      if (voisin !== undefined && convient(info, voisin) && (b.section || bordsGardentLeCorps || Math.abs(voisin / ideal - 1) <= 0.05)) {
         choix[i] = { n: voisin, explication: null };
         return true;
+      }
+      // Jambières à plat : une bordure qui ne tombe pas juste sur les mailles du corps en prend le nombre le plus proche
+      // (le plus grand à égalité), pour un rang de transition de quelques mailles seulement.
+      if (bordsGardentLeCorps && voisin !== undefined && !info.colonnes) {
+        for (let e = 1; e <= 12; e++) {
+          const n = [voisin + e, voisin - e].find((x) => x > 0 && convient(info, x));
+          if (n) {
+            choix[i] = { n, explication: null };
+            return true;
+          }
+        }
       }
       const voulu = Math.max(1, Math.round(ideal));
       const retenu = info.colonnes ? plusProche(info, voulu) : maillesPourLargeur(info.point, corpsCm, info.densite).retenu;
@@ -352,7 +367,9 @@ export function planEcharpe({ largeurCm, longueurCm, blocs, densites, lisieres =
       const { rang: r, entree } = rangBande(t);
       return [{ zone, pointId: lateral.pointId, rang: r, gestes: deplier(r, entree), laineId: laineDe(zone) }];
     };
-    const lisiere = (zone, code) => (nLisiere ? [{ zone, pointId: null, rang: null, lisiere: true, gestes: [code], laineId: laineDe(zone) }] : []);
+    const lisiere = (zone, code) => (nLisiere
+      ? [{ zone, pointId: null, rang: null, lisiere: true, ...(lisieres === "couture" ? { couture: true } : {}), gestes: [lisieres === "couture" ? (c === "E" ? "end" : "env") : code], laineId: laineDe(zone) }]
+      : []);
     // Colonnes : sur un rang endroit, on part du bord droit (colonne 1) ; sur l'envers, de la dernière colonne.
     const corpsZ = colonnesZ
       ? (c === "E" ? colonnesZ : [...colonnesZ].reverse())

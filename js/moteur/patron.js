@@ -106,6 +106,21 @@ export const TECHNIQUES_PATRON = {
     explication:
       "Découpe deux disques de carton du diamètre du pompon, avec un trou au milieu de la moitié de ce diamètre (une fente d'un côté aide à les sortir). Pose-les l'un sur l'autre et enroule la laine tout autour, en passant par le trou, jusqu'à ce que le trou soit plein. Glisse la pointe des ciseaux entre les deux cartons et coupe tous les fils sur le bord. Passe un fil solide entre les deux cartons, serre très fort et fais deux nœuds. Retire les cartons, secoue le pompon et égalise-le aux ciseaux. Garde les deux bouts du nœud pour le coudre au sommet du bonnet.",
   },
+  couture: {
+    titre: "Maille de couture",
+    explication:
+      "La 1re et la dernière maille de chaque rang servent à la couture : tricote-les en jersey, à l'endroit sur un rang endroit et à l'envers sur un rang envers. Ne les glisse pas. Elles forment un bord régulier, où l'aiguille à laine passera facilement, et elles disparaissent à l'intérieur une fois la couture faite.",
+  },
+  matelas: {
+    titre: "Couture au point de matelas",
+    explication:
+      "Pose la pièce à plat, endroit vers toi, et rapproche les deux bords côte à côte. Enfile le fil gardé au montage dans l'aiguille à laine. Entre la maille de couture et la maille d'à côté, il y a un petit brin horizontal à chaque rang. Prends ce brin sur un bord, puis le brin du même rang sur l'autre bord, puis le brin du rang suivant sur le premier bord, et ainsi de suite, en remontant d'un rang à chaque fois. Tous les 2 cm, tire doucement le fil : les bords se rejoignent et les mailles de couture passent à l'intérieur. Ne serre pas trop, la couture doit s'étirer comme le tricot. En haut, fais un petit point pour bloquer et rentre le fil à l'intérieur.",
+  },
+  rabattageJambiere: {
+    titre: "Rabattage souple",
+    explication:
+      "Tricote 2 mailles comme elles se présentent. Avec l'aiguille gauche, passe la 1re maille de l'aiguille droite par-dessus la 2e et laisse-la tomber. Tricote 1 maille de plus et recommence. Rabats sans serrer, avec une aiguille d'une taille au-dessus si tu en as une : le bord doit s'étirer autant que les côtes, pour passer le pied et ne pas serrer la jambe. À la fin, coupe le fil à 15 cm et passe-le dans la dernière maille.",
+  },
   blocage: {
     titre: "Blocage",
     explication:
@@ -165,7 +180,10 @@ export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false
   const premier = segments[0]?.lisiere ? segments[0] : null;
   const dernier = segments.at(-1)?.lisiere ? segments.at(-1) : null;
   const milieu = segments.filter((s) => !s.lisiere);
-  if (premier) lignes.push({ zone: "lisiere", texte: abreviations ? "1 gl. f. dev. (lisière)" : "Glisse la 1re maille, fil devant (lisière)" });
+  const texteCouture = (s) => (s.gestes[0] === "env"
+    ? (abreviations ? "1 env. (couture)" : "1 maille envers (maille de couture)")
+    : (abreviations ? "1 end. (couture)" : "1 maille endroit (maille de couture)"));
+  if (premier) lignes.push({ zone: "lisiere", texte: premier.couture ? texteCouture(premier) : abreviations ? "1 gl. f. dev. (lisière)" : "Glisse la 1re maille, fil devant (lisière)" });
   const tous = milieu.flatMap((s) => s.gestes);
   if (milieu.length > 1 && !rang.intarsia && tous.every((c) => c === tous[0])) {
     lignes.push({ zone: "tout", texte: majuscule(texteGestes(tous, { abreviations })) });
@@ -182,7 +200,7 @@ export function lignesDuRang(rang, nomBloc, { abreviations = false, rond = false
       });
     }
   }
-  if (dernier) lignes.push({ zone: "lisiere", texte: abreviations ? "1 end. (lisière)" : "Tricote la dernière maille à l'endroit (lisière)" });
+  if (dernier) lignes.push({ zone: "lisiere", texte: dernier.couture ? texteCouture(dernier) : abreviations ? "1 end. (lisière)" : "Tricote la dernière maille à l'endroit (lisière)" });
   return lignes;
 }
 
@@ -287,8 +305,14 @@ export function genererPatron({
   const approximatif = !dCorps || dCorps.statut !== "mesuree";
   const rond = plan.mode === "rond";
   const motRang = rond ? "tour" : "rang";
-  const piece = { echarpe: "l'écharpe", snood: "le snood", bonnet: "le bonnet" }[plan.type] || "la pièce";
+  const piece = { echarpe: "l'écharpe", snood: "le snood", bonnet: "le bonnet", jambieres: "chaque jambière" }[plan.type] || "la pièce";
   const bonnet = plan.type === "bonnet";
+  // Jambières (0.19.0) : le patron décrit une jambière, à tricoter 2 fois ; à plat, une couture au point de matelas.
+  const jambieres = plan.type === "jambieres";
+  const exemplaires = plan.exemplaires || 1;
+  const couture = jambieres && plan.couture ? plan.couture : null;
+  const magicLoop = bonnet || (jambieres && rond);
+  const filCouture = couture ? `${formaterNombre(couture.filCm / 100, 1)} m` : null;
   const nomBlocDe = (id) => {
     const b = plan.blocs.find((x) => x.id === id);
     if (!b) return "";
@@ -446,12 +470,13 @@ export function genererPatron({
 
   // ---- Étapes ----
   const t = plan.montage.repartition;
+  const motBord = couture ? ["maille de couture", "mailles de couture"] : ["lisière", "lisières"];
   const repartition = [
-    t.bordD ? pluriel(t.bordD, "lisière", "lisières") : null,
+    t.bordD ? pluriel(t.bordD, ...motBord) : null,
     t.bandeD ? `${t.bandeD} de bande latérale` : null,
     `${t.corps} pour le corps`,
     t.bandeG ? `${t.bandeG} de bande latérale` : null,
-    t.bordG ? pluriel(t.bordG, "lisière", "lisières") : null,
+    t.bordG ? pluriel(t.bordG, ...motBord) : null,
   ].filter(Boolean).join(", ");
 
   const etapes = [];
@@ -461,7 +486,7 @@ export function genererPatron({
         const m = metresDe(l.id) ?? (i === 0 ? metrage?.metres : null);
         return `${l.nom}${m ? ` : environ ${m} m` : ""}${i === 0 ? " (laine principale)" : ""}`;
       })
-    : [`${laine?.nom || "Ta laine"}${metrage ? ` : environ ${metrage.metres} m` : ""}`];
+    : [`${laine?.nom || "Ta laine"}${metrage ? ` : environ ${metrage.metres} m${exemplaires > 1 ? " pour la paire" : ""}` : ""}`];
   const blocsIntarsia = plan.blocs.filter((b) => b.intarsia);
   const nbPelotes = blocsIntarsia.reduce((t, b) => t + b.colonnes.length, 0);
   const materiel = [
@@ -469,24 +494,28 @@ export function genererPatron({
     ...(blocsIntarsia.length
       ? [`De quoi préparer ${nbPelotes} petites pelotes pour l'intarsia (${blocsIntarsia.map((b) => `${majuscule(nomBlocDe(b.id))} : ${textePelotes(b).replace(/^\d+ petites pelotes : /, "")}`).join(" ; ")})`]
       : []),
-    `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (${bonnet ? "on tricote en rond, en magic loop : câble de 80 cm conseillé" : rond ? "on tricote en rond" : "on tricote à plat, en allers-retours"})`,
+    `Aiguilles circulaires de ${formaterNombre(lireNombre(aiguilles.tailleMm), 2)} mm${lireNombre(aiguilles.cableCm) ? `, câble ${formaterNombre(lireNombre(aiguilles.cableCm), 0)} cm` : ""} (${magicLoop ? "on tricote en rond, en magic loop : câble de 80 cm conseillé" : rond ? "on tricote en rond" : "on tricote à plat, en allers-retours"})`,
     ...(rond ? ["Un marqueur de début de tour (un anneau ou un bout de laine d'une autre couleur)"] : []),
     ...(bonnet && plan.pompon ? [`Un morceau de carton pour le pompon (deux disques de ${formaterNombre(plan.pompon.cm, 0)} cm)`] : []),
-    "Une aiguille à laine pour rentrer les fils",
+    couture ? "Une aiguille à laine pour la couture et pour rentrer les fils" : "Une aiguille à laine pour rentrer les fils",
     "Une paire de ciseaux",
   ];
+  if (exemplaires > 1) materiel.unshift(`Ce patron décrit une jambière : tricote-le ${exemplaires} fois pour la paire (la laine est comptée pour les deux)`);
   etapes.push({ cle: "materiel", titre: "Matériel", detail: materiel.join(" · "), liste: materiel });
   etapes.push(rond
     ? {
       cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles, joindre en rond`,
-      texte: bonnet
-        ? `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Sépare-les en deux moitiés pour le magic loop (${plan.montage.mailles / 2} et ${plan.montage.mailles / 2}). Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour. Tout le bonnet se tricote en magic loop.`
+      texte: magicLoop
+        ? `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Sépare-les en deux moitiés pour le magic loop (${Math.ceil(plan.montage.mailles / 2)} et ${Math.floor(plan.montage.mailles / 2)}). Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour. ${bonnet ? "Tout le bonnet" : "Toute la jambière"} se tricote en magic loop.`
         : `Monte ${plan.montage.mailles} mailles avec le montage tricoté. Joins en rond sans vriller les mailles et place un marqueur : il marque le début du tour.`,
-      techniques: bonnet ? ["montage", "magicLoop", "joindre"] : ["montage", "joindre"],
+      techniques: magicLoop ? ["montage", "magicLoop", "joindre"] : ["montage", "joindre"],
     }
     : {
       cle: "montage", titre: "Montage", detail: `Monter ${plan.montage.mailles} mailles (montage tricoté)`,
-      texte: `Monte ${plan.montage.mailles} mailles avec le montage tricoté : ${repartition}.`, techniques: ["montage"],
+      texte: couture
+        ? `Laisse pendre un fil d'environ ${filCouture} avant la 1re maille : il servira à la couture. Monte ${plan.montage.mailles} mailles avec le montage tricoté : ${repartition}.`
+        : `Monte ${plan.montage.mailles} mailles avec le montage tricoté : ${repartition}.`,
+      techniques: ["montage"],
     });
   for (const b of plan.blocs) {
     const point = pointParId(b.pointId);
@@ -533,41 +562,53 @@ export function genererPatron({
     ? {
       cle: "rabattage", titre: "Rabattage",
       detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
-      texte: `Au marqueur, rabats les ${plan.rabattage.mailles} mailles souplement, en tricotant chaque maille comme elle se présente : le bord doit pouvoir passer la tête. Retire le marqueur en arrivant dessus.`,
+      texte: `Au marqueur, rabats les ${plan.rabattage.mailles} mailles souplement, en tricotant chaque maille comme elle se présente : le bord doit pouvoir passer ${jambieres ? "le pied" : "la tête"}. Retire le marqueur en arrivant dessus.`,
       techniques: ["rabattage"],
     }
     : {
       cle: "rabattage", titre: "Rabattage",
       detail: `Rabattre les ${plan.rabattage.mailles} mailles, souplement`,
-      texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage simple, en tricotant chaque maille comme elle se présente.`,
+      texte: `Sur l'${dernierRang.cote === "E" ? "envers" : "endroit"}, rabats les ${plan.rabattage.mailles} mailles avec le rabattage ${jambieres ? "souple" : "simple"}, en tricotant chaque maille comme elle se présente.`,
       techniques: ["rabattage"],
     });
+  if (couture) {
+    etapes.push({
+      cle: "assemblage", titre: "Assemblage",
+      detail: "Coudre au point de matelas, du bas vers le haut",
+      texte: `Ferme la jambière par une couture au point de matelas, du bas vers le haut, avec le fil gardé au montage (environ ${filCouture}) : ${plan.rangs.length} rangs à coudre, endroit vers toi.`,
+      techniques: ["matelas"],
+    });
+  }
   // Une petite pelote = 2 bouts (début et fin) ; le bloc en intarsia était compté comme une seule laine.
   const bouts = changements.bouts + blocsIntarsia.reduce((t, b) => t + 2 * b.colonnes.length - 2, 0);
   etapes.push({
     cle: "finitions", titre: "Finitions", detail: "Rentrer les fils, bloquer",
     texte: bouts > 2
-      ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine), chacun dans les mailles de sa couleur, puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`
-      : `Rentre les deux bouts de fil (début et fin), puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`,
+      ? `Rentre les ${bouts} bouts de fil (début, fin et changements de laine)${jambieres ? " de chaque jambière" : ""}, chacun dans les mailles de sa couleur, puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`
+      : `Rentre les deux bouts de fil (début et fin)${jambieres ? " de chaque jambière" : ""}, puis bloque ${piece} pour régulariser les mailles.${bonnet && plan.revers ? " Une fois sec, replie le bord en deux vers l'extérieur : c'est le revers." : ""}`,
     techniques: ["fils", "blocage"],
   });
 
+  if (jambieres) techniques.rabattage = techniques.rabattageJambiere;
+  else if (rond) techniques.rabattage = techniques.rabattageSouple;
+  if (couture) techniques.lisiere = techniques.couture;
   if (rond) {
-    techniques.rabattage = techniques.rabattageSouple;
     techniques.fils = techniques.filsRond;
     techniques.blocage = techniques.blocageRond;
     delete techniques.lisiere;
     delete techniques.laine;
     delete techniques.porte;
   }
-  for (const c of ["rabattageSouple", "filsRond", "blocageRond"]) delete techniques[c];
+  for (const c of ["rabattageSouple", "rabattageJambiere", "filsRond", "blocageRond", "couture"]) delete techniques[c];
+  if (!couture) delete techniques.matelas;
   if (!rond) for (const c of ["joindre", "marqueur", "laineRond", "porteRond"]) delete techniques[c];
-  if (!bonnet) for (const c of ["magicLoop", "sommet", "fermeture", "pompon"]) delete techniques[c];
+  if (!bonnet) for (const c of [...(magicLoop ? [] : ["magicLoop"]), "sommet", "fermeture", "pompon"]) delete techniques[c];
   else {
     delete techniques.rabattage;
     if (!plan.pompon) delete techniques.pompon;
   }
   if (!blocsIntarsia.length) delete techniques.intarsia;
+  if (jambieres && !rond) techniques.blocage = { ...techniques.blocage, explication: TECHNIQUES_PATRON.blocageRond.explication };
 
   // ---- Copie des points utilisés (recettes figées) ----
   const pointIds = [...new Set([
@@ -627,7 +668,9 @@ export function genererPatron({
     })),
     bandesLaterales: plan.bandesLaterales,
     ...(bonnet ? { revers: plan.revers, sommet: plan.sommet, pompon: plan.pompon } : {}),
-    resume: majuscule(resumeBlocs.join(", ")) + (bonnet && plan.pompon ? `, pompon de ${formaterNombre(plan.pompon.cm, 0)} cm` : "") + (bonnet && plan.revers ? ", revers replié" : "") + ".",
+    ...(jambieres ? { exemplaires, couture } : {}),
+    resume: majuscule(resumeBlocs.join(", ")) + (bonnet && plan.pompon ? `, pompon de ${formaterNombre(plan.pompon.cm, 0)} cm` : "") + (bonnet && plan.revers ? ", revers replié" : "")
+      + (jambieres ? `${couture ? ", à plat avec une couture" : ", en magic loop"} ; à tricoter ${exemplaires} fois` : "") + ".",
     metrage: metrage ? { metres: metrage.metres, methode: metrage.methode } : null,
     laineSuffit: laineSuffit ? { statut: laineSuffit.statut, disponible: laineSuffit.disponible } : null,
     verification: { ok: true, verifieLe: maintenant.toISOString() },
@@ -655,6 +698,33 @@ export function texteReversible(point, piece = "echarpe") {
     ? `${majuscule(nomAvecArticle(point))} est réversible : l'écharpe est belle des deux côtés`
     : `${majuscule(nomAvecArticle(point))} a un envers différent : l'écharpe a un beau côté`;
 }
+
+/** Combien de fois le patron se tricote (2 pour une paire de jambières). */
+export const exemplairesDuPatron = (patron) => patron?.exemplaires || 1;
+
+/**
+ * Pas du suivi : chaque rang de chaque exemplaire, plus une pause entre deux exemplaires
+ * (rabattage, et couture à plat, avant de repartir au rang 1).
+ */
+export function pasDuSuivi(patron) {
+  const e = exemplairesDuPatron(patron);
+  return patron.rangs.length * e + (e - 1);
+}
+
+/** Où en est le suivi : { exemplaire (1, 2…), index (rang dans l'exemplaire), pause, fini }. */
+export function positionSuivi(patron, faits) {
+  const n = patron.rangs.length;
+  const e = exemplairesDuPatron(patron);
+  const total = pasDuSuivi(patron);
+  const f = Math.max(0, Math.min(faits || 0, total));
+  if (f >= total) return { exemplaire: e, index: n, pause: false, fini: true };
+  const exemplaire = Math.floor(f / (n + 1));
+  const index = f % (n + 1);
+  return { exemplaire: exemplaire + 1, index, pause: index === n, fini: false };
+}
+
+/** « 1re jambière », « 2e jambière ». */
+export const nomExemplaire = (k) => `${k === 1 ? "1re" : `${k}e`} jambière`;
 
 /** Suivi neuf d'un patron. */
 export function nouveauSuivi(patron) {

@@ -1,6 +1,6 @@
 // Textes d'une fiche point, calculés depuis la recette (fonctions pures, testées).
 import { largeurMotif, maillesMinimum } from "../moteur/simulateur.js";
-import { PIECES, NIVEAUX } from "./points.js";
+import { PIECES, NIVEAUX, avisPour } from "./points.js";
 
 /** « nombre impair de mailles », « multiple de 9 + 3 mailles »… */
 export function texteMultiple(point, mode = "plat") {
@@ -45,6 +45,6 @@ export function texteDensite(point) {
 
 /** Pièces pour lesquelles le point est conseillé : « écharpe, snood, bonnet ». */
 export function texteOuvragesConseilles(point) {
-  const noms = PIECES.filter((p) => point.ouvrages[p.id]?.avis === "conseille").map((p) => p.nom.toLowerCase());
+  const noms = PIECES.filter((p) => avisPour(point, p.id).avis === "conseille").map((p) => p.nom.toLowerCase());
   return noms.length ? noms.join(", ") : "à choisir selon l'effet voulu";
 }

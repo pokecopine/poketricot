@@ -132,12 +132,24 @@ export function metrageNecessaire({ plan, laine, echantillon, densiteJersey }) {
     const metres = metresPompon(plan.pompon.cm, densiteJersey);
     if (metres) parBloc.push({ blocId: "pompon", nom: "pompon", pointId: null, laineId: plan.pompon.laineId || null, cm2: 0, grammes: mPour100g ? (metres * 100) / mPour100g : null, metres });
   }
+  // Jambières (0.19.0) : tout compte autant de fois qu'il y a d'exemplaires (la paire) ; à plat, le fil de couture en plus,
+  // dans la laine du bord du bas (celle du montage).
+  const exemplaires = plan.exemplaires || 1;
+  const parExemplaire = parBloc.reduce((t, b) => t + b.metres, 0);
+  if (exemplaires > 1) parBloc = parBloc.map((b) => ({ ...b, metres: b.metres * exemplaires, grammes: b.grammes === null ? null : b.grammes * exemplaires }));
+  if (plan.couture?.filCm) {
+    const metres = (exemplaires * plan.couture.filCm) / 100;
+    parBloc.push({ blocId: "couture", nom: "couture", pointId: null, laineId: plan.blocs[0]?.laineId || null, cm2: 0, grammes: mPour100g ? (metres * 100) / mPour100g : null, metres });
+  }
   const sansMarge = parBloc.reduce((t, b) => t + b.metres, 0);
   // Laine par laine : la longueur de fil dépend des mailles, pas de la marque (laines de même épaisseur).
   const totaux = new Map();
   for (const b of parBloc) totaux.set(b.laineId, (totaux.get(b.laineId) || 0) + b.metres);
   const parLaine = [...totaux].map(([laineId, m]) => ({ laineId, metresSansMarge: m, metres: Math.ceil(m * (1 + MARGE)) }));
-  return { metres: Math.ceil(sansMarge * (1 + MARGE)), metresSansMarge: sansMarge, methode, parBloc, parLaine };
+  return {
+    metres: Math.ceil(sansMarge * (1 + MARGE)), metresSansMarge: sansMarge, methode, parBloc, parLaine,
+    ...(exemplaires > 1 ? { exemplaires, parExemplaire: Math.ceil(parExemplaire * (1 + MARGE)) } : {}),
+  };
 }
 
 /**

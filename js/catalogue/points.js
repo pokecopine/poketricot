@@ -11,6 +11,7 @@
 // article : « le », « la » ou « les » devant le nom en minuscules (« le point de riz », « les côtes 2/2 »).
 // avis : "conseille" | "possible" | "deconseille", avec une raison d'une phrase quand ce n'est pas conseillé.
 
+import { avisJambieres } from "./jambieres.js";
 import { TRICONAUTES, E, V, fois, ok, possible, deconseille } from "./aides.js";
 import { avisCotes } from "./cotes.js";
 import { POINTS_LOT as LOT_A } from "./lots/lot-a.js";
@@ -33,6 +34,7 @@ export const PIECES = [
   { id: "echarpe", nom: "Écharpe" },
   { id: "snood", nom: "Snood" },
   { id: "bonnet", nom: "Bonnet" },
+  { id: "jambieres", nom: "Jambières" },
   { id: "couverture", nom: "Couverture" },
 ];
 
@@ -363,7 +365,7 @@ export function rechercherPoints(texte, points = POINTS) {
 
 /** Avis du point pour une pièce et une zone (« corps » par défaut). */
 export function avisPour(point, piece, zone = "corps") {
-  const avisPiece = piece ? point.ouvrages[piece] || { avis: "possible" } : { avis: "conseille" };
+  const avisPiece = piece ? point.ouvrages[piece] || (piece === "jambieres" ? avisJambieres(point) : { avis: "possible" }) : { avis: "conseille" };
   if (zone === "bordure" || zone === "cotes") {
     const avisZone = zone === "cotes" ? avisCotes(point) : point.zones?.bordure || { avis: "possible" };
     const ordre = { conseille: 0, possible: 1, deconseille: 2 };
