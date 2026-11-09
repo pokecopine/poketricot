@@ -40,7 +40,7 @@ ${rond
 
 // ---- B. Builder
 const zone = (id, h, sel = false) => `<div style="${tex(id, 0.5)};height:${h}px;${sel ? "outline:3px solid var(--accent);outline-offset:-3px;border-radius:4px;" : ""}"></div>`;
-const dessin = (rond, selBas) => `<div style="position:relative;width:${rond ? 230 : 236}px;margin:12px auto 0">
+const dessin = (rond, selBas) => `<div style="position:relative;width:${rond ? 230 : 236}px;margin:8px auto 0">
 <div style="border-radius:6px;overflow:hidden;box-shadow:0 0 0 1px #566A5A55">${zone("cotes-1-1", 34)}${zone("riz", 168, !selBas)}${zone("cotes-1-1", 34, selBas)}</div>
 ${rond
   ? `<div style="position:absolute;right:-1px;top:-6px;bottom:-6px;border-right:2px dashed var(--accent)"></div>
@@ -50,8 +50,8 @@ ${rond
 <div style="position:absolute;right:0;top:0;bottom:0;width:5px;background:repeating-linear-gradient(to bottom,#FFFDF8 0 5px,transparent 5px 9px);opacity:.9;border-left:1px dashed #566A5A"></div>
 <span style="position:absolute;left:-2px;bottom:-24px;font-size:12px;color:var(--texte-2)">↑ couture</span>
 <span style="position:absolute;right:-2px;bottom:-24px;font-size:12px;color:var(--texte-2)">couture ↑</span>`}
-<span style="position:absolute;left:50%;transform:translateX(-50%);bottom:-24px;font-size:12px;color:var(--texte-2)">cheville</span>
-<span style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;font-size:12px;color:var(--texte-2)">genou</span>
+<span style="position:absolute;right:calc(100% + 8px);bottom:8px;font-size:12px;color:var(--texte-2)">cheville</span>
+<span style="position:absolute;right:calc(100% + 8px);top:8px;font-size:12px;color:var(--texte-2)">genou</span>
 </div>
 <p class="atelier-legende" style="margin-top:32px">${rond ? "Une jambière ouverte et posée à plat · tricotée en rond" : "Une jambière à plat, avant la couture"}</p>`;
 const bloc = (nom, id, on, extra = "") => `<button type="button" class="bloc${extra}" aria-pressed="${on}"><div style="${tex(id, 0.6)};height:20px;border-radius:5px;width:100%"></div><span>${nom}</span></button>`;
