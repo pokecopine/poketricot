@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<link rel="stylesheet" href="/css/pelote.css">
+<style>.ecran-pied{position:static}</style>
+<script type="importmap">{"imports":{"preact":"/vendor/preact.module.js","preact/hooks":"/vendor/hooks.module.js","htm":"/vendor/htm.module.js"}}</script>
+</head><body><div id="app">
+<main class="ecran">
+<header class="ecran-entete"><div class="ecran-entete-ligne"><button type="button" class="bouton-rond"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button><div class="entete-etape"><h1 class="entete-etape-titre">Jambières sauge</h1><span class="entete-etape-sous-titre">Étape 5 sur 6 · Aperçu</span></div></div><div class="barre-etapes"><span class="fait"></span><span class="fait"></span><span class="fait"></span><span class="fait"></span><span class="fait"></span><span></span></div></header>
+<div class="ecran-contenu">
+<div class="echantillon-3d"><div class="echantillon-3d-scene piece-3d-scene" id="scene" style="height:440px">
+<div class="vue3d-echelle" aria-hidden="true" style="--longueur:48px"><i></i><span>10 cm</span></div>
+<p class="vue3d-aide" aria-hidden="true">Tourne la jambe avec un doigt · pince pour zoomer</p>
+</div></div>
+<div class="chiffres-cles chiffres-snood"><div><strong>34 × 35 cm</strong><span>tour × longueur</span></div><div><strong>× 2</strong><span>une paire à tricoter</span></div></div>
+<p class="note" id="legende">Sur une jambe de mannequin (mollet de 36 cm). Bords en côtes 1/1, corps en point de riz, laine « Sauge ». Une seule jambière est montrée : l'autre est la même.</p>
+</div>
+<div class="ecran-pied"><button type="button" class="bouton-principal">Créer le patron</button></div>
+</main></div>
+<script type="module">
+import { chargerThree } from "/js/composants/echantillon3d.js";
+import { fabriqueDeMatieres, tuileDuRect } from "/js/composants/piece3d.js";
+import { environnement } from "/js/rendu/lumiere.js";
+const PLAT = new URLSearchParams(location.search).has("plat");
+if (PLAT) document.getElementById("legende").textContent = "Sur une jambe de mannequin (mollet de 36 cm), tricotée à plat : la couture est à l'arrière du mollet. Bords en côtes 1/1, corps en point de riz, laine « Sauge ».";
+const COULEUR = "#7E9C84";
+const DENSITES = { riz: { mailles: 17, rangs: 24 }, "cotes-1-1": { mailles: 22, rangs: 24 } };
+const TOUR = 34, LONG = 35, BORD = 5, CHEVILLE = 10; // la jambière part de la cheville (y = 10)
+const R0 = TOUR / (2 * Math.PI);
+const { THREE, OrbitControls, RoomEnvironment } = await chargerThree();
+const boite = document.getElementById("scene");
+const L = boite.clientWidth, H = 440;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(2); renderer.setSize(L, H);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+boite.prepend(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color("#EDE4D6");
+const camera = new THREE.PerspectiveCamera(34, L / H, 1, 3000);
+
+// ---- Profil de la jambe (cm, depuis le sol) : rayon moyen, mollet de 36 cm ----
+const PTS = [[7,3.9],[9,3.45],[11,3.3],[14,3.45],[18,4.0],[23,4.85],[28,5.5],[32,5.73],[36,5.55],[40,5.05],[44,4.75],[47,4.85],[50,5.2],[55,5.9],[60,6.6],[66,7.2],[70,7.45]];
+const courbe = new THREE.SplineCurve(PTS.map(([y, r]) => new THREE.Vector2(r, y)));
+const prof = courbe.getSpacedPoints(400);
+const rayon = (y) => { let a = prof[0], b = prof[prof.length - 1]; for (let i = 1; i < prof.length; i++) if (prof[i].y >= y) { a = prof[i - 1]; b = prof[i]; break; } const t = (y - a.y) / ((b.y - a.y) || 1); return a.x + (b.x - a.x) * Math.min(1, Math.max(0, t)); };
+// Coupe légèrement ovale, le mollet ressort vers l'arrière.
+const AX = 0.94, AZ = 1.06;
+const toile = new THREE.MeshStandardMaterial({ color: "#E6D9C3", roughness: 0.95 });
+const bois = new THREE.MeshStandardMaterial({ color: "#B08A5E", roughness: 0.7 });
+const poser = (g, m, parent = scene) => { const mesh = new THREE.Mesh(g, m); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh); return mesh; };
+const jambe = new THREE.Group(); jambe.scale.set(AX, 1, AZ); scene.add(jambe);
+poser(new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(p.x, p.y)), 96), toile, jambe);
+// Haut de la cuisse : un disque de bois ; pied lisse, posé sur un socle.
+const dessus = poser(new THREE.CylinderGeometry(7.5, 7.5, 1.2, 64), bois, jambe); dessus.position.y = 70.6;
+{ const g = new THREE.SphereGeometry(1, 64, 32); const pied = poser(g, toile); pied.scale.set(4.2, 3.6, 12); pied.position.set(0, 4.2, 5.2); }
+{ const g = new THREE.SphereGeometry(1, 48, 24); const talon = poser(g, toile); talon.scale.set(3.8, 4.4, 4.2); talon.position.set(0, 5.4, -0.4); }
+const socle = poser(new THREE.CylinderGeometry(14, 15, 2, 64), bois); socle.position.y = -0.2;
+
+// ---- La jambière : tube rigide, même nombre de mailles partout ; moulée sur le mollet, un peu lâche à la cheville ----
+const { matiere } = fabriqueDeMatieres(THREE, renderer);
+const tuile = (id) => tuileDuRect(THREE, renderer, { pointId: id }, DENSITES);
+const ECART = 0.28;
+const rTube = (y) => { const r = rayon(y) + ECART; return r < R0 ? r + 0.45 * (R0 - r) : r; };
+function nappe(v0, v1, id, vTex = (v) => v) {
+  const t = tuile(id); const su = 160, sv = Math.max(4, Math.ceil((v1 - v0) / 0.5));
+  const pos = [], uv = [], idx = [];
+  for (let b = 0; b <= sv; b++) {
+    const v = v0 + ((v1 - v0) * b) / sv; const y = CHEVILLE + v; const r = rTube(y);
+    for (let a = 0; a <= su; a++) {
+      const ang = (2 * Math.PI * a) / su;
+      // Petites ondulations à la cheville, là où le tube est lâche.
+      const lache = Math.max(0, R0 - rayon(y) - ECART);
+      const rr = r + 0.12 * lache * Math.sin(ang * 7 + v * 0.8);
+      pos.push(rr * AX * Math.sin(ang), y, rr * AZ * Math.cos(ang));
+      uv.push(((a / su) * TOUR) / t.l, vTex(v) / t.h);
+    }
+  }
+  for (let b = 0; b < sv; b++) for (let a = 0; a < su; a++) { const i = b * (su + 1) + a; idx.push(i, i + 1, i + su + 1, i + 1, i + su + 2, i + su + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+const m = (id) => matiere(id, COULEUR, "endroit");
+poser(nappe(0, BORD, "cotes-1-1"), m("cotes-1-1"));
+poser(nappe(BORD, LONG - BORD, "riz", (v) => v - BORD), m("riz"));
+poser(nappe(LONG - BORD, LONG, "cotes-1-1", (v) => v - LONG + BORD), m("cotes-1-1"));
+// Bords roulés très légèrement (épaisseur du tricot).
+for (const v of [0, LONG]) { const y = CHEVILLE + v; const r = rTube(y); const tore = new THREE.TorusGeometry(r, 0.22, 8, 160); tore.rotateX(Math.PI / 2); const t = poser(tore, m("cotes-1-1")); t.scale.set(AX, 1, AZ); t.position.y = y; }
+// À plat : la couture, une ligne discrète à l'arrière du mollet.
+if (PLAT) {
+  const pts = []; for (let v = 0; v <= LONG; v += 0.5) { const y = CHEVILLE + v; pts.push(new THREE.Vector3(0, y, -(rTube(y) + 0.05) * AZ)); }
+  const g = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 140, 0.26, 8, false);
+  const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(COULEUR).multiplyScalar(0.55), roughness: 1 });
+  poser(g, mat);
+}
+
+// ---- Lumière (comme le bonnet) ----
+scene.environment = environnement(THREE, RoomEnvironment, renderer); scene.environmentIntensity = 0.3;
+scene.add(new THREE.HemisphereLight("#FFF7EC", "#8C7A66", 0.3));
+const soleil = new THREE.DirectionalLight("#FFF1DE", 2.6); soleil.position.set(-36, 110, 54); soleil.castShadow = true; soleil.shadow.mapSize.set(2048, 2048);
+Object.assign(soleil.shadow.camera, { left: -50, right: 50, top: 90, bottom: -10, near: 1, far: 400 }); soleil.shadow.bias = -0.0004; scene.add(soleil);
+const contre = new THREE.DirectionalLight("#FFFFFF", 0.9); contre.position.set(40, 40, -70); scene.add(contre);
+const sol = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.ShadowMaterial({ color: "#5A4632", opacity: 0.22 })); sol.rotation.x = -Math.PI / 2; sol.position.y = -1.2; sol.receiveShadow = true; scene.add(sol);
+
+const controles = new OrbitControls(camera, renderer.domElement); controles.enablePan = false;
+const centre = new THREE.Vector3(0, 34, 0); controles.target.copy(centre);
+window.vue = (polaire, azimut, distance = 120, cy = 34) => {
+  centre.y = cy; controles.target.copy(centre);
+  camera.position.set(centre.x + distance * Math.sin(polaire) * Math.sin(azimut), centre.y + distance * Math.cos(polaire), centre.z + distance * Math.sin(polaire) * Math.cos(azimut));
+  controles.update(); renderer.render(scene, camera);
+};
+window.vue(Math.PI * 0.46, PLAT ? Math.PI * 0.9 : 0.45, PLAT ? 85 : 150, PLAT ? 30 : 36);
+if (PLAT) document.querySelector(".vue3d-echelle").style.setProperty("--longueur", "85px");
+window.pret = true;
+</script>
+</body></html>
