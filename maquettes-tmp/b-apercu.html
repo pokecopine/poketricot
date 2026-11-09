@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<link rel="stylesheet" href="/css/pelote.css">
+<style>.ecran-pied{position:static}</style>
+<script type="importmap">{"imports":{"preact":"/vendor/preact.module.js","preact/hooks":"/vendor/hooks.module.js","htm":"/vendor/htm.module.js"}}</script>
+</head><body><div id="app">
+<main class="ecran">
+<header class="ecran-entete"><div class="ecran-entete-ligne"><button type="button" class="bouton-rond"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button><div class="entete-etape"><h1 class="entete-etape-titre">Bonnet sauge</h1><span class="entete-etape-sous-titre">Étape 5 sur 6 · Aperçu</span></div></div><div class="barre-etapes"><span class="fait"></span><span class="fait"></span><span class="fait"></span><span class="fait"></span><span class="fait"></span><span></span></div></header>
+<div class="ecran-contenu">
+<div class="echantillon-3d"><div class="echantillon-3d-scene piece-3d-scene" id="scene" style="height:440px">
+<div class="vue3d-echelle" aria-hidden="true" style="--longueur:60px"><i></i><span>10 cm</span></div>
+<p class="vue3d-aide" aria-hidden="true">Tourne la tête avec un doigt · pince pour zoomer</p>
+</div></div>
+<p class="note">Sur une tête de mannequin de 56 cm. Bord en côtes 1/1 avec revers replié, corps et sommet en point de riz, pompon de 6 cm, laine « Sauge ».</p>
+<div class="encart encart-sauge"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg><span>Le bonnet est posé, bien tendu : il ne glisse pas et ne tombe pas, même quand tu tournes la tête.</span></div>
+</div>
+<div class="ecran-pied"><button type="button" class="bouton-principal">Créer le patron</button></div>
+</main></div>
+<script type="module">
+import { chargerThree } from "/js/composants/echantillon3d.js";
+import { fabriqueDeMatieres, tuileDuRect } from "/js/composants/piece3d.js";
+import { environnement } from "/js/rendu/lumiere.js";
+
+const COULEUR = "#7E9C84";
+const DENSITES = { riz: { mailles: 17, rangs: 24 }, "cotes-1-1": { mailles: 22, rangs: 24 } };
+const HAUTEUR = 22, BORD = 10, REVERS = 5;
+const TOUR_BONNET = 51;
+const { THREE, OrbitControls, RoomEnvironment } = await chargerThree();
+const boite = document.getElementById("scene");
+const L = boite.clientWidth, H = 440;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(2); renderer.setSize(L, H);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping;
+boite.prepend(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color("#EDE4D6");
+const camera = new THREE.PerspectiveCamera(34, L / H, 1, 3000);
+
+// ---- Profil de la tête (cm) : superellipse, sommet en y = 24, menton en y = 0 ----
+const RX = 8.9, RY = 11.5, CY = 11.5, N = 2.4;
+const profilTete = (t) => { // t : 0 en haut, π au menton
+  const s = Math.sin(t), c = Math.cos(t);
+  const y = CY + RY * Math.sign(c) * Math.pow(Math.abs(c), 2 / N); const r = RX * Math.pow(Math.abs(s), 2 / N); return [y < CY ? r * (0.78 + 0.22 * Math.pow(y / CY, 0.7)) : r, y];
+};
+// Échantillonné finement, avec la longueur d'arc depuis le sommet et la normale du profil.
+const echant = [];
+{ let s = 0, prev = profilTete(0);
+  for (let i = 0; i <= 2000; i++) { const p = profilTete((Math.PI * i) / 2000); s += Math.hypot(p[0] - prev[0], p[1] - prev[1]); echant.push({ r: p[0], y: p[1], s }); prev = p; }
+  for (let i = 0; i < echant.length; i++) { const a = echant[Math.max(0, i - 1)], b = echant[Math.min(echant.length - 1, i + 1)]; const dr = b.r - a.r, dy = b.y - a.y, l = Math.hypot(dr, dy) || 1; echant[i].nr = -dy / l; echant[i].ny = dr / l; }
+  echant[0].nr = 0; echant[0].ny = 1; }
+const surArc = (s) => { let i = echant.findIndex((e) => e.s >= s); if (i < 0) i = echant.length - 1; return echant[i]; };
+
+const toile = new THREE.MeshStandardMaterial({ color: "#E6D9C3", roughness: 0.95 });
+const bois = new THREE.MeshStandardMaterial({ color: "#B08A5E", roughness: 0.7 });
+const groupe = new THREE.Group(); groupe.scale.set(0.92, 1, 1.12); scene.add(groupe);
+const poser = (g, m, parent = groupe) => { const mesh = new THREE.Mesh(g, m); mesh.castShadow = mesh.receiveShadow = true; parent.add(mesh); return mesh; };
+// Tête lisse, sans visage, et cou ; pied en bois.
+poser(new THREE.LatheGeometry(echant.filter((_, i) => i % 20 === 0).map((e) => new THREE.Vector2(Math.max(e.r, 0.001), e.y)).reverse(), 96), toile);
+poser(new THREE.CylinderGeometry(5.2, 5.6, 10, 48), toile).position.y = -2;
+const pied = poser(new THREE.CylinderGeometry(1.2, 1.2, 14, 20), bois, scene); pied.position.y = -14;
+const socle = poser(new THREE.CylinderGeometry(7, 8, 2, 48), bois, scene); socle.position.y = -21;
+
+// ---- Le bonnet : une surface de révolution qui suit la tête, à 0,5 cm au-dessus ----
+const { matiere } = fabriqueDeMatieres(THREE, renderer);
+const tuile = (id) => tuileDuRect(THREE, renderer, { pointId: id }, DENSITES);
+const ECART = 0.5;
+// v = hauteur le long du bonnet, depuis le bord (0) jusqu'au sommet (HAUTEUR + BORD - REVERS, tricoté).
+const LONG = 18.5; // arc couvert sur la tête, revers replié compris
+function nappe(v0, v1, id, decal = 0, vTex = (v) => v) {
+  const t = tuile(id); const su = 128, sv = Math.max(4, Math.ceil((v1 - v0) / 0.6));
+  const pos = [], nor = [], uv = [], idx = [];
+  for (let b = 0; b <= sv; b++) {
+    const v = v0 + ((v1 - v0) * b) / sv; const e = surArc(LONG - v);
+    const r = e.r + e.nr * (ECART + decal), y = e.y + e.ny * (ECART + decal);
+    for (let a = 0; a <= su; a++) {
+      const ang = (2 * Math.PI * a) / su;
+      pos.push(r * Math.sin(ang), y, r * Math.cos(ang)); nor.push(e.nr * Math.sin(ang), e.ny, e.nr * Math.cos(ang));
+      uv.push(((a / su) * TOUR_BONNET) / t.l, vTex(v) / t.h);
+    }
+  }
+  for (let b = 0; b < sv; b++) for (let a = 0; a < su; a++) { const i = b * (su + 1) + a; idx.push(i, i + 1, i + su + 1, i + 1, i + su + 2, i + su + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  return g;
+}
+const m = (id) => matiere(id, COULEUR, "endroit");
+poser(nappe(0, REVERS, "cotes-1-1"), m("cotes-1-1"));             // bord sous le revers
+poser(nappe(REVERS, LONG, "riz", 0, (v) => v - REVERS), m("riz")); // corps et sommet
+poser(nappe(0, REVERS, "cotes-1-1", 0.6, (v) => REVERS - v), m("cotes-1-1")); // revers replié par-dessus
+// Le pli du revers : un petit bourrelet arrondi au bas.
+{ const e = surArc(LONG); const r = e.r + e.nr * (ECART + 0.3); const tore = new THREE.TorusGeometry(r, 0.42, 10, 128); tore.rotateX(Math.PI / 2); const mesh = poser(tore, m("cotes-1-1")); mesh.position.y = e.y + e.ny * ECART - 0.15; }
+
+{ const e = surArc(LONG - REVERS); const r = e.r + e.nr * (ECART + 0.3); const tore = new THREE.TorusGeometry(r, 0.34, 10, 128); tore.rotateX(Math.PI / 2); const mesh = poser(tore, m("cotes-1-1")); mesh.position.y = e.y + e.ny * (ECART + 0.3); }
+// ---- Pompon : une boule duveteuse ----
+{ const g = new THREE.SphereGeometry(3.1, 96, 64); const p = g.attributes.position; const v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const n = 1 + 0.07 * Math.sin(v.x * 9.1) * Math.sin(v.y * 7.3) * Math.sin(v.z * 8.7) + 0.04 * Math.sin(v.x * 23 + v.z * 17) * Math.sin(v.y * 21); v.multiplyScalar(n); p.setXYZ(i, v.x, v.y, v.z); }
+  g.computeVertexNormals();
+  const laine = new THREE.Color(COULEUR);
+  const mat = new THREE.MeshPhysicalMaterial({ color: laine, roughness: 1, sheen: 1, sheenRoughness: 0.8, sheenColor: laine.clone().lerp(new THREE.Color("#fff"), 0.4) });
+  const pp = poser(g, mat, scene); pp.position.y = profilTete(0)[1] + ECART + 3.2; }
+
+// ---- Lumière (comme le snood) ----
+scene.environment = environnement(THREE, RoomEnvironment, renderer); scene.environmentIntensity = 0.3;
+scene.add(new THREE.HemisphereLight("#FFF7EC", "#8C7A66", 0.3));
+const soleil = new THREE.DirectionalLight("#FFF1DE", 2.6); soleil.position.set(-36, 90, 54); soleil.castShadow = true; soleil.shadow.mapSize.set(2048, 2048);
+Object.assign(soleil.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 300 }); soleil.shadow.bias = -0.0004; scene.add(soleil);
+const contre = new THREE.DirectionalLight("#FFFFFF", 0.5); contre.position.set(30, 12, -60); scene.add(contre);
+const sol = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.ShadowMaterial({ color: "#5A4632", opacity: 0.22 })); sol.rotation.x = -Math.PI / 2; sol.position.y = -22; sol.receiveShadow = true; scene.add(sol);
+
+const controles = new OrbitControls(camera, renderer.domElement); controles.enablePan = false;
+const centre = new THREE.Vector3(0, 16, 0); controles.target.copy(centre);
+window.vue = (polaire, azimut, distance = 62) => {
+  camera.position.set(centre.x + distance * Math.sin(polaire) * Math.sin(azimut), centre.y + distance * Math.cos(polaire), centre.z + distance * Math.sin(polaire) * Math.cos(azimut));
+  controles.update(); renderer.render(scene, camera);
+};
+window.vue(Math.PI * 0.42, 0.35);
+window.pret = true;
+</script>
+</body></html>
