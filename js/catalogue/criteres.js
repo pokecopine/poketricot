@@ -1,6 +1,7 @@
 // Recherche par critères dans le catalogue (en plus du nom) : chaque critère coché réduit la liste.
 import { largeurMotif } from "../moteur/simulateur.js";
 import { avisCotes } from "./cotes.js";
+import { convientALaLaine } from "./laine.js";
 
 /** Un motif de 12 mailles ou plus demande de la largeur pour se voir en entier. */
 export const SEUIL_GRAND_MOTIF = 12;
@@ -18,10 +19,22 @@ export const CRITERES = [
     aide: `${SEUIL_GRAND_MOTIF} mailles ou plus par motif, il demande de la largeur`,
     garde: (p) => largeurMotif(p) >= SEUIL_GRAND_MOTIF,
   },
+  // 0.18.0 : sans les points peu adaptés à la laine (table de jugement et motif qui tient assez de fois).
+  // Il a besoin d'une laine : sans elle, il est grisé à l'écran et ne retire rien.
+  {
+    id: "laine",
+    libelle: "Pour ma laine",
+    aide: "les points conseillés ou possibles pour la grosseur de ta laine",
+    besoinLaine: true,
+    garde: (p, contexte) => !contexte?.avisLaine || convientALaLaine(contexte.avisLaine(p), contexte.grosseur),
+  },
 ];
 
-/** Points qui remplissent tous les critères cochés (liste d'identifiants de critères). */
-export function filtrerParCriteres(points, coches = []) {
+/**
+ * Points qui remplissent tous les critères cochés (liste d'identifiants de critères).
+ * contexte : { avisLaine(point) } pour « Pour ma laine ».
+ */
+export function filtrerParCriteres(points, coches = [], contexte = null) {
   const actifs = CRITERES.filter((c) => coches.includes(c.id));
-  return actifs.length ? points.filter((p) => actifs.every((c) => c.garde(p))) : points;
+  return actifs.length ? points.filter((p) => actifs.every((c) => c.garde(p, contexte))) : points;
 }

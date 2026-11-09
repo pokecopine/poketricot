@@ -5,7 +5,7 @@ import { useApp } from "../etat.js";
 import { naviguer, retour } from "../routeur.js";
 import { useProjet } from "../composants/etape.js";
 import { PatronDejaCree } from "./patron.js";
-import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBloc, nomBloc, numeroSection } from "../donnees/projets.js";
+import { zoneAvis, avecPointDuBloc, avecPointDeColonne, cheminEtape, avisPourBloc, nomBloc, numeroSection, largeurDuBlocCm, echantillonDuProjet, enRond } from "../donnees/projets.js";
 const minusculeNom = (s) => s.charAt(0).toLowerCase() + s.slice(1);
 import { NOMS_DES_ZONES } from "../moteur/plan.js";
 import { EnTete, Onglets, Encart } from "../composants/base.js";
@@ -21,6 +21,9 @@ import { TECHNIQUES, techniquesDuPoint } from "../catalogue/techniques.js";
 import { convertirEnRond } from "../moteur/simulateur.js";
 import { CRITERES, filtrerParCriteres } from "../catalogue/criteres.js";
 import { avisCotes } from "../catalogue/cotes.js";
+import { avisAvecLaLaine, rangLaine, grosseurDeLaine, GROSSEURS, motifDansLeBloc, maillesEstimees } from "../catalogue/laine.js";
+import { nomEpaisseur, lireNombre } from "../donnees/reserve.js";
+import { densitePoint } from "../moteur/densite.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 
@@ -120,7 +123,21 @@ function VisuelCarte({ point, couleur }) {
 }
 
 /** Fiche résumée d'un point (comme dans la maquette « Choix des points »). */
-function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
+/** Laine du menu « Dans la couleur de » (catalogue) : celle de la couleur choisie, sinon la première. */
+function laineDuMenu(laines, couleur) {
+  return laines.find((l) => l.couleur === couleur) || laines[0] || null;
+}
+
+/** « Avec ta laine » sur une carte (0.18.0) : sauge si conseillé, brique si peu adapté, jamais bloquant. */
+function LigneLaine({ avis }) {
+  if (!avis) return null;
+  const lignes = [];
+  if (avis.raison) lignes.push({ classe: { conseille: "ligne-laine-conseil", possible: "ligne-laine-possible", deconseille: "ligne-laine-alerte" }[avis.avis], texte: avis.raison });
+  if (avis.motif) lignes.push({ classe: "ligne-laine-possible", texte: avis.motif });
+  return lignes.map((l) => html`<span class=${"ligne-laine " + l.classe}><span class="ligne-laine-pelote" aria-hidden="true"></span>${l.texte}</span>`);
+}
+
+function CartePoint({ point, couleur, piece, zone = "corps", selection, avisLaine = null }) {
   const avis = selection?.avis ? selection.avis(point) : piece ? avisPour(point, piece, zone) : { avis: "conseille" };
   const choisi = selection && selection.actuel === point.id;
   // Refusé (bord d'un bonnet avec revers, 0.17.0) : la carte est grisée et ne choisit rien.
@@ -138,6 +155,7 @@ function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
           <${Etiquettes} point=${point} />
           <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
           ${avis.avis !== "conseille" && avis.raison && html`<${Encart} type=${avis.avis === "deconseille" || refuse ? "brique" : "sauge"}>${avis.raison}<//>`}
+          <${LigneLaine} avis=${avisLaine} />
         </span>
       </button>
       <${MarquesPoint} point=${point} />
@@ -149,7 +167,7 @@ function CartePoint({ point, couleur, piece, zone = "corps", selection }) {
     </div>`;
 }
 
-function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte, icone, classe = "" }) {
+function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte, icone, classe = "", avisLaine }) {
   if (points.length === 0) return null;
   return html`
     <details class=${"famille" + (alerte ? " famille-alerte" : "") + (icone ? " famille-marque" : "") + (classe ? " " + classe : "")} open=${ouverte}>
@@ -159,13 +177,13 @@ function Famille({ titre, points, couleur, piece, zone, selection, ouverte, aler
         <span class="famille-nombre">${points.length} point${points.length > 1 ? "s" : ""}</span>
       </summary>
       <div class="famille-points">
-        ${points.map((p) => html`<${CartePoint} key=${p.id} point=${p} couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} />`)}
+        ${points.map((p) => html`<${CartePoint} key=${p.id} point=${p} couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} avisLaine=${avisLaine(p)} />`)}
       </div>
     </details>`;
 }
 
 export function CataloguePoints({ selection = null } = {}) {
-  const { prefs } = useApp();
+  const { prefs, flash } = useApp();
   const laines = useCouleurs();
   const [pieceLibre, setPiece] = useState(memoire.piece);
   const [rechercheLibre, setRecherche] = useState(memoire.recherche);
@@ -182,10 +200,24 @@ export function CataloguePoints({ selection = null } = {}) {
     if (!selection) Object.assign(memoire, { piece: pieceLibre, recherche: rechercheLibre, couleur: couleurChoisie, criteres });
   }, [pieceLibre, rechercheLibre, couleurChoisie, criteres]);
   const avis = (p) => (selection?.avis ? selection.avis(p) : avisPour(p, piece, zone)).avis;
+  // 0.18.0 : la laine qui juge les points — celle du bloc pendant un projet, celle du menu dans le catalogue.
+  const laine = selection ? selection.laine || null : laineDuMenu(laines, couleur);
+  const cacheLaine = new Map();
+  const avisLaine = (p) => {
+    if (!laine) return null;
+    if (!cacheLaine.has(p.id)) cacheLaine.set(p.id, avisAvecLaLaine(p, laine, selection?.motif ? selection.motif(p) : null));
+    return cacheLaine.get(p.id);
+  };
+  // Dans chaque famille : conseillés pour la pièce et pour la laine, puis pour la pièce, puis pour la laine ; peu adaptés à la laine en dernier.
+  const rangTri = (p) => {
+    const r = rangLaine(avisLaine(p));
+    const pieceOk = !piece || avis(p) === "conseille";
+    return (pieceOk ? 0 : 2) + (r === 0 ? 0 : 1) + (r === 3 ? 4 : 0);
+  };
 
   const nomPiece = PIECES.find((p) => p.id === piece)?.nom.toLowerCase();
   const filtre = recherche.trim() || criteres.length > 0;
-  const trouves = filtrerParCriteres(rechercherPoints(recherche), criteres);
+  const trouves = filtrerParCriteres(rechercherPoints(recherche), criteres, laine ? { avisLaine, grosseur: grosseurDeLaine(laine) } : null);
   let familles;
   if (filtre) {
     familles = [{ id: "resultats", titre: "Résultats", points: trouves, ouverte: true }];
@@ -196,8 +228,8 @@ export function CataloguePoints({ selection = null } = {}) {
       id: f.id,
       titre: f.nom,
       points: POINTS.filter((p) => p.famille === f.id && adaptes(p))
-        // Les points conseillés pour la pièce (et la zone) en premier.
-        .sort((a, b) => (piece ? (avis(a) === "conseille" ? 0 : 1) - (avis(b) === "conseille" ? 0 : 1) : 0)),
+        // Les points conseillés pour la pièce (et la zone) et pour la laine en premier (0.18.0).
+        .sort((a, b) => rangTri(a) - rangTri(b)),
       ouverte: false,
     }));
     // Mes points favoris et ceux à tester, en tête : ils restent aussi dans leur famille d'origine.
@@ -246,14 +278,18 @@ export function CataloguePoints({ selection = null } = {}) {
             onInput=${(e) => (selection ? setRechercheSelection : setRecherche)(e.currentTarget.value)} />
         </label>
         <div class="puces criteres" role="group" aria-label="Critères">
-          ${CRITERES.map(
-            (c) => html`<button type="button" class="puce puce-critere" aria-pressed=${String(criteres.includes(c.id))}
-              title=${c.aide || c.libelle} onClick=${() => basculerCritere(c.id)}>${c.libelle}</button>`
-          )}
+          ${CRITERES.map((c) => {
+            const grise = c.besoinLaine && !laine;
+            return html`<button type="button" class="puce puce-critere" aria-pressed=${String(criteres.includes(c.id) && !grise)}
+              aria-disabled=${grise ? "true" : undefined} title=${grise ? "Choisis une laine" : c.aide || c.libelle}
+              onClick=${() => (grise ? flash("Choisis une laine : ajoute-en une à ta réserve.") : basculerCritere(c.id))}>${c.libelle}</button>`;
+          })}
           ${criteres.length > 0 && html`<button type="button" class="puce-effacer" onClick=${() => setCriteres([])}>Effacer</button>`}
         </div>
         ${criteres.includes("grandMotif") && html`<p class="note">Grand motif : ${CRITERES.find((c) => c.id === "grandMotif").aide}.</p>`}
         ${criteres.includes("cotes") && html`<p class="note">Pour les côtés : ${CRITERES.find((c) => c.id === "cotes").aide}.</p>`}
+        ${!laine && html`<p class="note">Pour ma laine : choisis une laine.</p>`}
+        ${laine && criteres.includes("laine") && html`<p class="note">Pour ma laine (« ${laine.nom} »${grosseurDeLaine(laine) ? `, ${nomEpaisseur(laine.epaisseur)}, laine ${GROSSEURS.find((g) => g.id === grosseurDeLaine(laine)).nom}` : ""}) : ${["moyenne", null].includes(grosseurDeLaine(laine)) ? "en laine moyenne, tous les points vont bien ; seuls les motifs qui ne tiennent pas assez de fois sont retirés" : CRITERES.find((c) => c.id === "laine").aide}.</p>`}
         ${selection && html`<p class="note">${selection.aide}</p>`}
 
         ${!selection && html`<span class="note" style="font-weight:700">Pour quelle pièce ?</span>`}
@@ -268,8 +304,8 @@ export function CataloguePoints({ selection = null } = {}) {
         <${ChoixCouleur} laines=${laines} couleur=${couleur} surChoix=${setCouleur} />`}
 
         ${familles.map(
-          (f) => html`<${Famille} key=${f.id + (piece || "") + recherche + criteres.join()} titre=${f.titre} points=${f.points} icone=${f.icone} classe=${f.classe}
-            couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} />`
+          (f) => html`<${Famille} key=${f.id + (piece || "") + recherche + criteres.join() + (laine?.id || "")} titre=${f.titre} points=${f.points} icone=${f.icone} classe=${f.classe}
+            couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} ouverte=${f.ouverte} alerte=${f.alerte} avisLaine=${avisLaine} />`
         )}
         ${!filtre && !pointsMarques(prefs, "favoris").length && !pointsMarques(prefs, "aTester").length &&
         html`<p class="note astuce-marques">Touche le ${IconeCoeur({ taille: 15 })} d'un point pour le garder dans « Mes points favoris », ou l'${IconeEprouvette({ taille: 15 })} pour le mettre dans « À tester en priorité ».</p>`}
@@ -362,6 +398,18 @@ export function FichePoint({ id }) {
               <span><strong>En bordure (haut et bas)</strong>${point.zones.bordure.raison ? html` — ${point.zones.bordure.raison}` : ""}</span>
             </li>`}
             ${(() => {
+              const l = laineDuMenu(laines, couleur);
+              if (!l) return null;
+              const a = avisAvecLaLaine(point, l);
+              const ep = nomEpaisseur(l.epaisseur);
+              return html`<li>
+                ${a?.avis
+                  ? html`<span class=${"avis avis-" + a.avis}>${{ conseille: "Conseillé", possible: "Possible", deconseille: "Peu adapté" }[a.avis]}</span>`
+                  : html`<span class="avis avis-possible">Possible</span>`}
+                <span><strong>Avec ta laine</strong> (« ${l.nom} »${ep ? `, ${ep}` : ""})${a?.raison ? html` — ${a.raison}` : grosseurDeLaine(l) ? " — rien de particulier pour cette grosseur de laine." : " — indique l'épaisseur de ta laine pour avoir un avis."}</span>
+              </li>`;
+            })()}
+            ${(() => {
               const a = avisCotes(point);
               return html`<li>
                 <span class=${"avis avis-" + a.avis}>${{ conseille: "Conseillé", possible: "Possible", deconseille: "Peu adapté" }[a.avis]}</span>
@@ -422,7 +470,7 @@ const AIDES_ZONES_SNOOD = {
 };
 
 export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
-  const { projet, laines, introuvable, modifier } = useProjet(id);
+  const { projet, laines, aiguilles, echantillons, introuvable, modifier } = useProjet(id);
   if (introuvable) return html`<main class="ecran"><${EnTete} titre="Projet introuvable" secours="/" /></main>`;
   if (!projet) return null;
   if (projet.statut !== "conception") return html`<${PatronDejaCree} projet=${projet} />`;
@@ -432,6 +480,16 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
   const nomZone = NOMS_DES_ZONES[bloc.zone];
   const section1 = bloc.section && numeroSection(projet, bloc) === 1;
   const iColonne = colonneId ? (bloc.colonnes || []).findIndex((c) => c.id === colonneId) : -1;
+  // 0.18.0 (C-3) : combien de fois le motif tient dans le bloc, avec la densité de la laine principale dans ce point.
+  const principale = laines.find((l) => l.id === projet.laineId);
+  const aig = aiguilles.find((a) => a.id === projet.aiguillesId);
+  const largeurCm = largeurDuBlocCm(projet, bloc, { colonne: iColonne >= 0 });
+  const echantillonPrincipal = echantillonDuProjet(projet, aig, echantillons);
+  const motif = (p) => {
+    if (!largeurCm || !principale) return null;
+    const d = densitePoint({ pointId: p.id, laine: principale, tailleAiguille: lireNombre(aig?.tailleMm), echantillons, echantillonPrincipal });
+    return motifDansLeBloc(p, maillesEstimees(largeurCm, d), { enRond: enRond(projet), colonne: iColonne >= 0 });
+  };
   if (iColonne >= 0) {
     const c = bloc.colonnes[iColonne];
     const retourBuilder = `/projet/${encodeURIComponent(projet.id)}/builder`;
@@ -439,6 +497,8 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
       piece: projet.type,
       zone: "corps",
       couleur: laine?.couleur,
+      laine,
+      motif,
       actuel: c.pointId,
       avis: (p) => avisPourBloc(p, projet.type, "corps", { colonne: true }),
       titre: `Point : colonne ${iColonne + 1} ${bloc.section ? `de la ${minusculeNom(nomBloc(bloc, projet))}` : bloc.zone === "corps" ? "du corps" : "de la bande"}`,
@@ -456,6 +516,8 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
     piece: projet.type,
     zone: zoneAvis(bloc.zone),
     couleur: laine?.couleur,
+    laine,
+    motif,
     actuel: bloc.pointId,
     avis: (p) => avisPourBloc(p, projet.type, bloc.zone, { revers: projet.type === "bonnet" && !!projet.taille?.revers && bloc.zone === "bas" }),
     titrePeuAdaptes: { bas: projet.type === "bonnet" ? "Peu adaptés à un bord" : "Peu adaptés à une bordure", haut: "Peu adaptés à une bordure", cotes: "Peu adaptés aux bandes latérales" }[bloc.zone],

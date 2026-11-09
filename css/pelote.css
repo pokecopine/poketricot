@@ -921,3 +921,11 @@ dialog.fenetre h2 { font-size: 22px; margin-bottom: 10px; }
 .colonne:has(.pastille-colonne) { padding-left: 2px; gap: 4px; }
 .colonne:has(.pastille-colonne) .colonne-point { gap: 8px; }
 .colonne:has(.pastille-colonne) .colonne-point > div { flex-basis: 40px; }
+
+/* 0.18.0 : « avec ta laine » sur les cartes de point (sauge si conseillé, brique si peu adapté) */
+.ligne-laine { display: flex; gap: 6px; align-items: baseline; font-size: 13px; line-height: 1.35; }
+.ligne-laine-pelote { flex: none; width: 9px; height: 9px; border-radius: 50%; border: 2px solid currentColor; transform: translateY(1px); }
+.ligne-laine-conseil { color: var(--sauge-texte); font-weight: 600; }
+.ligne-laine-possible { color: var(--texte-2); }
+.ligne-laine-alerte { color: var(--brique); font-weight: 600; }
+.puce-critere[aria-disabled="true"] { opacity: 0.45; }

@@ -18,7 +18,7 @@ test("les critères se cumulent", () => {
 });
 
 test("chaque critère garde au moins un point, et pas tous", () => {
-  for (const c of CRITERES) {
+  for (const c of CRITERES.filter((x) => !x.besoinLaine)) {
     const n = filtrerParCriteres(POINTS, [c.id]).length;
     assert.ok(n > 0 && n < POINTS.length, c.id);
   }

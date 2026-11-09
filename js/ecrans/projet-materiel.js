@@ -10,8 +10,9 @@ import { ProjetIntrouvable } from "./projet-piece.js";
 import { PatronDejaCree } from "./patron.js";
 import { pointParId } from "../catalogue/points.js";
 import { etiquettesProprietes } from "../catalogue/fiche.js";
+import { texteConseilFourchette } from "../moteur/aiguille.js";
 import { cableMagicLoop, CABLE_MAGIC_LOOP } from "../moteur/plan-bonnet.js";
-import { trierLaines, trierAiguilles, titreAiguilles, lireNombre, formaterNombre, EPAISSEURS } from "../donnees/reserve.js";
+import { trierLaines, trierAiguilles, titreAiguilles, lireNombre, formaterNombre, EPAISSEURS, aiguillesEtiquette } from "../donnees/reserve.js";
 import { texteDate, estPese } from "../donnees/echantillons.js";
 import {
   cheminEtape, detailLaineProjet, conseilAiguille, echantillonDuProjet, materielManquant, nomPropose, avisPointPrincipal, noteEchantillonEnRond,
@@ -34,6 +35,8 @@ export function EtapeMateriel({ id }) {
   const echantillon = echantillonDuProjet(projet, aig, echantillons);
   const conseil = laine && aig ? conseilAiguille(laine, aig.tailleMm) : null;
   const taille = lireNombre(aig?.tailleMm);
+  // 0.18.0 (C-1) : la bonne taille dans la fourchette de l'étiquette, selon la pièce et le point principal.
+  const fourchette = laine && aig && point ? texteConseilFourchette({ piece: projet.type, point, fourchette: aiguillesEtiquette(laine), tailleChoisie: taille }) : null;
 
   const choisirLaine = (l) =>
     modifier((p) => ({ ...avecLainePrincipale(p, l.id), echantillonId: "", nom: p.nomAuto ? nomPropose(p.type, l) : p.nom }));
@@ -69,7 +72,10 @@ export function EtapeMateriel({ id }) {
             </button>`
           )}
         </div>
-        ${conseil && html`<${Encart} type=${conseil.ok ? "sauge" : "brique"}>${conseil.texte}<//>`}
+        ${fourchette
+          ? html`<${Encart} type="sauge">${fourchette.debut}<strong>${fourchette.tailleTexte}</strong>${fourchette.fin}${fourchette.choisie ? " C'est ton aiguille." : fourchette.douce ? " " + fourchette.douce : ""}<//>
+            ${conseil && !fourchette.choisie && !fourchette.douce && html`<${Encart} type=${conseil.ok ? "sauge" : "brique"}>${conseil.texte}<//>`}`
+          : conseil && html`<${Encart} type=${conseil.ok ? "sauge" : "brique"}>${conseil.texte}<//>`}
         ${projet.type === "bonnet" && (aig && cableMagicLoop(lireNombre(aig.cableCm))
           ? html`<${Encart} type="brique">Ton câble de ${formaterNombre(lireNombre(aig.cableCm), 0)} cm est trop court pour le magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.<//>`
           : html`<p class="note">Tout le bonnet se tricote en magic loop : prends un câble de ${CABLE_MAGIC_LOOP} cm.</p>`)}

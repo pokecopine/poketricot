@@ -312,6 +312,18 @@ export function avisPointPrincipal(point, type) {
   return a;
 }
 
+/**
+ * Largeur (ou tour) d'un bloc en cm, pour estimer combien de fois un motif y tient (0.18.0, C-3).
+ * null pour les bandes latérales (elles ont leur propre avis, en mailles).
+ */
+export function largeurDuBlocCm(projet, bloc, { colonne = false } = {}) {
+  if (!projet?.taille || bloc?.zone === "cotes") return null;
+  const total = projet.type === "bonnet" ? tourDuBonnet(projet) : projet.type === "snood" ? projet.taille.tourCm : projet.taille.largeurCm;
+  if (!(total > 0)) return null;
+  const n = colonne ? bloc?.colonnes?.length || 1 : 1;
+  return total / n;
+}
+
 /** Échantillon du projet : celui choisi s'il existe encore, sinon le plus récent de la combinaison. */
 export function echantillonDuProjet(projet, aiguilles, echantillons) {
   const taille = lireNombre(aiguilles?.tailleMm);
