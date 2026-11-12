@@ -192,6 +192,8 @@ test("patron en panneaux : un onglet par panneau, l'assemblage, le suivi panneau
   assert.deepEqual(patron.assemblage.etapes.map((e) => e.cle), ["poser", "reperes", "coudre", "fils", "laver"]);
   assert.match(patron.assemblage.etapes[2].bordure, /bosses du point mousse/);
   assert.ok(patron.techniques.matelas && patron.techniques.matelasMousse);
+  // 0.21.1 : les pelotes de chaque laine sont gardées dans le patron (100 m par pelote).
+  assert.equal(patron.laines[0].pelotes, Math.ceil(patron.laines[0].metres / 100));
   // Une ligne « Bordure » dans les rangs du corps.
   const r7 = patron.panneaux[0].rangs.find((r) => r.blocId === "corps");
   assert.ok(r7.lignes.some((l) => l.etiquette?.startsWith("Bordure")));
@@ -209,7 +211,12 @@ test("patron en panneaux : un onglet par panneau, l'assemblage, le suivi panneau
   const projet = { ...p, statut: "patron", patron: { nbRangs: n, panneaux: [n, n], sections: patron.assemblage.sections } };
   assert.match(texteSuivi(projet, { rangsFaits: 0 }), /^Patron prêt · 2 panneaux de \d+ rangs/);
   assert.match(texteSuivi(projet, { rangsFaits: n + 5 }), /^Panneau 2 · rang 5 sur/);
-  assert.match(texteSuivi(projet, { rangsFaits: 2 * n + 2, assemblage: { section: 5 } }), /^Assemblage · couture 5 sur/);
+  assert.match(texteSuivi(projet, { rangsFaits: 2 * n + 2, assemblage: { section: 5 } }), /^Assemblage · section 5 sur \d+$/);
+  assert.equal(texteSuivi(projet, { rangsFaits: 2 * n + 2, assemblage: { section: 5, faits: ["coudre"] } }), "Assemblage · coutures faites");
+  // Avec 3 panneaux, la section est comptée à la suite : la couture 2 commence après les sections de la couture 1.
+  const s = projet.patron.sections;
+  const trois = { ...projet, patron: { ...projet.patron, panneaux: [n, n, n] } };
+  assert.equal(texteSuivi(trois, { rangsFaits: 3 * n + 3, assemblage: { section: s + 3 } }), `Assemblage · couture 2 · section 3 sur ${s}`);
 });
 
 test("patron en une pièce : comme une écharpe, avec la bordure de côté", () => {

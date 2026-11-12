@@ -529,7 +529,7 @@ function UneJauge({ x, plusieurs, piece }) {
       <div class="jauge-plein" style=${`width:${Math.round(part * 100)}%`}></div>
       ${manque && html`<div class="jauge-manque"></div>`}
     </div>
-    ${manque && html`<${Encart} type="brique">Il manque environ ${Math.ceil(c.manque)} m de « ${x.laine?.nom} ». ${x.principale ? (piece === "jambieres" ? "Raccourcis les jambières, ou choisis un point moins gourmand (la laine est comptée pour la paire)." : piece === "bonnet" ? "Rends le bonnet moins haut, enlève le pompon, ou choisis un point moins gourmand." : piece === "snood" ? "Rends le snood moins haut ou moins large, ou choisis un point moins gourmand." : "Raccourcis l'écharpe, ou choisis un point moins gourmand.") : "Réduis la hauteur des blocs dans cette laine, ou prévois une pelote de plus."}<//>`}
+    ${manque && html`<${Encart} type="brique">Il manque environ ${Math.ceil(c.manque)} m de « ${x.laine?.nom} ». ${x.principale ? (piece === "jambieres" ? "Raccourcis les jambières, ou choisis un point moins gourmand (la laine est comptée pour la paire)." : piece === "bonnet" ? "Rends le bonnet moins haut, enlève le pompon, ou choisis un point moins gourmand." : piece === "snood" ? "Rends le snood moins haut ou moins large, ou choisis un point moins gourmand." : piece === "couverture" ? "Rends la couverture plus petite, ou choisis un point moins gourmand." : "Raccourcis l'écharpe, ou choisis un point moins gourmand.") : "Réduis la hauteur des blocs dans cette laine, ou prévois une pelote de plus."}<//>`}
     ${c.statut === "juste" && html`<p class="note">Ça devrait suffire, mais de justesse.</p>`}
   </div>`;
 }

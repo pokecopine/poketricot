@@ -495,6 +495,14 @@ function texteCotes(panneau) {
   return majuscule(`${g}, ${d}.`);
 }
 
+/** Puce du patron (0.21.1) : « ≈ 28 pelotes » avec une seule laine dont l'étiquette donne le métrage d'une pelote ; sinon les mètres. */
+function texteLaineDuPatron(patron) {
+  const ls = (patron.laines || []).filter((l) => l.metres);
+  if (ls.length === 1 && ls[0].pelotes) return `≈ ${ls[0].pelotes} pelote${ls[0].pelotes > 1 ? "s" : ""}`;
+  if (ls.length > 1 && ls.every((l) => l.pelotes)) return ls.map((l) => `${l.pelotes} ${l.nom}`).join(" · ") + " (pelotes)";
+  return `≈ ${formaterNombre(patron.metrage.metres, 0)} m`;
+}
+
 const nomPosition = (p) => ({ gauche: "celui de gauche", milieu: "celui du milieu", droite: "celui de droite" })[p.position] || "";
 
 function EtapesDe({ patron, etapes, prefs, mots }) {
@@ -552,7 +560,7 @@ function PatronEnPanneaux({ projet, patron, suivi, prefs, base, flash }) {
           <span class="etiquette">${n} panneaux cousus</span>
           ${corps && html`<span class="etiquette">${corps.nom}</span>`}
           ${pointBordure && html`<span class="etiquette">Bordure ${nomCourtPoint(pointBordure)}</span>`}
-          ${patron.metrage && html`<span class="etiquette">≈ ${patron.metrage.metres} m</span>`}
+          ${patron.metrage && html`<span class="etiquette">${texteLaineDuPatron(patron)}</span>`}
         </div>
         ${patron.approximatif && html`<${Encart} type="brique">Tailles approximatives : mesure ton tricot après une quinzaine de centimètres ; le suivi indique la longueur attendue à chaque rang.<//>`}
         <details class="ajustements">
@@ -620,8 +628,30 @@ function PatronEnPanneaux({ projet, patron, suivi, prefs, base, flash }) {
     </main>`;
 }
 
+/** Un panneau terminé, revu depuis le suivi : en lecture seule, le suivi ne bouge pas (0.21.1). */
+function PanneauRevu({ patron, index, prefs }) {
+  const n = patron.panneaux.length;
+  const p = patron.panneaux[index];
+  const vue = { ...patron, rangs: p.rangs, blocs: p.blocs };
+  const mots = { Rang: "Rang", rang: "rang", rangs: "rangs", piece: "la couverture", Piece: "La couverture", ton: "ta couverture" };
+  const fin = p.rangs.at(-1)?.longueurCm;
+  return html`
+    <div class="carte-panneau">
+      <${SchemaPanneaux} n=${n} enAvant=${index + 1} libelle=${`Schéma : ${n} panneaux côte à côte ; le panneau ${index + 1}, terminé, est mis en avant.`} />
+      <div class="carte-panneau-texte">
+        <span class="carte-panneau-titre">Panneau ${index + 1} · ${nomPosition(p)}</span>
+        <span><strong>${p.montage.mailles} mailles</strong> · <strong>${p.rangs.length} rangs</strong> · terminé</span>
+        <span class="note">${texteCotes(p)}${fin ? ` À la fin, il devait mesurer environ ${formaterNombre(fin, 0)} cm.` : ""}</span>
+      </div>
+    </div>
+    <${Encart}>Tu revois un panneau terminé : rien ne change dans ton suivi.<//>
+    <${EtapesDe} patron=${vue} etapes=${p.etapes} prefs=${prefs} mots=${mots} />`;
+}
+
 function SuiviCouverture({ projet, patron, suivi, majSuivi, majProjet, prefs, flash }) {
   const [aide, setAide] = useState(false);
+  // Un panneau fini revu en lecture seule (0.21.1) : son index (0…n-1), ou null.
+  const [revu, setRevu] = useState(null);
   const n = patron.panneaux.length;
   const total = pasDuSuivi(patron);
   const faits = Math.min(suivi.rangsFaits, total);
@@ -667,14 +697,19 @@ function SuiviCouverture({ projet, patron, suivi, majSuivi, majProjet, prefs, fl
         <div class="parties" role="group" aria-label="Partie en cours">
           ${patron.panneaux.map((x, i) => {
             const fait = i + 1 < pos.panneau || pos.assemblage;
-            return html`<button type="button" class=${fait ? "fait" : ""} aria-pressed=${String(!pos.assemblage && i + 1 === pos.panneau)} disabled=${!fait && i + 1 !== pos.panneau}>
+            const enCours = !pos.assemblage && i + 1 === pos.panneau;
+            return html`<button type="button" class=${fait ? "fait" : ""} aria-pressed=${String(revu === null ? enCours : revu === i)} disabled=${!fait && !enCours}
+              aria-label=${fait ? `Panneau ${i + 1}, terminé : le revoir` : undefined}
+              onClick=${() => setRevu(fait ? (revu === i ? null : i) : null)}>
               ${fait && html`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg>`}Panneau ${i + 1}
             </button>`;
           })}
-          <button type="button" aria-pressed=${String(pos.assemblage)} disabled=${!pos.assemblage}>Assemblage</button>
+          <button type="button" aria-pressed=${String(revu === null && pos.assemblage)} disabled=${!pos.assemblage} onClick=${() => setRevu(null)}>Assemblage</button>
         </div>
 
-        ${!pos.assemblage && html`
+        ${revu !== null && html`<${PanneauRevu} patron=${patron} index=${revu} prefs=${prefs} />`}
+
+        ${revu === null && !pos.assemblage && html`
           <div class="carte-panneau">
             <${SchemaPanneaux} n=${n} avancement=${{ panneau: pos.panneau, part: pos.index / p.rangs.length }}
               libelle=${`Avancement : ${pos.panneau > 1 ? `${pos.panneau > 2 ? `les panneaux 1 à ${pos.panneau - 1} sont terminés` : "le panneau 1 est terminé"} ; ` : ""}le panneau ${pos.panneau} est tricoté à ${Math.round((pos.index / p.rangs.length) * 100)} %.`} />
@@ -685,13 +720,13 @@ function SuiviCouverture({ projet, patron, suivi, majSuivi, majProjet, prefs, fl
             </div>
           </div>`}
 
-        ${rang && pos.index === 0 && montage && html`<div class="carte-etape-suivi">
+        ${revu === null && rang && pos.index === 0 && montage && html`<div class="carte-etape-suivi">
           <strong>Panneau ${pos.panneau} · avant le rang 1 : le montage</strong>
           <p>${montage.texte}</p>
           ${pos.panneau === 1 && html`<${Technique} code="montage" patron=${patron} />`}
         </div>`}
 
-        ${rang && html`<section class="compteur-rangs" aria-label="Compteur de rangs" aria-live="polite">
+        ${revu === null && rang && html`<section class="compteur-rangs" aria-label="Compteur de rangs" aria-live="polite">
           ${rang.debutBloc && html`<span class="debut-bloc">Nouveau bloc : ${rang.nomBloc}</span>`}
           <div class="compteur-rangs-tete"><strong>${majuscule(rang.nomBloc)} · rang ${rang.cote === "E" ? "endroit" : "envers"}</strong><span class="note">sur ${p.rangs.length}</span></div>
           <h2 class="compteur-rangs-numero">Rang ${rang.numero}</h2>
@@ -711,13 +746,13 @@ function SuiviCouverture({ projet, patron, suivi, majSuivi, majProjet, prefs, fl
           ${pos.panneau > 1 && html`<span>Le panneau 1 garde ses ${patron.panneaux[0].rangs.length} rangs : tu peux comparer les longueurs en posant l'un sur l'autre.</span>`}
         </div>`}
 
-        ${pos.pause && html`<div class="carte-etape-suivi">
+        ${revu === null && pos.pause && html`<div class="carte-etape-suivi">
           <strong>Panneau ${pos.panneau} · finir</strong>
           <p>${rabattage?.texte}</p>
           ${pos.panneau === 1 && html`<${Technique} code="rabattage" patron=${patron} />`}
         </div>`}
 
-        ${pos.assemblage && html`
+        ${revu === null && pos.assemblage && html`
           <div class="carte-panneau">
             <${SchemaPanneaux} n=${n} reperes=${Math.min(10, A.reperes)} cousu=${(a.section - 1) / sectionsTotal}
               libelle=${`Couture : les panneaux côte à côte, avec ${A.reperes} repères ; la section ${a.section} sur ${sectionsTotal} est en cours.`} />
@@ -751,9 +786,10 @@ function SuiviCouverture({ projet, patron, suivi, majSuivi, majProjet, prefs, fl
           </ol>`}
       </div>
       <div class="ecran-pied ecran-pied-pile suivi-pied">
-        ${pos.pause && html`<button type="button" class="bouton-principal bouton-rang" onClick=${() => majSuivi((s) => cocherRang(s, total))}>Panneau ${pos.panneau} terminé</button>
+        ${revu !== null && html`<button type="button" class="bouton-principal" onClick=${() => setRevu(null)}>${pos.assemblage ? "Revenir à l'assemblage" : `Revenir au panneau ${pos.panneau}`}</button>`}
+        ${revu === null && pos.pause && html`<button type="button" class="bouton-principal bouton-rang" onClick=${() => majSuivi((s) => cocherRang(s, total))}>Panneau ${pos.panneau} terminé</button>
           <button type="button" class="bouton-lien bouton-retour-rang" onClick=${() => majSuivi(decocherRang)}>Revenir au rang ${p.rangs.length}</button>`}
-        ${pos.assemblage && html`<button type="button" class=${fini ? "bouton-principal" : "bouton-secondaire"} onClick=${terminer}>Ranger dans la bibliothèque</button>
+        ${revu === null && pos.assemblage && html`<button type="button" class=${fini ? "bouton-principal" : "bouton-secondaire"} onClick=${terminer}>Ranger dans la bibliothèque</button>
           <button type="button" class="bouton-lien bouton-retour-rang" onClick=${() => majSuivi(decocherRang)}>Revenir à la fin du panneau ${n}</button>`}
       </div>
       <${Fenetre} ouverte=${aide} titre="Les gestes de ce rang" surFermeture=${() => setAide(false)}

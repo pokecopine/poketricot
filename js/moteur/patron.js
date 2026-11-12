@@ -9,6 +9,7 @@ import { texteGestes, texteDeplacement } from "../catalogue/texte.js";
 import { consomme, convertirEnRond } from "./simulateur.js";
 import { nomAvecArticle } from "./dimensions.js";
 import { formaterNombre, lireNombre } from "../donnees/reserve.js";
+import { pelotesEtPoids } from "./metrage.js";
 
 const majuscule = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const minuscule = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
@@ -672,7 +673,12 @@ function genererPatronSimple({
     origineDensite: dCorps?.origine || null,
     projet: structuredClone(projet),
     laine: laine ? { id: laine.id, nom: laine.nom, couleur: laine.couleur, epaisseur: laine.epaisseur } : null,
-    laines: [...mesLaines.values()].map((l) => ({ id: l.id, nom: l.nom, couleur: l.couleur, epaisseur: l.epaisseur, metres: metresDe(l.id) ?? null })),
+    laines: [...mesLaines.values()].map((l) => {
+      const metres = metresDe(l.id) ?? null;
+      // 0.21.1 : les pelotes, quand l'étiquette donne le métrage d'une pelote (pour les puces du patron).
+      const pelotes = metres ? pelotesEtPoids(metres, l).pelotes : null;
+      return { id: l.id, nom: l.nom, couleur: l.couleur, epaisseur: l.epaisseur, metres, ...(pelotes ? { pelotes } : {}) };
+    }),
     bouts,
     aiguilles: { id: aiguilles.id, tailleMm: lireNombre(aiguilles.tailleMm), cableCm: lireNombre(aiguilles.cableCm) },
     echantillon: echantillon

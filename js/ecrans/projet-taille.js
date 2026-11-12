@@ -362,7 +362,7 @@ export function texteLaineCouverture(metres, laine, { enTout = false } = {}) {
   if (!metres) return "";
   const { pelotes, grammes } = pelotesEtPoids(metres, laine);
   const poids = grammes ? `${formaterNombre(grammes / 1000, 1)} kg` : `${metres} m`;
-  return `Environ ${poids} de laine${enTout ? " en tout" : ""}${pelotes ? `, soit ${pelotes} pelote${pelotes > 1 ? "s" : ""}${laine?.nom ? ` de ${laine.nom}` : ""}` : ""}`;
+  return `Environ ${poids} de laine${enTout ? " en tout" : ""}${pelotes ? `, soit ${pelotes} pelote${pelotes > 1 ? "s" : ""}${laine?.nom ? ` de « ${laine.nom} »` : ""}` : ""}`;
 }
 
 const poidsSurAiguilles = (metres, laine) => {

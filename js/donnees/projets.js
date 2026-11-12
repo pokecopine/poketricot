@@ -1228,7 +1228,13 @@ export function texteSuivi(projet, suivi) {
       faits += n;
     }
     const a = suivi?.assemblage;
-    return a?.section ? `Assemblage · couture ${a.section} sur ${projet.patron.sections}` : "Assemblage";
+    // 0.21.1 : la section se compte à la suite sur toutes les coutures ; on dit la couture, puis la section dans cette couture.
+    const sections = projet.patron.sections;
+    if (!a?.section || !sections) return "Assemblage";
+    if (a.faits?.includes("coudre")) return "Assemblage · coutures faites";
+    const couture = Math.ceil(a.section / sections);
+    const dans = ((a.section - 1) % sections) + 1;
+    return `Assemblage · ${panneaux.length > 2 ? `couture ${couture} · ` : ""}section ${dans} sur ${sections}`;
   }
   if (fait === 0) return `Patron prêt · ${total} ${tour ? "tours" : "rangs"}${(projet.patron?.exemplaires || 1) > 1 ? ` × ${projet.patron.exemplaires}` : ""}${projet.patron?.approximatif ? " · tailles approximatives" : ""}`;
   // Jambières (0.19.0) : deux exemplaires, une pause entre les deux.
