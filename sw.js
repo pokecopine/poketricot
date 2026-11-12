@@ -50,6 +50,7 @@ const FICHIERS = [
   "js/catalogue/jambieres.js",
   "js/catalogue/criteres.js",
   "js/catalogue/fiche.js",
+  "js/catalogue/comparer.js",
   "js/catalogue/lots/lot-a.js",
   "js/catalogue/lots/lot-b.js",
   "js/catalogue/lots/lot-c.js",

@@ -24,11 +24,27 @@ import { avisCotes } from "../catalogue/cotes.js";
 import { avisAvecLaLaine, rangLaine, grosseurDeLaine, GROSSEURS, motifDansLeBloc, maillesEstimees } from "../catalogue/laine.js";
 import { nomEpaisseur, lireNombre } from "../donnees/reserve.js";
 import { densitePoint } from "../moteur/densite.js";
+import { MAX_COMPARER, basculerMisDeCote, lignesDeComparaison } from "../catalogue/comparer.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 
 // Choix gardés pendant la visite (liste → fiche → retour).
 const memoire = { piece: null, couleur: null, recherche: "", criteres: [] };
+
+// 0.22.0 : points mis de côté pour l'écran « Comparer », pendant la visite (une liste pour le catalogue, une pour le choix d'un point).
+const misDeCote = { catalogue: [], choix: [] };
+function useMisDeCote(cle) {
+  const [liste, setListe] = useState(misDeCote[cle]);
+  const changer = (l) => {
+    misDeCote[cle] = l;
+    setListe(l);
+  };
+  return [liste, changer];
+}
+/** Vider la liste du choix d'un point (après « Choisir », ou en revenant au builder). */
+export function viderMisDeCote(cle = "choix") {
+  misDeCote[cle] = [];
+}
 
 /** Couleurs proposées : celles des laines de la réserve, sinon terracotta. */
 function useCouleurs() {
@@ -154,6 +170,11 @@ function CasePoint({ point, couleur, piece, zone, selection, avisLaine, surOuvri
   </button>`;
 }
 
+const IconeComparer = () => html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M7 4L3 8l4 4"></path><path d="M3 8h13"></path><path d="M17 12l4 4-4 4"></path><path d="M21 16H8"></path></svg>`;
+const IconeCoche = () => html`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>`;
+const IconeCroix = (t = 18) => html`<svg width=${t} height=${t} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>`;
+
 const IconeFleche = (sens) => html`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   <path d=${sens < 0 ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"}></path></svg>`;
 
@@ -161,7 +182,7 @@ const IconeFleche = (sens) => html`<svg width="20" height="20" viewBox="0 0 24 2
  * Volet d'un point (0.20.0) : ce que montrait la carte (schéma et 3D, étiquettes, ouvrages, avis, ligne « avec ta laine »),
  * le cœur et l'éprouvette, le feuilletage dans la famille, et les boutons. Il monte du bas de l'écran, par-dessus la grille.
  */
-function VoletPoint({ liste, index, titreListe, couleur, piece, zone = "corps", selection, avisLaine, surFeuilleter, surFermer, surAction }) {
+function VoletPoint({ liste, index, titreListe, couleur, piece, zone = "corps", selection, avisLaine, comparer, surFeuilleter, surFermer, surAction }) {
   const point = liste[index];
   const avis = avisDansLaListe(point, { piece, zone, selection });
   const refuse = !!selection && avis.avis === "refuse";
@@ -220,6 +241,17 @@ function VoletPoint({ liste, index, titreListe, couleur, piece, zone = "corps", 
         <span class="feuilleter-texte" aria-live="polite">${index + 1} sur ${liste.length} · ${titreListe}</span>
         <button type="button" class="bouton-rond" aria-label="Point suivant" disabled=${index === liste.length - 1} onClick=${() => surFeuilleter(1)}>${IconeFleche(1)}</button>
       </div>`}
+      ${comparer && (() => {
+        const mis = comparer.liste.includes(point.id);
+        return html`<div class="volet-comparer">
+          <button type="button" class=${"bouton-comparer" + (mis ? " bouton-comparer-mis" : "")} aria-pressed=${String(mis)}
+            aria-label=${(mis ? "Retirer de la comparaison : " : "Mettre de côté pour comparer : ") + point.nom}
+            onClick=${() => comparer.basculer(point)}>
+            ${mis ? html`${IconeCoche()} Mis de côté` : html`${IconeComparer()} Comparer`}
+          </button>
+          ${comparer.liste.length > 0 && html`<span class="volet-comparer-compte">${comparer.liste.length} sur ${MAX_COMPARER}</span>`}
+        </div>`;
+      })()}
       <div class="carte-point-corps">
         <${Etiquettes} point=${point} />
         <span class="note">Conseillé pour : ${texteOuvragesConseilles(point)} · ${texteConsommation(point).toLowerCase()}</span>
@@ -245,11 +277,12 @@ function VoletPoint({ liste, index, titreListe, couleur, piece, zone = "corps", 
  * Ouverture du volet, liée au bouton retour du téléphone : ouvrir ajoute une entrée à l'historique (même adresse),
  * le retour la retire et ferme le volet. Une action qui quitte l'écran (choisir, fiche) retire d'abord cette entrée.
  */
-function useVolet() {
+function useVolet(cle = "volet") {
   const [ouvert, setOuvert] = useState(null);
   const ensuite = useRef(null);
   useEffect(() => {
     const surRetour = () => {
+      if (history.state?.[cle]) return; // une couche posée au-dessus vient de se fermer : celle-ci reste
       setOuvert(null);
       const action = ensuite.current;
       ensuite.current = null;
@@ -259,11 +292,11 @@ function useVolet() {
     return () => window.removeEventListener("popstate", surRetour);
   }, []);
   const ouvrir = (o) => {
-    if (!history.state?.volet) history.pushState({ volet: true }, "");
+    if (!history.state?.[cle]) history.pushState({ ...(history.state || {}), [cle]: true }, "");
     setOuvert(o);
   };
   const fermerPuis = (action = null) => {
-    if (history.state?.volet) {
+    if (history.state?.[cle]) {
       ensuite.current = action;
       history.back();
     } else {
@@ -272,6 +305,120 @@ function useVolet() {
     }
   };
   return { ouvert, ouvrir, setOuvert, fermerPuis };
+}
+
+// ---------------- Écran « Comparer » (0.22.0) ----------------
+
+/** Barre en bas de l'écran des points : les points mis de côté, et le bouton qui ouvre la comparaison. */
+function BarreComparer({ points, couleur, surOuvrir, surVider }) {
+  return html`<div class="barre-comparer" role="region" aria-label="Points mis de côté pour comparer">
+    <span class="barre-comparer-pastilles" aria-hidden="true">
+      ${points.map((p) => html`<${BandeTexture} key=${p.id} point=${p} couleur=${couleur} hauteur=${30} rayon=${15} style="width:30px;box-shadow:0 0 0 2px var(--carte)" />`)}
+    </span>
+    ${points.length < 2
+      ? html`<span class="barre-comparer-texte">1 point mis de côté · ajoute un 2e point pour comparer</span>
+          <button type="button" class="puce-effacer" onClick=${surVider}>Retirer</button>`
+      : html`<button type="button" class="bouton-principal barre-comparer-bouton" onClick=${surOuvrir}>Comparer (${points.length}) ›</button>`}
+  </div>`;
+}
+
+/** L'échantillon 3D en grand, qu'on tourne, depuis l'écran Comparer (une seule vue 3D à la fois). */
+function Grand3D({ point, couleur, surFermer }) {
+  const [face, setFace] = useState("endroit");
+  return html`<div class="volet-fond" onClick=${surFermer}>
+    <div class="volet" role="dialog" aria-modal="true" aria-label=${"Échantillon en 3D : " + point.nom} onClick=${(e) => e.stopPropagation()}>
+      <span class="volet-poignee" aria-hidden="true"></span>
+      <div class="detail-point-tete">
+        <h2 class="detail-point-nom">${point.nom}</h2>
+        <button type="button" class="detail-fermer" aria-label="Fermer" onClick=${surFermer}>${IconeCroix(20)}</button>
+      </div>
+      <div style="padding:0 14px">
+        <${Onglets} libelle="Côté" valeur=${face} surChoix=${setFace} choix=${[{ valeur: "endroit", libelle: "Endroit" }, { valeur: "envers", libelle: "Envers" }]} />
+        <div style="margin-top:10px;border-radius:14px;overflow:hidden">
+          <${Echantillon3D} key=${face} point=${point} couleur=${couleur} face=${face} hauteur=${320} />
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function EcranComparer({ points, couleur, selection, piece, zone, avisLaine, surRetirer, surToutRetirer, surFermer, surAction }) {
+  const { flash } = useApp();
+  const grand = useVolet("grand3d");
+  const fermer = useRef(null);
+  const rappels = useRef({});
+  rappels.current = { surFermer, grand };
+  useEffect(() => {
+    fermer.current?.focus();
+    const touche = (e) => {
+      if (e.key !== "Escape") return;
+      if (rappels.current.grand.ouvert) rappels.current.grand.fermerPuis();
+      else rappels.current.surFermer();
+    };
+    document.addEventListener("keydown", touche);
+    const avant = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", touche);
+      document.body.style.overflow = avant;
+    };
+  }, []);
+  const n = points.length;
+  const h = n >= 3 ? 112 : 150;
+  const grille = `grid-template-columns:repeat(${Math.max(n, 1)},minmax(0,1fr))`;
+  const avisBloc = selection ? (p) => avisDansLaListe(p, { piece, zone, selection }) : null;
+  const lignes = n ? lignesDeComparaison(points, { avisBloc, avisLaine, mode: selection?.mode || "plat" }) : [];
+  const pointGrand = grand.ouvert && points.find((p) => p.id === grand.ouvert.id);
+  return html`<div class="comparer" role="dialog" aria-modal="true" aria-labelledby="titre-comparer">
+    <header class="comparer-tete">
+      <button type="button" class="bouton-rond" ref=${fermer} aria-label="Revenir aux points" onClick=${surFermer}>${IconeFleche(-1)}</button>
+      <div class="comparer-titres">
+        <h2 class="comparer-titre" id="titre-comparer">Comparer</h2>
+        <span class="comparer-sous-titre">${n} point${n > 1 ? "s" : ""}${selection ? " · " + selection.titre.replace(/^Point : /, "") : ""}</span>
+      </div>
+      <button type="button" class="puce-effacer" onClick=${surToutRetirer}>Tout retirer</button>
+    </header>
+    <div class="comparer-colonnes" style=${grille}>
+      ${points.map((p) => html`<div class="comparer-col" key=${p.id}>
+        <span class="comparer-nom">${p.nom}</span>
+        <div class="comparer-images">
+          <button type="button" class="comparer-vignette" aria-label=${"Voir en 3D et tourner : " + p.nom} onClick=${() => grand.ouvrir({ id: p.id })}>
+            <${Vignette3D} point=${p} couleur=${couleur} largeur="100%" hauteur=${h} />
+            <span class="comparer-3d" aria-hidden="true">3D</span>
+          </button>
+          <${BandeTexture} point=${p} couleur=${couleur} hauteur=${h} />
+          <button type="button" class="comparer-retirer" aria-label=${"Retirer : " + p.nom} onClick=${() => surRetirer(p.id)}>${IconeCroix(16)}</button>
+        </div>
+      </div>`)}
+    </div>
+    ${n === 1 && html`<div class="comparer-seul">
+      <p class="note">Ajoute un 2e point pour comparer.</p>
+      <button type="button" class="bouton-secondaire" onClick=${surFermer}>Revenir aux points</button>
+    </div>`}
+    ${n > 1 && html`<div class="comparer-lignes">
+      ${lignes.map((l) => html`<div class=${"comparer-ligne" + (l.differente ? " comparer-ligne-diff" : "")} key=${l.id} role="group" aria-label=${l.libelle + (l.differente ? ", différent" : ", pareil")}>
+        <div class="comparer-libelle">${l.libelle}${l.differente && html`<span class="comparer-diff">différent</span>`}</div>
+        <div class="comparer-valeurs" style=${grille}>
+          ${l.valeurs.map((v, i) => html`<div class=${"comparer-valeur" + (v.ton ? " comparer-ton-" + v.ton : "")}>
+            <span class="visuellement-cache">${points[i].nom} : </span>${v.texte}
+            ${v.detail && html`<span class="comparer-detail">${v.detail}</span>`}
+          </div>`)}
+        </div>
+      </div>`)}
+    </div>
+    <div class="comparer-pied" style=${grille}>
+      ${points.map((p) => {
+        if (!selection) return html`<button type="button" class="bouton-secondaire comparer-bouton" key=${p.id}
+          onClick=${() => surAction(() => naviguer("/points/" + p.id))}>Fiche</button>`;
+        const refuse = avisDansLaListe(p, { piece, zone, selection }).avis === "refuse";
+        return html`<button type="button" key=${p.id} class="bouton-principal comparer-bouton" aria-disabled=${refuse ? "true" : undefined}
+          aria-label=${(selection.actuel === p.id ? "Garder : " : "Choisir : ") + p.nom}
+          onClick=${() => (refuse ? flash(selection.messageRefus || "Ce point ne peut pas être choisi ici.") : surAction(() => selection.choisir(p.id)))}>
+          ${selection.actuel === p.id ? "Garder" : "Choisir"}</button>`;
+      })}
+    </div>`}
+    ${pointGrand && html`<${Grand3D} point=${pointGrand} couleur=${couleur} surFermer=${() => grand.fermerPuis()} />`}
+  </div>`;
 }
 
 function Famille({ titre, points, couleur, piece, zone, selection, ouverte, alerte, icone, classe = "", avisLaine, surOuvrir }) {
@@ -298,6 +445,15 @@ export function CataloguePoints({ selection = null } = {}) {
   const [couleurChoisie, setCouleur] = useState(memoire.couleur);
   const [criteres, setCriteres] = useState(selection ? [] : memoire.criteres);
   const volet = useVolet();
+  // 0.22.0 : points mis de côté pour l'écran « Comparer ».
+  const [mis, setMis] = useMisDeCote(selection ? "choix" : "catalogue");
+  const couche = useVolet("comparer");
+  const basculerComparer = (p) => {
+    const r = basculerMisDeCote(mis, p.id);
+    if (r.plein) return flash(`Tu compares déjà ${MAX_COMPARER} points. Retires-en un.`);
+    setMis(r.liste);
+    if (r.ajoute) flash(`${p.nom} mis de côté (${r.liste.length} sur ${MAX_COMPARER})`);
+  };
   const basculerCritere = (id) => setCriteres((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
   const piece = selection ? selection.piece : pieceLibre;
   const zone = selection ? selection.zone : "corps";
@@ -421,6 +577,7 @@ export function CataloguePoints({ selection = null } = {}) {
           if (!f || !f.points[volet.ouvert.index]) return null;
           return html`<${VoletPoint} liste=${f.points} index=${volet.ouvert.index} titreListe=${f.titre}
             couleur=${couleur} piece=${piece} zone=${zone} selection=${selection} avisLaine=${avisLaine}
+            comparer=${{ liste: mis, basculer: basculerComparer }}
             surFeuilleter=${(d) => volet.setOuvert((o) => o && { ...o, index: Math.max(0, Math.min(f.points.length - 1, o.index + d)) })}
             surFermer=${() => volet.fermerPuis()} surAction=${(action) => volet.fermerPuis(action)} />`;
         })()}
@@ -430,7 +587,13 @@ export function CataloguePoints({ selection = null } = {}) {
         html`<p class="note">${criteres.length ? "Aucun point ne remplit tous ces critères" + (recherche.trim() ? " avec ce nom" : "") + " : décoche un critère." : "Aucun point ne porte ce nom pour l'instant."}</p>`}
 
         <p class="note">Catalogue : ${POINTS.length} points. D'autres arrivent ensuite.</p>
+        ${mis.length > 0 && html`<div class="barre-comparer-place" aria-hidden="true"></div>`}
       </div>
+      ${mis.length > 0 && !volet.ouvert && !couche.ouvert &&
+      html`<${BarreComparer} points=${mis.map(pointParId)} couleur=${couleur} surOuvrir=${() => couche.ouvrir({})} surVider=${() => setMis([])} />`}
+      ${couche.ouvert && html`<${EcranComparer} points=${mis.map(pointParId)} couleur=${couleur} selection=${selection} piece=${piece} zone=${zone}
+        avisLaine=${avisLaine} surRetirer=${(id) => { const l = mis.filter((x) => x !== id); setMis(l); if (!l.length) couche.fermerPuis(); }}
+        surToutRetirer=${() => { setMis([]); couche.fermerPuis(); }} surFermer=${() => couche.fermerPuis()} surAction=${(a) => couche.fermerPuis(a)} />`}
     </main>`;
 }
 
@@ -633,7 +796,9 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
         ? "Une colonne dans la longueur de la jambière, à côté des autres : chaque point garde son motif."
         : "Une colonne dans la longueur de l'écharpe, à côté des autres : chaque point garde son motif.",
       secours: retourBuilder,
+      mode: enRond(projet) ? "rond" : "plat",
       choisir: async (pointId) => {
+        viderMisDeCote();
         await modifier((p) => avecPointDeColonne(p, blocId, colonneId, pointId));
         retour(retourBuilder);
       },
@@ -656,7 +821,9 @@ export function ChoixPointDuBloc({ id, blocId, colonneId = null }) {
       : projet.type === "couverture" && ["bas", "haut", "cotes"].includes(bloc.zone) ? AIDES_ZONES.bordureCouverture
       : (projet.type === "jambieres" ? AIDES_ZONES_JAMBIERES : projet.type === "bonnet" ? AIDES_ZONES_BONNET : projet.type === "snood" ? AIDES_ZONES_SNOOD : AIDES_ZONES)[bloc.zone] || "",
     secours: projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet),
+    mode: enRond(projet) ? "rond" : "plat",
     choisir: async (pointId) => {
+      viderMisDeCote();
       await modifier((p) => avecPointDuBloc(p, blocId, pointId));
       retour(projet.etape >= 4 ? `/projet/${encodeURIComponent(projet.id)}/builder` : cheminEtape(projet));
     },
