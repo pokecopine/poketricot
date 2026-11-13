@@ -1,0 +1,10 @@
+import { chromium } from "/opt/npm-tools/node_modules/playwright/index.mjs";
+const [ids, sortie, face, seul] = process.argv.slice(2);
+const b = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+const p = await b.newPage({ viewport: { width: 390, height: 800 }, deviceScaleFactor: 2 });
+p.on("console", (m) => m.type() === "error" && console.log("ERR", m.text()));
+p.on("pageerror", (e) => console.log("PAGEERR", e.message));
+await p.goto(`http://localhost:8091/maquettes-tmp/comparer3d.html?ids=${ids}&face=${face || "endroit"}${seul === "petit" ? "&petit=1" : seul ? "&seul=1" : ""}`);
+await p.waitForSelector("body[data-pret]", { timeout: 240000 });
+await p.screenshot({ path: sortie, fullPage: true });
+await b.close();

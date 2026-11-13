@@ -157,3 +157,257 @@ export function brinsDuFil(points, { nb = 3, rayon = MODELE.rayon * 0.48, tours 
   }
   return brins;
 }
+
+// ---------- 3D fidèle des jetés, diminutions et augmentations (placement par les liens) ----------
+//
+// La grille vient de simulerLiens : chaque maille connaît les mailles du rang du dessous qu'elle traverse.
+//   - La place d'une maille (ses « pieds ») est au milieu de ses mailles du dessous ; un jeté se glisse entre ses
+//     voisines ; les mailles d'une augmentation s'écartent autour de leur maille commune ; puis on écarte un peu
+//     les mailles trop serrées.
+//   - La tête d'une maille va là où passe la maille du rang suivant qui la traverse : dans une diminution, les têtes
+//     se rassemblent sous la nouvelle maille, celle du dessus penche (à droite pour 2 ensemble, à gauche pour le
+//     surjet) et celles du dessous passent derrière.
+//   - Un jeté ne traverse rien : sa boucle reste haute et plate, et les mailles du dessous s'écartent : un trou.
+
+import { simulerLiens, largeurMotif, maillesLesPlusProches } from "../moteur/simulateur.js";
+import { liensDuGeste } from "../catalogue/gestes.js";
+
+const ECART_MIN = 0.74; // deux mailles d'un même rang ne se rapprochent pas plus (en largeurs de maille)
+const RETRAIT_DESSOUS = 0.16;
+const ANCRAGE = 0.6; // part de l'espacement régulier dans la place d'une maille
+const PORTEE_TROU = 1.1; // les têtes à moins de cette distance d'un jeté s'en écartent…
+const ECART_TROU = 0.45; // … d'au plus cette distance
+const TIRAGE_TETE = 0.7; // part du chemin vers la maille du rang suivant que fait la tête
+const TETE_MAX = 0.45; // une tête ne se décale pas de plus (en largeurs de maille) // de combien la tête d'une maille cachée dans une diminution passe derrière
+
+/**
+ * Gestes dessinés fil par fil grâce aux liens (lot 1 : jetés, diminutions, augmentations).
+ * Les mailles glissées, doubles, passées par-dessus, enroulées et les torsades restent approchées pour l'instant.
+ */
+export const GESTES_LIES = new Set(
+  "end env endT envT jete 2ens 2ensEnv ssk ssp 3ens 3ensEnv 3ensT 3ensBA_c sd 5ens 5ensEnv aug augEnv endEnv_f 1en3 1en3Env_e 1en3j 1en3jEnv etoileEnd etoileEnv croise_b croise_e augID_f".split(" ")
+);
+
+/** Le point se dessine-t-il fil par fil avec les liens (tous ses gestes sont dans GESTES_LIES) ? */
+export function pointLie(point) {
+  return [...(point.miseEnPlace || []), ...point.rangs].every((r) => [...(r.debut || []), ...r.motif, ...(r.fin || [])].every((c) => GESTES_LIES.has(c)));
+}
+
+/** Places des mailles de chaque rang, de gauche à droite (vu de l'endroit), et décalage des têtes. */
+export function placerLesMailles(grille, montage) {
+  const rangs = [];
+  let precedent = Array.from({ length: montage }, (_, j) => j + 0.5);
+  let enfantsDuPrecedent = null;
+  for (let r = 0; r < grille.length; r++) {
+    const brut = grille[r];
+    const n = brut.length;
+    const nP = precedent.length;
+    // De gauche à droite ; les parents aussi.
+    const cellules = Array.from({ length: n }, (_, j) => {
+      const c = brut[n - 1 - j];
+      return { ...c, parents: c.parents.map((p) => nP - 1 - p).sort((a, b) => a - b) };
+    });
+    const X = cellules.map((c) => (c.parents.length ? c.parents.reduce((t, p) => t + precedent[p], 0) / c.parents.length : NaN));
+    // Augmentations : les mailles qui partagent les mêmes parents s'écartent autour d'eux.
+    for (let j = 0; j < n; ) {
+      const cle = cellules[j].parents.join(",");
+      let k = j + 1;
+      while (k < n && cle && (cellules[k].parents.join(",") === cle || (cellules[k].jete && k + 1 < n && cellules[k + 1].parents.join(",") === cle))) k++;
+      const groupe = [];
+      for (let i = j; i < k; i++) groupe.push(i);
+      if (groupe.length > 1) groupe.forEach((i, q) => (X[i] = X[j] + (q - (groupe.length - 1) / 2) * 0.62));
+      j = k;
+    }
+    // Jetés et augmentations levées : entre leurs voisines.
+    for (let j = 0; j < n; j++) {
+      if (!Number.isNaN(X[j])) continue;
+      let g = j - 1;
+      while (g >= 0 && Number.isNaN(X[g])) g--;
+      let d = j + 1;
+      while (d < n && Number.isNaN(X[d])) d++;
+      const xg = g >= 0 ? X[g] : null;
+      const xd = d < n ? X[d] : null;
+      if (xg !== null && xd !== null) X[j] = xg + ((xd - xg) * (j - g)) / (d - g);
+      else if (xg !== null) X[j] = xg + (j - g) * 0.9;
+      else if (xd !== null) X[j] = xd - (d - j) * 0.9;
+      else X[j] = j + 0.5;
+    }
+    // Un tricot garde ses colonnes : chaque rang est ramené vers un espacement régulier, centré sur le montage
+    // (sinon les petits écarts s'ajoutent de rang en rang et le tricot penche).
+    for (let j = 0; j < n; j++) X[j] = (1 - ANCRAGE) * X[j] + ANCRAGE * (montage / 2 + j - (n - 1) / 2);
+    // On écarte les mailles trop serrées, sans changer leur ordre.
+    for (let it = 0; it < 30; it++) {
+      let bouge = false;
+      for (let j = 0; j + 1 < n; j++) {
+        const e = X[j + 1] - X[j];
+        if (e < ECART_MIN) {
+          const d = (ECART_MIN - e) / 2;
+          X[j] -= d;
+          X[j + 1] += d;
+          bouge = true;
+        }
+      }
+      if (!bouge) break;
+    }
+    // Têtes du rang du dessous : là où passe la maille qui les traverse ; dans une diminution, les cachées reculent.
+    const enfants = Array.from({ length: nP }, () => []);
+    const retrait = new Array(nP).fill(0);
+    cellules.forEach((c, j) => {
+      for (const p of c.parents) enfants[p].push(j);
+      if (c.parents.length > 1) {
+        const ps = c.parents;
+        const dessus = c.aspect === "Vdroite" ? ps[0] : c.aspect === "Vgauche" ? ps[ps.length - 1] : ps[Math.floor(ps.length / 2)];
+        for (const p of ps) if (p !== dessus) retrait[p] = Math.max(retrait[p], RETRAIT_DESSOUS * (1 + 0.3 * Math.abs(p - dessus)));
+      }
+    });
+    if (r > 0) {
+      const rp = rangs[r - 1];
+      // Le décalage est un peu retenu : la maille du dessous se penche sans s'étirer.
+      rp.tete = rp.X.map((x, p) => {
+        if (!enfants[p].length) return 0;
+        const d = (enfants[p].reduce((t, j) => t + X[j], 0) / enfants[p].length - x) * TIRAGE_TETE;
+        return Math.max(-TETE_MAX, Math.min(TETE_MAX, d));
+      });
+      // Sous un jeté, les têtes du rang du dessous s'écartent : c'est le trou.
+      cellules.forEach((c, j) => {
+        if (!c.jete) return;
+        rp.X.forEach((x, p) => {
+          const d = x + rp.tete[p] - X[j];
+          if (Math.abs(d) < PORTEE_TROU) rp.tete[p] += Math.sign(d || 1) * ECART_TROU * (1 - Math.abs(d) / PORTEE_TROU);
+        });
+      });
+      rp.retrait = retrait;
+    }
+    rangs.push({ cellules, X, tete: new Array(n).fill(0), retrait: new Array(n).fill(0) });
+    precedent = X;
+    enfantsDuPrecedent = enfants;
+  }
+  return rangs;
+}
+
+/**
+ * Chemin du fil d'une grille liée (simulerLiens). Options : montage (mailles montées), rangs dessinés [de, a),
+ * fenêtre horizontale { xMin, xMax } (en largeurs de maille, depuis le bord gauche du montage).
+ * Renvoie { points, largeur, hauteur } centré en (0, 0), comme cheminDuFil.
+ */
+export function cheminDuFilLie(grille, { montage, de = 0, a = grille.length, fenetre = null } = {}, modele = MODELE) {
+  const { pas, H, A, D, points: N } = modele;
+  const places = placerLesMailles(grille, montage);
+  const nR = a - de;
+  const y0 = -((nR - 1) * pas) / 2;
+  let xmin = Infinity;
+  let xmax = -Infinity;
+  const lignes = [];
+  for (let r = de; r < a; r++) {
+    const { cellules, X, tete, retrait } = places[r];
+    const n = X.length;
+    const B = Array.from({ length: n + 1 }, (_, j) => (j === 0 ? X[0] - 0.5 : j === n ? X[n - 1] + 0.5 : (X[j - 1] + X[j]) / 2));
+    // Un pont qui touche un jeté reste haut (le jeté n'est retenu par aucune maille).
+    const creux = B.map((_, j) => ((j > 0 && cellules[j - 1].jete) || (j < n && cellules[j].jete) ? 0.3 : 1));
+    let j0 = 0;
+    let j1 = n;
+    if (fenetre) {
+      while (j0 < n && X[j0] < fenetre.xMin) j0++;
+      j1 = j0;
+      while (j1 < n && X[j1] < fenetre.xMax) j1++;
+    }
+    if (j1 <= j0) continue;
+    xmin = Math.min(xmin, B[j0]);
+    xmax = Math.max(xmax, B[j1]);
+    const yr = y0 + (r - de) * pas;
+    const ligne = [];
+    for (let j = j0; j < j1; j++) {
+      const c = cellules[j];
+      const w = B[j + 1] - B[j];
+      const Ae = c.jete ? A * 0.2 : A * Math.min(1.3, Math.max(0.6, w));
+      const s0 = c.sens;
+      const sg = j > 0 ? cellules[j - 1].sens : s0;
+      const sd = j + 1 < n ? cellules[j + 1].sens : s0;
+      for (let i = j === j0 ? 0 : 1; i <= N; i++) {
+        const t = i / N;
+        const phi = 2 * Math.PI * (t - 0.5);
+        const cos = Math.cos(phi);
+        const xb = phi < 0 ? B[j] + ((X[j] - B[j]) * (phi + Math.PI)) / Math.PI : X[j] + ((B[j + 1] - X[j]) * phi) / Math.PI;
+        const bosse = Math.pow((1 + cos) / 2, 1.5);
+        const remonte = cos < 0 ? (1 - (phi < 0 ? creux[j] : creux[j + 1])) * H * -cos : 0;
+        let s = s0;
+        if (t < 0.22 && sg !== s0) {
+          const g = lisse(0.5 + t / 0.44);
+          s = s0 * g + sg * (1 - g);
+        } else if (t > 0.78 && sd !== s0) {
+          const g = lisse(0.5 + (1 - t) / 0.44);
+          s = s0 * g + sd * (1 - g);
+        }
+        const profond = c.jete ? 0.35 : 1;
+        ligne.push([
+          xb + Ae * Math.sin(2 * phi) + tete[j] * bosse,
+          yr + H * cos + remonte,
+          -s * D * Math.cos(2 * phi) * profond - s0 * retrait[j] * bosse,
+        ]);
+      }
+    }
+    lignes.push(ligne);
+  }
+  // Centrage et lisières, comme cheminDuFil.
+  const cx = (xmin + xmax) / 2;
+  const chemin = [];
+  lignes.forEach((l, r) => {
+    const ligne = l.map(([x, y, z]) => [x - cx, y, z]);
+    if (r % 2 === 1) ligne.reverse();
+    if (chemin.length) {
+      const [xa, ya, za] = chemin[chemin.length - 1];
+      const [xb, yb, zb] = ligne[0];
+      const cote = xa > 0 ? 1 : -1;
+      for (let k = 1; k < 10; k++) {
+        const t = k / 10;
+        chemin.push([xa + (xb - xa) * t + cote * 0.32 * Math.sin(Math.PI * t), ya + (yb - ya) * t, za + (zb - za) * t]);
+      }
+    }
+    chemin.push(...ligne);
+  });
+  return { points: chemin, largeur: fenetre ? fenetre.xMax - fenetre.xMin : xmax - xmin, hauteur: (nR - 1) * pas + 2 * H };
+}
+
+/** Nombre de mailles d'un tricot à plat d'au moins `motifs` répétitions, qui tombe juste à chaque rang. */
+const largeurDuTricot = (point, motifs) => maillesLesPlusProches({ ...point, miseEnPlace: [] }, motifs * largeurMotif(point), "plat");
+
+/**
+ * Échantillon fil par fil d'un point lié : un nombre entier de motifs (au moins `mailles` × `rangs` quand c'est
+ * possible, sans dépasser `max` mailles), pris au milieu d'un tricot plus large. Renvoie le chemin et la taille, ou null.
+ */
+export function echantillonLie(point, { mailles = 16, rangs = 20, max = 900 } = {}) {
+  if (!pointLie(point)) return null;
+  const L = largeurMotif(point);
+  const Hm = point.rangs.length;
+  let nx = Math.max(1, Math.ceil(mailles / L));
+  let ny = Math.max(1, Math.ceil(rangs / Hm));
+  while (nx * L * ny * Hm > max && (nx > 1 || ny > 1)) {
+    if (nx * L >= ny * Hm && nx > 1) nx--;
+    else if (ny > 1) ny--;
+    else nx--;
+  }
+  const total = largeurDuTricot(point, nx + 4);
+  const sim = total && simulerLiens(point, { mailles: total, rangs: ny * Hm });
+  if (!sim?.ok) return null;
+  const xMin = Math.round(total / 2 - (nx * L) / 2);
+  const fenetre = { xMin, xMax: xMin + nx * L };
+  const fil = cheminDuFilLie(sim.grille, { montage: total, fenetre });
+  return { ...fil, mailles: nx * L, rangs: ny * Hm };
+}
+
+/**
+ * Une répétition du motif d'un point lié, avec une maille et un rang de voisinage tout autour (pour les textures
+ * cuites, qui se répètent sans couture). Renvoie { points, mailles, rangs } ou null.
+ */
+export function tuileLiee(point) {
+  if (!pointLie(point)) return null;
+  const L = largeurMotif(point);
+  const Hm = point.rangs.length;
+  const total = largeurDuTricot(point, 5);
+  const sim = total && simulerLiens(point, { mailles: total, rangs: 3 * Hm });
+  if (!sim?.ok) return null;
+  const xMin = Math.round(total / 2 - L / 2);
+  const fenetre = { xMin: xMin - 1, xMax: xMin + L + 1 };
+  const fil = cheminDuFilLie(sim.grille, { montage: total, de: Hm - 1, a: 2 * Hm + 1, fenetre });
+  return { points: fil.points, mailles: L, rangs: Hm };
+}

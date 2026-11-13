@@ -8,7 +8,8 @@
 // La couleur de la laine n'entre pas dans la cuisson : la même cuisson sert pour toutes les laines.
 
 import { grilleMotif } from "./texture.js";
-import { cheminDuFil, MODELE } from "./fil3d.js";
+import { cheminDuFil, rendu3dFidele, tuileLiee, MODELE } from "./fil3d.js";
+import { comptesVariables } from "../moteur/simulateur.js";
 import { occlusionDesSommets } from "./occlusion.js";
 
 /** Grille d'une répétition entourée d'une maille et d'un rang de voisinage (le motif continue). */
@@ -74,7 +75,9 @@ export function cuire(THREE, renderer, point, face = "endroit") {
   if (!motif) return null;
   const W = motif[0].length;
   const H = motif.length;
-  const { points } = cheminDuFil(grilleAvecVoisinage(motif));
+  // Jetés et diminutions : la répétition est tricotée avec les liens entre les mailles (les trous deviennent des jours).
+  const lie = !(rendu3dFidele(motif) && !comptesVariables(point)) && tuileLiee(point);
+  const { points } = lie || cheminDuFil(grilleAvecVoisinage(motif));
   const courbe = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
   const geometrie = new THREE.TubeGeometry(courbe, points.length * 2, MODELE.rayon, 10, false);
   // Ombre de contact de chaque sommet, calculée sur le fil (vue de l'endroit ou de l'envers, le calcul est le même).
