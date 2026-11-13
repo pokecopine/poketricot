@@ -84,7 +84,36 @@ const LIENS_PARTICULIERS = {
   "1en3j": [{ parents: [0] }, { parents: [], jete: true }, { parents: [0] }],
   "1en3jEnv": [{ parents: [0] }, { parents: [], jete: true }, { parents: [0] }],
   augID_f: [{ parents: [], levee: true }],
+
+  // ---- Lot 2 de la 3D fidèle ----
+  // Maille glissée : elle ne traverse pas la maille du dessous, elle EST cette maille, qui monte d'un rang.
+  // « fil » : où passe le fil, vu du côté où l'on tricote (devant = vers soi).
+  gl: [{ parents: [0], glissee: true, fil: "derriere" }],
+  glAv: [{ parents: [0], glissee: true, fil: "devant" }],
+  // Maille glissée avec un jeté (brioche) : le jeté se pose à cheval sur la maille glissée.
+  gljete_b: [{ parents: [0], glissee: true, fil: "jete" }],
+  // Maille double (piquée un rang plus bas) et maille brioche (la maille et son jeté ensemble) : la maille du dessous
+  // ne retient plus rien, elle reste à cheval ; la nouvelle maille traverse la maille d'encore en dessous.
+  md: [{ parents: [0], double: true }],
+  mdEnv: [{ parents: [0], double: true }],
+  brEnd_b: [{ parents: [0], double: true }],
+  brEnv_b: [{ parents: [0], double: true }],
+  // Mailles passées par-dessus : la maille passée ne porte plus rien, elle fait une ceinture autour des suivantes.
+  // La ceinture est notée sur la première maille entourée (dans l'ordre du travail).
+  "2envJ_a": [{ parents: [0], ceinture: { origine: "jete", parents: [], sur: 2 } }, { parents: [1] }],
+  "3p1_a": [{ parents: [1], ceinture: { origine: "tricotee", parents: [0], sur: 2 } }, { parents: [2] }],
+  gl2pp_b: [{ parents: [1], ceinture: { origine: "glissee", parents: [0], sur: 2 } }, { parents: [2] }],
+  glPar2_f: [{ parents: [1], ceinture: { origine: "glissee", parents: [0], sur: 2 } }, { parents: [2] }],
+  // Cluster : le fil fait plusieurs tours autour des 3 mailles avant qu'on les tricote.
+  cluster3_b: [{ parents: [0], cluster: { sur: 3, tours: 3 } }, { parents: [1] }, { parents: [2] }],
+  // Jeté à lâcher : il ne pose aucune maille ; il laisse un pont de fil lâche (noté sur la maille d'avant).
+  jeteLache_c: [],
+  // Jeté glissé : lâcher le jeté, 1 jeté, glisser 1 maille, 3 endroit, passer la glissée par-dessus les 3.
+  jeteGlisse_c: [{ parents: [], jete: true }, { parents: [1], ceinture: { origine: "glissee", parents: [0], sur: 3 } }, { parents: [2] }, { parents: [3] }],
 };
+
+/** Gestes qui laissent un pont de fil lâche après la maille précédente. */
+export const GESTES_LACHES = new Set(["jeteLache_c"]);
 
 /**
  * Liens d'un geste : [{ parents: [indices des mailles prises], jete?, levee? }, …], une entrée par maille posée.

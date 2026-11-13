@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { POINTS, pointParId } from "../js/catalogue/points.js";
 import { liensDuGeste } from "../js/catalogue/gestes.js";
 import { tricoterRangLie, simulerLiens } from "../js/moteur/simulateur.js";
-import { pointLie, placerLesMailles, echantillonLie, tuileLiee, rendu3dFidele } from "../js/rendu/fil3d.js";
+import { pointLie, placerLesMailles, echantillonLie, tuileLiee, rendu3dFidele, besoinDesLiens, cheminDuFil, grilleEchantillon } from "../js/rendu/fil3d.js";
 import { grilleMotif } from "../js/rendu/texture.js";
 import { tailleMotif } from "../js/rendu/cuisson.js";
 import { comptesVariables } from "../js/moteur/simulateur.js";
@@ -69,9 +69,9 @@ test("placement : un jeté laisse un écart sous lui, une diminution penche du b
   });
 });
 
-test("lot 1 : les 34 points à jetés et diminutions ont un échantillon et une tuile fidèles", () => {
-  const lies = POINTS.filter((p) => !(rendu3dFidele(grilleMotif(p)) && !comptesVariables(p)) && pointLie(p));
-  assert.equal(lies.length, 34);
+test("lots 1 et 2 : les 53 points liés ont un échantillon et une tuile fidèles, au fil continu", () => {
+  const lies = POINTS.filter((p) => !(rendu3dFidele(grilleMotif(p)) && !comptesVariables(p) && !besoinDesLiens(p)) && pointLie(p));
+  assert.equal(lies.length, 34 + 19);
   for (const p of lies) {
     const e = echantillonLie(p);
     assert.ok(e, p.id);
@@ -85,6 +85,76 @@ test("lot 1 : les 34 points à jetés et diminutions ont un échantillon et une 
   }
 });
 
-test("les gestes pas encore modélisés restent approchés (glissées, torsades, passées par-dessus)", () => {
-  for (const id of ["tisse", "torsade-droite", "bambou", "brioche", "cluster"]) assert.equal(pointLie(pointParId(id)), false, id);
+test("les torsades restent approchées ; glissées, doubles, passées par-dessus et cluster sont liés (lot 2)", () => {
+  for (const id of ["torsade-droite", "torsade-gauche", "double-torsade"]) assert.equal(pointLie(pointParId(id)), false, id);
+  for (const id of ["tisse", "bambou", "brioche", "cluster", "jete-glisse", "point-cocon"]) assert.equal(pointLie(pointParId(id)), true, id);
+  assert.equal(POINTS.filter((p) => !pointLie(p)).length, 11);
+});
+
+// ---------- Lot 2 : mailles glissées, doubles, passées par-dessus, cluster, jeté glissé ----------
+
+test("lot 2 : une maille glissée garde sa maille du dessous et le côté du fil, retourné sur l'envers", () => {
+  const e = tricoterRangLie({ cote: "E", debut: [], motif: ["glAv", "end"], fin: [] }, 4);
+  assert.deepEqual(e.rang.map((c) => [c.parents, !!c.glissee, c.fil]), [[[0], true, "devant"], [[1], false, undefined], [[2], true, "devant"], [[3], false, undefined]]);
+  // Fil devant sur un rang envers : il passe derrière vu de l'endroit.
+  const v = tricoterRangLie({ cote: "V", debut: [], motif: ["glAv", "env"], fin: [] }, 2);
+  assert.equal(v.rang.find((c) => c.glissee).fil, "derriere");
+  assert.equal(tricoterRangLie({ cote: "V", debut: [], motif: ["gl", "env"], fin: [] }, 2).rang.find((c) => c.glissee).fil, "devant");
+});
+
+test("lot 2 : une maille passée par-dessus ne porte rien au rang suivant ; ceinture et cluster sont notés", () => {
+  const r = tricoterRangLie({ cote: "E", debut: [], motif: ["3p1_a", "jete"], fin: [] }, 3);
+  assert.ok(r.ok);
+  const portes = r.rang.flatMap((c) => c.parents);
+  assert.ok(!portes.includes(0), "la 1re maille est passée par-dessus");
+  assert.deepEqual(r.rang[0].ceinture, { origine: "tricotee", parents: [0], sur: 2, cote: 1 });
+  const c = tricoterRangLie({ cote: "E", debut: [], motif: ["cluster3_b"], fin: [] }, 3);
+  assert.equal(c.rang[0].cluster.sur, 3);
+  // Jeté à lâcher : aucune maille de plus, un pont lâche après la maille d'avant.
+  const l = tricoterRangLie({ cote: "V", debut: [], motif: ["env", "jeteLache_c"], fin: [] }, 2);
+  assert.equal(l.rang.length, 2);
+  assert.ok(l.rang.every((x) => x.lacheApres === -1));
+});
+
+test("lot 2 : les 19 points se tricotent avec leurs liens, le bon nombre de mailles à chaque rang", () => {
+  const ids = "fausses-cotes-anglaises nid-abeille bambou tisse tisse-double oeil-de-perdrix dentelle-nouee brioche barres-verticales-lignees cluster grain-de-poudre noisette-aeree jete-glisse mousse-glisse mailles-swag point-cocon cotes-glissees point-boucles millepertuis".split(" ");
+  for (const id of ids) {
+    const p = pointParId(id);
+    assert.ok(besoinDesLiens(p) && pointLie(p), id);
+    const e = echantillonLie(p);
+    assert.ok(e && e.mailles >= 12, id);
+  }
+});
+
+test("lot 2 : une maille glissée s'allonge, la barrette « fil devant » passe devant, une ceinture passe devant", () => {
+  // Point tissé : rangs endroit avec mailles glissées fil devant.
+  const p = pointParId("tisse");
+  const sim = simulerLiens(p, { mailles: 11, rangs: 8 });
+  const places = placerLesMailles(sim.grille, 11);
+  assert.ok(places.some((r) => r.allonge.some((a) => a >= 1)), "une maille allongée");
+  const e = echantillonLie(p);
+  assert.ok(Math.max(...e.points.map((q) => q[2])) > 0.5, "la barrette est devant le tissu");
+  // Brioche : des mailles à cheval et du relief vers l'endroit.
+  const b = pointParId("brioche");
+  const pb = placerLesMailles(simulerLiens(b, { mailles: 12, rangs: 6 }).grille, 12);
+  assert.ok(pb.some((r) => r.cheval.some((x) => x !== 0)) && pb.some((r) => r.relief.some((x) => x > 0)));
+  // Dentelle nouée : la ceinture passe devant les mailles.
+  const d = echantillonLie(pointParId("dentelle-nouee"));
+  assert.ok(Math.max(...d.points.map((q) => q[2])) > 0.55);
+});
+
+test("lot 2 : les 73 points déjà fidèles gardent exactement le même fil", async () => {
+  const { createHash } = await import("node:crypto");
+  const { readFile } = await import("node:fs/promises");
+  const attendu = JSON.parse(await readFile(new URL("./donnees/empreintes-fideles.json", import.meta.url), "utf8"));
+  const h = (pts) => createHash("sha1").update(pts.map((q) => q.map((v) => v.toFixed(3)).join(",")).join(";")).digest("hex").slice(0, 16);
+  assert.equal(Object.keys(attendu).length, 73);
+  for (const [id, e] of Object.entries(attendu)) {
+    const p = pointParId(id);
+    if (e.simple) assert.equal(h(cheminDuFil(grilleEchantillon(grilleMotif(p, { face: "endroit" }))).points), e.simple, id);
+    else {
+      assert.equal(h(echantillonLie(p).points), e.echantillon, id);
+      assert.equal(h(tuileLiee(p).points), e.tuile, id);
+    }
+  }
 });
