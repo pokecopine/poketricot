@@ -183,12 +183,31 @@ const GONFLE = 0.42; // relief d'une noisette vers l'endroit
 const TIRAGE_TETE = 0.7; // part du chemin vers la maille du rang suivant que fait la tête
 const TETE_MAX = 0.45; // une tête ne se décale pas de plus (en largeurs de maille) // de combien la tête d'une maille cachée dans une diminution passe derrière
 
+// Lot 2 : mailles glissées, doubles, passées par-dessus, cluster, jeté lâché.
+const ECART_BARRETTE = 0.4; // une barrette (fil devant une maille glissée) passe à cette distance devant le tissu
+export const GONFLE_DOUBLE = 0.34; // relief des côtes de mailles doubles et brioche vers leur côté (bien marqué)
+const CHEVAL = 0.3; // une maille à cheval se pose à cette distance devant la maille qu'elle couvre
+const SERRE_CLUSTER = 0.28; // part du chemin vers le milieu que font les mailles d'un cluster
+
+/** Gestes du lot 2 : mailles glissées, doubles et brioche, passées par-dessus, cluster, jeté glissé. */
+export const GESTES_LOT2 = "gl glAv gljete_b md mdEnv brEnd_b brEnv_b 2envJ_a 3p1_a gl2pp_b glPar2_f cluster3_b jeteLache_c jeteGlisse_c".split(" ");
+const LOT2 = new Set(GESTES_LOT2);
+
+/** Le point utilise-t-il un geste du lot 2 (il passe alors par les liens, même si ses mailles ont l'air simples) ? */
+export function besoinDesLiens(point) {
+  return [...(point.miseEnPlace || []), ...point.rangs].some((r) => [...(r.debut || []), ...r.motif, ...(r.fin || [])].some((c) => LOT2.has(c)));
+}
+
 /**
- * Gestes dessinés fil par fil grâce aux liens (lot 1 : jetés, diminutions, augmentations).
- * Les mailles glissées, doubles, passées par-dessus, enroulées et les torsades restent approchées pour l'instant.
+ * Gestes dessinés fil par fil grâce aux liens (lot 1 : jetés, diminutions, augmentations ; lot 2 : mailles glissées,
+ * doubles, passées par-dessus, cluster, jeté glissé). Les torsades restent approchées pour l'instant.
  */
 export const GESTES_LIES = new Set(
-  "end env endT envT jete 2ens 2ensEnv ssk ssp 3ens 3ensEnv 3ensT 3ensBA_c sd 5ens 5ensEnv aug augEnv endEnv_f 1en3 1en3Env_e 1en3j 1en3jEnv etoileEnd etoileEnv croise_b croise_e augID_f".split(" ")
+  [
+    ..."end env endT envT jete 2ens 2ensEnv ssk ssp 3ens 3ensEnv 3ensT 3ensBA_c sd 5ens 5ensEnv aug augEnv endEnv_f 1en3 1en3Env_e 1en3j 1en3jEnv etoileEnd etoileEnv croise_b croise_e augID_f".split(" "),
+    // Lot 2 (0.24.0)
+    ...GESTES_LOT2,
+  ]
 );
 
 /** Le point se dessine-t-il fil par fil avec les liens (tous ses gestes sont dans GESTES_LIES) ? */
@@ -252,6 +271,16 @@ export function placerLesMailles(grille, montage) {
       }
       if (!bouge) break;
     }
+    // Cluster : les mailles entourées se rapprochent du milieu (le fil enroulé les serre).
+    cellules.forEach((c, j) => {
+      if (!c.cluster) return;
+      const groupe = c.cluster.cote > 0 ? [j - c.cluster.sur + 1, j] : [j, j + c.cluster.sur - 1];
+      if (groupe[0] < 0 || groupe[1] >= n) return;
+      let m = 0;
+      for (let k = groupe[0]; k <= groupe[1]; k++) m += X[k];
+      m /= c.cluster.sur;
+      for (let k = groupe[0]; k <= groupe[1]; k++) X[k] += (m - X[k]) * SERRE_CLUSTER;
+    });
     // Têtes du rang du dessous : là où passe la maille qui les traverse ; dans une diminution, les cachées reculent.
     const enfants = Array.from({ length: nP }, () => []);
     const retrait = new Array(nP).fill(0);
@@ -299,11 +328,101 @@ export function placerLesMailles(grille, montage) {
       });
       rp.retrait = retrait;
     }
-    rangs.push({ cellules, X, tete: new Array(n).fill(0), retrait: new Array(n).fill(0), gonfle: new Array(n).fill(0) });
+    rangs.push({ cellules, X, tete: new Array(n).fill(0), retrait: new Array(n).fill(0), gonfle: new Array(n).fill(0), allonge: new Array(n).fill(0), cheval: new Array(n).fill(0), relief: new Array(n).fill(0) });
     precedent = X;
     enfantsDuPrecedent = enfants;
   }
+  marquerMaillesLongues(rangs);
   return rangs;
+}
+
+/**
+ * Lot 2 : mailles qui s'allongent et mailles à cheval.
+ *   - Une maille glissée est la maille du dessous qui monte d'un rang : cette maille (la « racine ») s'allonge.
+ *   - Une maille double (ou brioche) traverse la maille d'encore en dessous, qui s'allonge ; la maille du dessous
+ *     ne retient plus rien et se pose à cheval. Les deux gonflent vers le côté où la maille double se voit.
+ */
+function marquerMaillesLongues(rangs) {
+  const racines = rangs.map((r) => new Array(r.cellules.length).fill(null));
+  rangs.forEach((rang, r) => {
+    rang.cellules.forEach((c, j) => {
+      if (r === 0) return;
+      const dessous = rangs[r - 1];
+      if (c.glissee) {
+        const q = c.parents[0];
+        const racine = racines[r - 1][q] || { r: r - 1, j: q };
+        racines[r][j] = racine;
+        rangs[racine.r].allonge[racine.j] += 1;
+      }
+      if (c.double) {
+        const p = c.parents[0];
+        const cote = c.sens || 1;
+        dessous.cheval[p] = cote;
+        dessous.relief[p] = cote;
+        const pc = dessous.cellules[p];
+        let racine = racines[r - 1][p];
+        if (!pc.glissee && r >= 2 && pc.parents.length === 1) {
+          racine = { r: r - 2, j: pc.parents[0] };
+          rangs[r - 2].allonge[racine.j] += 1;
+        }
+        if (racine) rangs[racine.r].relief[racine.j] = cote;
+      }
+    });
+  });
+}
+
+/**
+ * Détour du fil autour d'un groupe de mailles, depuis le point P (un pont) : il monte à la hauteur y, passe du côté
+ * où l'on tricote (cote : +1 l'endroit) de xA à xB, fait le tour, revient derrière, et redescend en P.
+ * Une ceinture (maille passée par-dessus) fait 1 tour ; un cluster en fait plusieurs, les uns au-dessus des autres.
+ */
+function tourDeFil(P, { xA, xB, y, cote, tours = 1 }) {
+  const out = [];
+  const zDevant = cote * (MODELE.D + 0.42);
+  const zDerriere = -cote * (MODELE.D + 0.26);
+  const dir = Math.sign(xB - xA) || 1;
+  const [px, py, pz] = P;
+  const segment = (a, b, nb) => {
+    for (let i = 1; i <= nb; i++) {
+      const t = i / nb;
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+    }
+  };
+  let cur = [px, py, pz];
+  for (let k = 0; k < tours; k++) {
+    const yk = y + k * 0.21;
+    const debut = [xA, yk, zDevant];
+    segment(cur, debut, k ? 4 : 6);
+    // Devant, de xA à xB, un peu tendu (léger creux au milieu).
+    for (let i = 1; i <= 16; i++) {
+      const t = i / 16;
+      out.push([xA + (xB - xA) * t, yk - 0.06 * Math.sin(Math.PI * t), zDevant]);
+    }
+    // Le tour du bout.
+    for (let i = 1; i <= 6; i++) {
+      const th = (Math.PI * i) / 6;
+      out.push([xB + dir * 0.16 * Math.sin(th), yk + 0.04 * Math.sin(th), (zDevant + zDerriere) / 2 + ((zDevant - zDerriere) / 2) * Math.cos(th)]);
+    }
+    // Derrière, retour vers xA.
+    for (let i = 1; i <= 10; i++) {
+      const t = i / 10;
+      out.push([xB + (xA - xB) * t, yk + 0.05, zDerriere]);
+    }
+    cur = out[out.length - 1];
+  }
+  segment(cur, [px, py, pz], 6);
+  return out;
+}
+
+/** Pont lâche (jeté lâché) depuis le point P : une petite boucle de fil qui retombe. */
+function pontLache(P, cote) {
+  const [px, py, pz] = P;
+  const out = [];
+  for (let i = 1; i <= 14; i++) {
+    const u = i / 14;
+    out.push([px + 0.22 * Math.sin(2 * Math.PI * u), py - 0.5 * Math.sin(Math.PI * u), pz - cote * 0.12 * Math.sin(Math.PI * u)]);
+  }
+  return out;
 }
 
 /**
@@ -320,7 +439,7 @@ export function cheminDuFilLie(grille, { montage, de = 0, a = grille.length, fen
   let xmax = -Infinity;
   const lignes = [];
   for (let r = de; r < a; r++) {
-    const { cellules, X, tete, retrait, gonfle } = places[r];
+    const { cellules, X, tete, retrait, gonfle, allonge, cheval, relief } = places[r];
     const n = X.length;
     const B = Array.from({ length: n + 1 }, (_, j) => (j === 0 ? X[0] - 0.5 : j === n ? X[n - 1] + 0.5 : (X[j - 1] + X[j]) / 2));
     // Un pont qui touche un jeté reste haut (le jeté n'est retenu par aucune maille).
@@ -336,37 +455,105 @@ export function cheminDuFilLie(grille, { montage, de = 0, a = grille.length, fen
     xmin = Math.min(xmin, B[j0]);
     xmax = Math.max(xmax, B[j1]);
     const yr = y0 + (r - de) * pas;
+    // Point d'un pont (entre deux mailles) : le même pour les deux mailles qui le partagent.
+    const sensPont = (k) => {
+      const g = k > 0 ? cellules[k - 1].sens : cellules[k].sens;
+      const d = k < n ? cellules[k].sens : cellules[k - 1].sens;
+      return (g + d) / 2;
+    };
+    const pont = (k) => [B[k], yr - H + (1 - creux[k]) * H, -sensPont(k) * D];
+    // Détours du fil, rangés par pont : ceintures, tours d'un cluster, pont lâche.
+    const detours = new Map();
+    const ajouter = (k, f) => {
+      if (k < j0 || k > j1) return;
+      if (!detours.has(k)) detours.set(k, []);
+      detours.get(k).push(f);
+    };
+    cellules.forEach((c, j) => {
+      for (const [cle, hauteur, tours] of [["ceinture", 0.05, 1], ["cluster", -0.62, 0]]) {
+        const e = c[cle];
+        if (!e) continue;
+        const cote = e.cote;
+        const g = cote > 0 ? j - e.sur + 1 : j;
+        const d = cote > 0 ? j : j + e.sur - 1;
+        if (g < 0 || d >= n || g < j0 || d >= j1) continue; // groupe entier dans la fenêtre seulement
+        const k = cote > 0 ? d + 1 : g; // l'origine : le côté où l'on a commencé
+        // La ceinture s'arrête un peu avant le bout : deux ceintures voisines ne se touchent pas.
+        const xBout = cote > 0 ? B[g] + 0.16 : B[d + 1] - 0.16;
+        ajouter(k, (P) => tourDeFil(P, { xA: B[k], xB: xBout, y: yr + hauteur * H, cote, tours: tours || e.tours || 1 }));
+      }
+      if (c.lacheApres) {
+        const k = c.lacheApres > 0 ? j : j + 1;
+        ajouter(k, (P) => pontLache(P, c.lacheApres));
+      }
+    });
     const ligne = [];
+    const placerDetours = (k) => {
+      for (const f of detours.get(k) || []) ligne.push(...f(ligne[ligne.length - 1]));
+    };
     for (let j = j0; j < j1; j++) {
       const c = cellules[j];
-      const w = B[j + 1] - B[j];
-      const Ae = c.jete ? A * 0.2 : A * Math.min(1.3, Math.max(0.6, w));
-      const s0 = c.sens;
-      const sg = j > 0 ? cellules[j - 1].sens : s0;
-      const sd = j + 1 < n ? cellules[j + 1].sens : s0;
-      for (let i = j === j0 ? 0 : 1; i <= N; i++) {
-        const t = i / N;
-        const phi = 2 * Math.PI * (t - 0.5);
-        const cos = Math.cos(phi);
-        const xb = phi < 0 ? B[j] + ((X[j] - B[j]) * (phi + Math.PI)) / Math.PI : X[j] + ((B[j + 1] - X[j]) * phi) / Math.PI;
-        const bosse = Math.pow((1 + cos) / 2, 1.5);
-        const remonte = cos < 0 ? (1 - (phi < 0 ? creux[j] : creux[j + 1])) * H * -cos : 0;
-        let s = s0;
-        if (t < 0.22 && sg !== s0) {
-          const g = lisse(0.5 + t / 0.44);
-          s = s0 * g + sg * (1 - g);
-        } else if (t > 0.78 && sd !== s0) {
-          const g = lisse(0.5 + (1 - t) / 0.44);
-          s = s0 * g + sd * (1 - g);
+      const pts = [];
+      if (c.glissee && !cheval[j]) {
+        // Maille glissée : le fil du rang passe tout droit, devant (barrette) ou derrière la maille qui monte.
+        const [xa, ya, za] = pont(j);
+        const [xe, ye, ze] = pont(j + 1);
+        const zf = (c.fil === "derriere" ? -1 : 1) * (D + ECART_BARRETTE);
+        for (let i = 0; i <= N; i++) {
+          const t = i / N;
+          const b = Math.pow(Math.sin(Math.PI * t), 0.6);
+          pts.push([xa + (xe - xa) * t, ya + (ye - ya) * t + 0.4 * H * Math.sin(Math.PI * t), (za + (ze - za) * t) * (1 - b) + zf * b]);
         }
-        const profond = c.jete ? 0.35 : 1;
-        ligne.push([
-          xb + Ae * Math.sin(2 * phi) + tete[j] * bosse,
-          yr + H * cos + remonte,
-          -s * D * Math.cos(2 * phi) * profond - s0 * retrait[j] * bosse + gonfle[j] * Math.sqrt((1 + cos) / 2),
-        ]);
+      } else {
+        const w = B[j + 1] - B[j];
+        const long = allonge[j];
+        const Ae = c.jete ? A * 0.2 : A * Math.min(1.3, Math.max(0.6, w)) * (long ? 0.75 : 1) * (cheval[j] ? 0.9 : 1);
+        const s0 = c.sens;
+        const sg = j > 0 ? cellules[j - 1].sens : s0;
+        const sd = j + 1 < n ? cellules[j + 1].sens : s0;
+        // Une maille longue a plus de points (sinon ses jambes feraient des sauts).
+        const Nc = N * (1 + long + (cheval[j] ? 1 : 0));
+        for (let i = 0; i <= Nc; i++) {
+          const t = i / Nc;
+          const phi = 2 * Math.PI * (t - 0.5);
+          const cos = Math.cos(phi);
+          const xb = phi < 0 ? B[j] + ((X[j] - B[j]) * (phi + Math.PI)) / Math.PI : X[j] + ((B[j + 1] - X[j]) * phi) / Math.PI;
+          const bosse = Math.pow((1 + cos) / 2, 1.5);
+          const remonte = cos < 0 ? (1 - (phi < 0 ? creux[j] : creux[j + 1])) * H * -cos : 0;
+          let s = s0;
+          if (t < 0.22 && sg !== s0) {
+            const g = lisse(0.5 + t / 0.44);
+            s = s0 * g + sg * (1 - g);
+          } else if (t > 0.78 && sd !== s0) {
+            const g = lisse(0.5 + (1 - t) / 0.44);
+            s = s0 * g + sd * (1 - g);
+          }
+          const profond = c.jete ? 0.35 : 1;
+          const haut = Math.max(0, cos);
+          let x = xb + Ae * Math.sin(2 * phi) + tete[j] * bosse;
+          // Maille allongée (glissée au-dessus, ou traversée par une maille double) : la boucle monte d'autant de rangs.
+          let y = yr + H * cos + remonte + long * pas * haut;
+          let z = -s * D * Math.cos(2 * phi) * profond - s0 * retrait[j] * bosse + gonfle[j] * Math.sqrt((1 + cos) / 2);
+          // Relief des côtes de mailles doubles et brioche.
+          if (relief[j]) z += relief[j] * GONFLE_DOUBLE * Math.sqrt((1 + cos) / 2);
+          if (cheval[j]) {
+            // Maille à cheval : elle ne retient plus rien et se pose devant (du côté où se voit la maille double).
+            // Le haut bascule vers l'arrière : la maille passe par-dessus la maille allongée, comme un jeté.
+            // Seule la tête passe devant (en arche sur le haut de la maille allongée) ; les jambes restent dans le tissu.
+            const m = Math.pow((1 + cos) / 2, 2);
+            z = z * (1 - m) + m * cheval[j] * (D + CHEVAL + GONFLE_DOUBLE);
+            y += 0.18 * pas * haut;
+          }
+          pts.push([x, y, z]);
+        }
       }
+      if (j === j0) {
+        ligne.push(pts[0]);
+        placerDetours(j);
+      } else placerDetours(j);
+      for (let i = 1; i < pts.length; i++) ligne.push(pts[i]);
     }
+    placerDetours(j1);
     lignes.push(ligne);
   }
   // Centrage et lisières, comme cheminDuFil.

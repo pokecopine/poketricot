@@ -7,7 +7,7 @@
 // Dans la grille, l'indice 0 d'un rang est la maille la plus à droite vue de l'endroit
 // (c'est la première tricotée sur un rang endroit).
 
-import { geste, liensDuGeste } from "../catalogue/gestes.js";
+import { geste, liensDuGeste, GESTES_LACHES } from "../catalogue/gestes.js";
 
 const somme = (liste, cle) => liste.reduce((t, code) => t + geste(code)[cle], 0);
 export const consomme = (liste) => somme(liste || [], "consomme");
@@ -475,10 +475,21 @@ export function tricoterRangLie(rang, n) {
     const liens = liensDuGeste(code);
     const vus = envers ? g.envers : g.endroit;
     if (!liens || !vus) return { ok: false, code };
+    // Ordre de travail → indice de la grille du dessous : sur l'envers, on part de la gauche (vu de l'endroit).
+    const indice = (k) => (envers ? n - 1 - (pris + k) : pris + k);
+    // Jeté à lâcher : aucune maille, un pont lâche après la maille précédente.
+    if (GESTES_LACHES.has(code) && cellules.length) cellules[cellules.length - 1].lacheApres = envers ? -1 : 1;
     liens.forEach((l, i) => {
-      // Ordre de travail → indice de la grille du dessous : sur l'envers, on part de la gauche (vu de l'endroit).
-      const parents = l.parents.map((k) => (envers ? n - 1 - (pris + k) : pris + k));
-      cellules.push({ aspect: vus[i], code, parents, jete: !!l.jete, levee: !!l.levee, sens: sensVuDeLEndroit(vus[i], g, envers) });
+      const cellule = { aspect: vus[i], code, parents: l.parents.map(indice), jete: !!l.jete, levee: !!l.levee, sens: sensVuDeLEndroit(vus[i], g, envers) };
+      // Lot 2 : maille glissée (et côté du fil vu de l'endroit), maille double, ceinture, cluster.
+      if (l.glissee) {
+        cellule.glissee = true;
+        cellule.fil = l.fil === "jete" ? "jete" : (l.fil === "devant") !== envers ? "devant" : "derriere";
+      }
+      if (l.double) cellule.double = true;
+      if (l.ceinture) cellule.ceinture = { ...l.ceinture, parents: l.ceinture.parents.map(indice), cote: envers ? -1 : 1 };
+      if (l.cluster) cellule.cluster = { ...l.cluster, cote: envers ? -1 : 1 };
+      cellules.push(cellule);
     });
     pris += g.consomme;
   }

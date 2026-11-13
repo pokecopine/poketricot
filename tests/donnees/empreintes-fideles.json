@@ -1,0 +1,255 @@
+{
+ "jersey": {
+  "simple": "1484c9c4393c35e8"
+ },
+ "jersey-envers": {
+  "simple": "cf7a118d30b302f2"
+ },
+ "mousse": {
+  "simple": "dd4f2924edd61914"
+ },
+ "cotes-1-1": {
+  "simple": "62634bf34adbc626"
+ },
+ "cotes-2-2": {
+  "simple": "429b25ed0737637e"
+ },
+ "sillon": {
+  "simple": "bad6a80f8b8f420f"
+ },
+ "riz": {
+  "simple": "a52b3fbcc375e697"
+ },
+ "ble": {
+  "simple": "e8f85925dd836a9e"
+ },
+ "sable": {
+  "simple": "7c8c1a3f3dd33501"
+ },
+ "mini-noisette": {
+  "echantillon": "14e6fa640eaa226e",
+  "tuile": "55474fc559d1549f"
+ },
+ "bourse": {
+  "echantillon": "aa27b0c7d657cc80",
+  "tuile": "a52ce0280418f430"
+ },
+ "chevron-dentele": {
+  "echantillon": "7a96725f7f7b70d0",
+  "tuile": "b81da60c25818867"
+ },
+ "andalou": {
+  "simple": "a9e457c42abf90b1"
+ },
+ "andalou-double": {
+  "simple": "19a66c99fd888526"
+ },
+ "boites": {
+  "simple": "128ab700a318c9df"
+ },
+ "cotes-chevrons": {
+  "simple": "f4ccd153ee22deb0"
+ },
+ "cotes-souples": {
+  "echantillon": "d7e195e716d89076",
+  "tuile": "95fe60d1565aefe5"
+ },
+ "cotes-riz-gaufre": {
+  "simple": "327ea216765b571b"
+ },
+ "cotes-allongees-alternees": {
+  "simple": "57be1212ff5f65c2"
+ },
+ "cloque": {
+  "simple": "61529590299fba72"
+ },
+ "thermes": {
+  "simple": "41f3b11586b7f24d"
+ },
+ "double-panier": {
+  "simple": "969fb44c5b1d8db0"
+ },
+ "grille": {
+  "simple": "6a0f035dd56d0393"
+ },
+ "damier-4-4": {
+  "simple": "e9805f1796e258d7"
+ },
+ "chevron-reversible": {
+  "simple": "0797ae10dcbc529b"
+ },
+ "pavillon": {
+  "simple": "d549dfc8e4976055"
+ },
+ "petites-pyramides": {
+  "simple": "0dfecdb89af78143"
+ },
+ "manne-mousse": {
+  "simple": "1e7ca7e4b06165bb"
+ },
+ "vagues": {
+  "echantillon": "0b30355db6e805d6",
+  "tuile": "239db8c95738c187"
+ },
+ "plumes-eventail": {
+  "echantillon": "19ded2c89193eaeb",
+  "tuile": "93aa552ae05dcdff"
+ },
+ "mini-feuilles": {
+  "echantillon": "efda2ec88634433d",
+  "tuile": "5a17386ac8e24ca4"
+ },
+ "bouton-de-rose": {
+  "echantillon": "a9ac658148325882",
+  "tuile": "c5b98ba2d4b84b4e"
+ },
+ "fleurs-cerisier": {
+  "echantillon": "5c74652a06bb10f9",
+  "tuile": "363cfa3f1eaf2852"
+ },
+ "cotes-dentelle-simple": {
+  "echantillon": "18aee16294e6f476",
+  "tuile": "0cbcc385f6c8d082"
+ },
+ "point-perfore": {
+  "echantillon": "54f02e2403073c84",
+  "tuile": "34dfea049d905efa"
+ },
+ "jours-obliques": {
+  "echantillon": "43abd17dda499a2a",
+  "tuile": "fadef81a4a0ed787"
+ },
+ "zigzags-ajoures": {
+  "echantillon": "d0ecd3662a1863ce",
+  "tuile": "ef2243e3e3005779"
+ },
+ "goutte-eau": {
+  "echantillon": "4a40eb392c8ec5c9",
+  "tuile": "1ac8c613f7fe8102"
+ },
+ "point-resille": {
+  "echantillon": "07614958c1b9a3bd",
+  "tuile": "6aefddd337aadb6c"
+ },
+ "petits-diamants-ajoures": {
+  "echantillon": "7fa12ff7e180c184",
+  "tuile": "a10cf4746739a5b5"
+ },
+ "cotes-double-jour": {
+  "echantillon": "c5b9df01c9f244fc",
+  "tuile": "c39ab44af9cb42d1"
+ },
+ "point-fougeres": {
+  "echantillon": "6e80e9adaf25435a",
+  "tuile": "9beaaf513157317a"
+ },
+ "chenilles-verticales": {
+  "simple": "688c64b21d8b9eaf"
+ },
+ "cotes-3-3": {
+  "simple": "b03099909c49f391"
+ },
+ "cotes-twist": {
+  "simple": "62634bf34adbc626"
+ },
+ "cotes-perlees": {
+  "simple": "0969c6e4baee1de0"
+ },
+ "losange-diamant-riz": {
+  "simple": "c58c765ca3d3e2dc"
+ },
+ "zigzag-cotes": {
+  "simple": "215a18de5a07e482"
+ },
+ "chevrons-ombres": {
+  "simple": "35f4b97f026d9d82"
+ },
+ "oeillets-chevrons": {
+  "echantillon": "8c0ffd0d118fed70",
+  "tuile": "9a1040064455356c"
+ },
+ "point-croise": {
+  "echantillon": "7726398a44dbb2cd",
+  "tuile": "f67793f7e63cb61e"
+ },
+ "motif-de-maille": {
+  "echantillon": "26262a010cceb30e",
+  "tuile": "c783287e4b5cab9b"
+ },
+ "triangles-jersey": {
+  "simple": "989f89e319309040"
+ },
+ "cotes-brisees": {
+  "simple": "480dbcdfb09c117e"
+ },
+ "astrakan": {
+  "echantillon": "da1bbeb20cf9f205",
+  "tuile": "ebcb65586ec72fd6"
+ },
+ "claie": {
+  "simple": "8e72130863fe51a3"
+ },
+ "godron": {
+  "simple": "d42ea3a8a0e27ddb"
+ },
+ "claie-quadrillage": {
+  "simple": "f7e0134a89508212"
+ },
+ "perle-contrarie": {
+  "simple": "5054c6ead3e26ab6"
+ },
+ "parallelogrammes-riz": {
+  "simple": "effdc60770d27195"
+ },
+ "pointilles": {
+  "simple": "a8e1843fe7ba1855"
+ },
+ "petites-coquilles": {
+  "echantillon": "734ccdaeeb48582e",
+  "tuile": "0632b4f65e97422c"
+ },
+ "jours-en-angle": {
+  "echantillon": "1fe6918a4203b62d",
+  "tuile": "2551547d1431d893"
+ },
+ "ecailles": {
+  "echantillon": "299deb5acbad7b59",
+  "tuile": "d619302e4e7ef3bc"
+ },
+ "pommes-de-pin": {
+  "echantillon": "c0b7fe6c60f99b33",
+  "tuile": "3f3daad19ef62b9d"
+ },
+ "muguets": {
+  "echantillon": "1fd5c417d7525301",
+  "tuile": "a48bde1cafac8bb9"
+ },
+ "rayures-granitees": {
+  "echantillon": "ba4b91792c70b57e",
+  "tuile": "b21ac4d998b64482"
+ },
+ "flots": {
+  "echantillon": "63151e7e3388ddd0",
+  "tuile": "caad046b7ffe085e"
+ },
+ "etoile": {
+  "echantillon": "58fdec94fa5d74bf",
+  "tuile": "31adce58a93a3d94"
+ },
+ "variation-riz": {
+  "echantillon": "94dec7160dbcd243",
+  "tuile": "ff2cbc0efd552e03"
+ },
+ "cotes-couverture": {
+  "echantillon": "481ce6f1d9acf4eb",
+  "tuile": "1f38c95f24c4d0c8"
+ },
+ "lignes-pointillees": {
+  "echantillon": "fd800a70a06a5a42",
+  "tuile": "0a5953a2e716e831"
+ },
+ "mures": {
+  "echantillon": "d0ce8a935d4f7187",
+  "tuile": "e0920f137926032b"
+ }
+}
