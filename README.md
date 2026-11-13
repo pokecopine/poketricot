@@ -11,7 +11,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Étape | Contenu | État |
 | --- | --- | --- |
 | E0 — Socle | Installation, hors connexion, base de données, réserve (laines et aiguilles), réglages et sauvegarde | ✅ |
-| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil lisse, tournable, ombres de contact, éclairage indirect et nuances), écran de consultation (grille de vignettes 3D, volet avec le dessin et les avis, feuilletage dans la famille, 0.20.0 ; recherche par nom et par critères), favoris et points à tester | ✅ 103 points (0.12.0) (7 lots, dont les 7 points de De Rerum Natura et le point d'étoile) |
+| E1 — Catalogue | Notation des points, simulateur, conversion en rond, rendu des textures, échantillon en 3D (fil lisse, tournable, ombres de contact, éclairage indirect et nuances), écran de consultation (grille de vignettes 3D, volet avec le dessin et les avis, feuilletage dans la famille, 0.20.0 ; recherche par nom et par critères), favoris et points à tester, écran « Comparer » (2 ou 3 points mis de côté, côte à côte, différences surlignées, « Choisir » depuis la comparaison, 0.22.0) | ✅ 103 points (0.12.0) ; « Comparer » (0.22.0), essai 📱 (7 lots, dont les 7 points de De Rerum Natura et le point d'étoile) |
 | E2 — Moteur | Densités (mesurées ou estimées), mailles et rangs qui tombent juste, rangs de transition, plan complet de l'écharpe vérifié par le simulateur, métrage | ✅ moteur et onglet Échantillons de la réserve |
 | E3 — Écharpe | Nouveau projet, matériel, taille, builder, aperçu en 3D (sur une barre ou autour du cou, physique de tissu), patron figé rang par rang, suivi des rangs, suppression d'un projet | ✅ (0.9.1) ; reste l'essai 📱 |
 | E3b — Colonnes et couleurs | Nombre de mailles du rang visible, corps et bandes en colonnes (damier), bandes et bordures dans une autre laine, fil porté en option, métrage par laine | ✅ (0.6.0) |
@@ -20,7 +20,7 @@ Un atelier de tricot dans le téléphone : on part de sa laine et de ses aiguill
 | Conseils | Aiguille conseillée dans la fourchette de l'étiquette selon la pièce et le point ; avis des points selon la grosseur de la laine (mention sur les cartes, tri, critère « Pour ma laine »), motif qui tient assez de fois dans le bloc | ✅ (0.18.0) ; essai 📱 |
 | E4 — Jambières | Tube droit, de la cheville vers le genou, à tricoter 2 fois : tour du mollet et longueur mesurés (25, 35 ou 45 cm), en magic loop ou à plat avec une maille de couture de chaque côté et un assemblage au point de matelas, aperçu 3D sur une jambe de mannequin, patron et suivi de la paire | ✅ (0.19.0) ; essai 📱 |
 | E4 — Couverture | Plaid 110 × 140, lit 1 personne 140 × 200, lit 2 personnes 200 × 220 cm ou mesures libres ; à plat, bordure tout autour (4 cm de point mousse, réglable côté par côté) ; en une pièce ou en 2 à 5 panneaux cousus au point de matelas (conseillés quand le câble est trop court : 80 cm porte environ 140 cm) ; aperçu 3D drapé sur un canapé ou un lit ; patron par panneau, suivi des panneaux puis de l'assemblage | ✅ (0.21.0) ; essai 📱 |
-| E4 — Bonnet | Bonnet en rond, tout en magic loop : tailles enfant, femme, homme ou tour de tête mesuré, revers replié (points réversibles), sommet en 8 parts (point simple ou jersey), pompon, aperçu 3D sur une tête de mannequin, patron et suivi | ✅ (0.17.0) ; couverture à venir |
+| E4 — Bonnet | Bonnet en rond, tout en magic loop : tailles enfant, femme, homme ou tour de tête mesuré, revers replié (points réversibles), sommet en 8 parts (point simple ou jersey), pompon, aperçu 3D sur une tête de mannequin, patron et suivi | ✅ (0.17.0) ; essai 📱 |
 | E5, E6 | Laine insuffisante, bibliothèque | À venir |
 
 ## Installer sur le téléphone (Chrome Android)
@@ -45,10 +45,10 @@ manifest.webmanifest  installation sur l'écran d'accueil
 sw.js                 fonctionnement hors connexion et mises à jour
 css/pelote.css        couleurs et formes de l'ambiance Pelote (clair et sombre)
 js/app.js             démarrage et navigation
-js/ecrans/            un fichier par écran (projet-*.js : étapes 1 à 5 ; patron.js : patron figé et suivi)
+js/ecrans/            un fichier par écran (projet-*.js : étapes 1 à 5 ; patron.js : patron figé et suivi ; points.js : catalogue, choix d'un point, volet, écran « Comparer »)
 js/composants/        éléments réutilisables (dont echantillon3d.js et vignette3d.js : photos 3D du catalogue ; piece3d.js : écharpe finie ; snood3d.js : snood fini en tube rigide ; bonnet3d.js : bonnet fini sur une tête ; jambiere3d.js : jambière finie sur une jambe)
 js/donnees/           base de données, réserve, sauvegarde, couleurs
-js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), avis selon la laine (laine.js), avis pour des jambières (jambieres.js), critères de recherche, techniques, consignes écrites
+js/catalogue/         gestes, points (première fournée + lots/), avis sur les côtés (cotes.js), avis selon la laine (laine.js), avis pour des jambières (jambieres.js), critères de recherche, comparaison de points (comparer.js), techniques, consignes écrites
 js/moteur/            simulateur (comptage des mailles, conversion en rond), densités, dimensions,
                       plan de l'écharpe (plan.js), du snood en rond (plan-rond.js) du bonnet (plan-bonnet.js : 8 parts, sommet) des jambières (plan-jambieres.js : en rond ou à plat avec couture, la paire) et de la couverture (plan-couverture.js : une pièce ou panneaux, portée du câble, repères) et leur vérification,
                       conseil d'aiguille dans la fourchette (aiguille.js), métrage, générateur du patron et suivi
