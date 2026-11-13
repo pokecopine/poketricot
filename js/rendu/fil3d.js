@@ -176,7 +176,10 @@ const ECART_MIN = 0.74; // deux mailles d'un même rang ne se rapprochent pas pl
 const RETRAIT_DESSOUS = 0.16;
 const ANCRAGE = 0.6; // part de l'espacement régulier dans la place d'une maille
 const PORTEE_TROU = 1.1; // les têtes à moins de cette distance d'un jeté s'en écartent…
-const ECART_TROU = 0.45; // … d'au plus cette distance
+const ECART_TROU = 0.55; // … d'au plus cette distance
+const ECART_PIEDS = 0.12; // de combien les voisines d'un jeté s'en écartent dans son rang
+const TETE_MAX_RASSEMBLE = 0.85; // décalage permis quand 3 mailles ou plus sont rassemblées
+const GONFLE = 0.42; // relief d'une noisette vers l'endroit
 const TIRAGE_TETE = 0.7; // part du chemin vers la maille du rang suivant que fait la tête
 const TETE_MAX = 0.45; // une tête ne se décale pas de plus (en largeurs de maille) // de combien la tête d'une maille cachée dans une diminution passe derrière
 
@@ -265,20 +268,38 @@ export function placerLesMailles(grille, montage) {
       // Le décalage est un peu retenu : la maille du dessous se penche sans s'étirer.
       rp.tete = rp.X.map((x, p) => {
         if (!enfants[p].length) return 0;
-        const d = (enfants[p].reduce((t, j) => t + X[j], 0) / enfants[p].length - x) * TIRAGE_TETE;
-        return Math.max(-TETE_MAX, Math.min(TETE_MAX, d));
+        // Une maille rassemblée avec 2 autres ou plus (étoile, 3 ensemble) va plus loin : c'est le fronce.
+        const rassemble = enfants[p].some((j) => cellules[j].parents.length >= 3);
+        const max = rassemble ? TETE_MAX_RASSEMBLE : TETE_MAX;
+        // Dans une diminution, les têtes se rassemblent au milieu de leurs mailles (là où la nouvelle maille les prend).
+        const cible = (j) => {
+          const ps = cellules[j].parents;
+          return ps.length > 1 ? (X[j] + ps.reduce((t, q) => t + rp.X[q], 0) / ps.length) / 2 : X[j];
+        };
+        const d = (enfants[p].reduce((t, j) => t + cible(j), 0) / enfants[p].length - x) * (rassemble ? 0.9 : TIRAGE_TETE);
+        return Math.max(-max, Math.min(max, d));
+      });
+      // Noisette : mailles nées d'une augmentation et reprises ensemble au rang suivant ; elles gonflent vers l'endroit.
+      rp.gonfle = rp.cellules.map((c, p) => {
+        const freres = c.parents.length === 1 && rp.cellules.filter((d) => d.parents.length === 1 && d.parents[0] === c.parents[0]).length >= 3;
+        const repris = enfants[p].length === 1 && cellules[enfants[p][0]].parents.length >= 3;
+        return freres && repris ? GONFLE : 0;
       });
       // Sous un jeté, les têtes du rang du dessous s'écartent : c'est le trou.
       cellules.forEach((c, j) => {
         if (!c.jete) return;
         rp.X.forEach((x, p) => {
+          // Pas pour une maille rassemblée (étoile) : le jeté est au milieu de son fronce.
+          if (enfants[p].some((k) => cellules[k].parents.length >= 3)) return;
           const d = x + rp.tete[p] - X[j];
           if (Math.abs(d) < PORTEE_TROU) rp.tete[p] += Math.sign(d || 1) * ECART_TROU * (1 - Math.abs(d) / PORTEE_TROU);
         });
+        // Les pieds des voisines du jeté, dans son propre rang, s'écartent un peu aussi.
+        for (const k of [j - 1, j + 1]) if (k >= 0 && k < n && !cellules[k].jete) X[k] += Math.sign(k - j) * ECART_PIEDS;
       });
       rp.retrait = retrait;
     }
-    rangs.push({ cellules, X, tete: new Array(n).fill(0), retrait: new Array(n).fill(0) });
+    rangs.push({ cellules, X, tete: new Array(n).fill(0), retrait: new Array(n).fill(0), gonfle: new Array(n).fill(0) });
     precedent = X;
     enfantsDuPrecedent = enfants;
   }
@@ -299,7 +320,7 @@ export function cheminDuFilLie(grille, { montage, de = 0, a = grille.length, fen
   let xmax = -Infinity;
   const lignes = [];
   for (let r = de; r < a; r++) {
-    const { cellules, X, tete, retrait } = places[r];
+    const { cellules, X, tete, retrait, gonfle } = places[r];
     const n = X.length;
     const B = Array.from({ length: n + 1 }, (_, j) => (j === 0 ? X[0] - 0.5 : j === n ? X[n - 1] + 0.5 : (X[j - 1] + X[j]) / 2));
     // Un pont qui touche un jeté reste haut (le jeté n'est retenu par aucune maille).
@@ -342,7 +363,7 @@ export function cheminDuFilLie(grille, { montage, de = 0, a = grille.length, fen
         ligne.push([
           xb + Ae * Math.sin(2 * phi) + tete[j] * bosse,
           yr + H * cos + remonte,
-          -s * D * Math.cos(2 * phi) * profond - s0 * retrait[j] * bosse,
+          -s * D * Math.cos(2 * phi) * profond - s0 * retrait[j] * bosse + gonfle[j] * Math.sqrt((1 + cos) / 2),
         ]);
       }
     }
