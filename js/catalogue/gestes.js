@@ -67,3 +67,42 @@ export function geste(code) {
   if (!g) throw new Error(`Geste inconnu : ${code}`);
   return g;
 }
+
+// ---------- Liens entre les mailles (pour la 3D fidèle) ----------
+//
+// Pour chaque maille posée par un geste (dans l'ordre où elles sont posées), les mailles prises qu'elle traverse
+// (indices dans l'ordre où elles sont prises). Un jeté ne traverse rien : il laisse un trou.
+// Une augmentation intercalaire (« levee ») prend le brin entre deux mailles : elle n'a pas de maille dessous.
+
+const LIENS_PARTICULIERS = {
+  // Étoile : 3 mailles ensemble sans les lâcher, un jeté, puis les 3 mêmes encore ensemble.
+  etoileEnd: [{ parents: [0, 1, 2] }, { parents: [], jete: true }, { parents: [0, 1, 2] }],
+  etoileEnv: [{ parents: [0, 1, 2] }, { parents: [], jete: true }, { parents: [0, 1, 2] }],
+  // Côtes souples : la première maille tricotée sans la lâcher, puis la même avec la suivante.
+  croise_b: [{ parents: [0] }, { parents: [0, 1] }],
+  // 1 maille en 3 avec un jeté : le jeté du milieu ne traverse pas la maille.
+  "1en3j": [{ parents: [0] }, { parents: [], jete: true }, { parents: [0] }],
+  "1en3jEnv": [{ parents: [0] }, { parents: [], jete: true }, { parents: [0] }],
+  augID_f: [{ parents: [], levee: true }],
+};
+
+/**
+ * Liens d'un geste : [{ parents: [indices des mailles prises], jete?, levee? }, …], une entrée par maille posée.
+ * null si le geste ne se décrit pas ainsi (gestes non encore modélisés : ils restent approchés en 3D).
+ */
+export function liensDuGeste(code) {
+  if (LIENS_PARTICULIERS[code]) return LIENS_PARTICULIERS[code];
+  const g = geste(code);
+  const aspects = g.endroit || g.envers || [];
+  if (aspects.length !== g.produit) return null;
+  const nonJetes = aspects.filter((a) => a !== "trou").length;
+  let pris = 0;
+  return aspects.map((a) => {
+    if (a === "trou") return { parents: [], jete: true };
+    if (g.consomme === 0) return { parents: [], levee: true };
+    if (g.consomme === 1) return { parents: [0] };
+    if (nonJetes === 1) return { parents: Array.from({ length: g.consomme }, (_, i) => i) };
+    if (nonJetes === g.consomme) return { parents: [pris++] };
+    return { parents: [Math.min(g.consomme - 1, pris++)] };
+  });
+}

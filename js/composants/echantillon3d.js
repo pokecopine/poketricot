@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html } from "../html.js";
 import { grilleMotif } from "../rendu/texture.js";
-import { grilleEchantillon, cheminDuFil, rendu3dFidele, MODELE } from "../rendu/fil3d.js";
+import { grilleEchantillon, cheminDuFil, rendu3dFidele, echantillonLie, MODELE } from "../rendu/fil3d.js";
 import { nuancesLaine } from "../donnees/couleur.js";
 import { occlusionDesSommets } from "../rendu/occlusion.js";
 import { lineaire, couleursDuFil, environnement, libererEnvironnement } from "../rendu/lumiere.js";
@@ -15,6 +15,10 @@ import { comptesVariables } from "../moteur/simulateur.js";
 export function preparerEchantillon(point, taille = {}) {
   const motif = grilleMotif(point, { face: "endroit" });
   if (!motif) return null;
+  const simple = rendu3dFidele(motif) && !comptesVariables(point);
+  // Jetés, diminutions, augmentations : le fil suit les liens entre les mailles (3D fidèle).
+  const lie = !simple && echantillonLie(point, taille);
+  if (lie) return { brins: [lie.points], largeur: lie.largeur, hauteur: lie.hauteur, fidele: true, mailles: lie.mailles, rangs: lie.rangs };
   const grille = grilleEchantillon(motif, taille);
   const fil = cheminDuFil(grille);
   return {
@@ -23,7 +27,7 @@ export function preparerEchantillon(point, taille = {}) {
     largeur: fil.largeur,
     hauteur: fil.hauteur,
     // Un point dont le nombre de mailles change (diminutions et augmentations) n'est qu'approché.
-    fidele: rendu3dFidele(motif) && !comptesVariables(point),
+    fidele: simple,
     mailles: grille[0].length,
     rangs: grille.length,
   };
@@ -260,7 +264,7 @@ export function Echantillon3D({ point, couleur, face = "endroit", hauteur = 320 
       ${etat === "pret" &&
       html`<p class="note">
         Glisse un doigt pour tourner l'échantillon, pince pour zoomer.
-        ${!fidele && html` <strong>Aperçu approché</strong> : les jetés, torsades, mailles glissées et diminutions ne sont pas encore dessinés fil par fil.`}
+        ${!fidele && html` <strong>Aperçu approché</strong> : les torsades, les mailles glissées et les mailles doubles ne sont pas encore dessinées fil par fil.`}
       </p>`}
     </div>`;
 }

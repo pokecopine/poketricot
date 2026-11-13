@@ -7,7 +7,7 @@
 // Dans la grille, l'indice 0 d'un rang est la maille la plus à droite vue de l'endroit
 // (c'est la première tricotée sur un rang endroit).
 
-import { geste } from "../catalogue/gestes.js";
+import { geste, liensDuGeste } from "../catalogue/gestes.js";
 
 const somme = (liste, cle) => liste.reduce((t, code) => t + geste(code)[cle], 0);
 export const consomme = (liste) => somme(liste || [], "consomme");
@@ -445,4 +445,59 @@ export function largeurMotif(point) {
 
 export function nombreDeRangsDuMotif(point) {
   return point.rangs.length;
+}
+
+// ---------- Liens entre les mailles (3D fidèle) ----------
+
+/** +1 si la maille montre un V sur l'endroit, −1 si elle y montre une bosse. */
+function sensVuDeLEndroit(aspect, g, envers) {
+  if (aspect === "grain") return -1;
+  // « boule » : une diminution de 3 ou 5 mailles ; elle montre un V sur l'endroit si elle est tricotée à l'endroit
+  // sur un rang endroit, ou à l'envers sur un rang envers.
+  if (aspect === "boule") return /l'envers/.test(g.nom) === envers ? 1 : -1;
+  return 1;
+}
+
+/**
+ * Tricote un rang sur n mailles en gardant, pour chaque maille posée, les mailles du rang du dessous qu'elle traverse.
+ * Renvoie { ok, rang: [{ aspect, code, parents, jete, levee }, …] } rangé comme la grille (indice 0 = maille la plus
+ * à droite vue de l'endroit) ; les parents sont des indices de la grille du rang du dessous (n mailles). ok: false si un
+ * geste n'a pas de liens connus ou si le motif ne tombe pas juste.
+ */
+export function tricoterRangLie(rang, n) {
+  const gestes = deplier(rang, n);
+  if (!gestes) return { ok: false };
+  const envers = rang.cote === "V";
+  const cellules = [];
+  let pris = 0;
+  for (const code of gestes) {
+    const g = geste(code);
+    const liens = liensDuGeste(code);
+    const vus = envers ? g.envers : g.endroit;
+    if (!liens || !vus) return { ok: false, code };
+    liens.forEach((l, i) => {
+      // Ordre de travail → indice de la grille du dessous : sur l'envers, on part de la gauche (vu de l'endroit).
+      const parents = l.parents.map((k) => (envers ? n - 1 - (pris + k) : pris + k));
+      cellules.push({ aspect: vus[i], code, parents, jete: !!l.jete, levee: !!l.levee, sens: sensVuDeLEndroit(vus[i], g, envers) });
+    });
+    pris += g.consomme;
+  }
+  if (envers) cellules.reverse();
+  return { ok: true, rang: cellules };
+}
+
+/**
+ * Tricote un point à plat (sans mise en place) en gardant les liens : grille[r][i] = { aspect, parents, … }.
+ * Le rang 0 est tricoté sur le montage (n mailles). Renvoie { ok, grille, montage } ou { ok: false, code }.
+ */
+export function simulerLiens(point, { mailles, rangs }) {
+  const grille = [];
+  let n = mailles;
+  for (let r = 0; r < rangs; r++) {
+    const res = tricoterRangLie(point.rangs[r % point.rangs.length], n);
+    if (!res.ok) return { ok: false, code: res.code };
+    grille.push(res.rang);
+    n = res.rang.length;
+  }
+  return { ok: true, grille, montage: mailles };
 }
