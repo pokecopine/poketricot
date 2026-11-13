@@ -19,7 +19,7 @@ import { EtapeBuilder } from "./ecrans/projet-builder.js";
 import { EtapeApercu } from "./ecrans/projet-apercu.js";
 import { EcranPatron, EcranSuivi } from "./ecrans/patron.js";
 import { Reglages } from "./ecrans/reglages.js";
-import { CataloguePoints, FichePoint } from "./ecrans/points.js";
+import { CataloguePoints, FichePoint, suivreNavigation } from "./ecrans/points.js";
 
 function Ecran({ chemin }) {
   const [premier, deuxieme, troisieme, quatrieme] = morceaux(chemin);
@@ -81,6 +81,9 @@ function App({ base, prefsInitiales }) {
   const minuterie = useRef(null);
 
   useEffect(() => appliquerPreferencesAffichage(prefs), [prefs]);
+
+  // 0.22.0 : les points mis de côté pour « Comparer » ne vivent que pendant la visite de l'écran des points.
+  useEffect(() => suivreNavigation(chemin), [chemin]);
 
   // Suivre le thème du téléphone quand le réglage est « Comme le téléphone ».
   useEffect(() => {

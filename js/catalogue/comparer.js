@@ -67,3 +67,16 @@ export function lignesDeComparaison(points, { avisBloc = null, avisLaine = null,
   }
   return lignes;
 }
+
+/**
+ * Quelles listes de points mis de côté garder à cette adresse (0.22.0) ? Elles ne vivent que pendant la visite :
+ * - catalogue : tant qu'on reste dans le catalogue (« /points », grille ou fiche) ; vidée en revenant à l'accueil ;
+ * - choix : tant qu'on reste sur l'écran de choix d'un point (« /projet/<id>/point/… ») ou sur une fiche ouverte depuis lui ;
+ *   vidée en revenant au builder ou à l'étape Matériel (et après « Choisir »).
+ */
+export function listesAGarder(chemin = "/") {
+  const morceaux = String(chemin).split("?")[0].split("/").filter(Boolean);
+  const catalogue = morceaux[0] === "points";
+  const choix = (morceaux[0] === "projet" && morceaux[2] === "point") || (catalogue && morceaux.length > 1);
+  return { catalogue, choix };
+}

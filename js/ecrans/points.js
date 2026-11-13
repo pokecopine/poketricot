@@ -24,7 +24,7 @@ import { avisCotes } from "../catalogue/cotes.js";
 import { avisAvecLaLaine, rangLaine, grosseurDeLaine, GROSSEURS, motifDansLeBloc, maillesEstimees } from "../catalogue/laine.js";
 import { nomEpaisseur, lireNombre } from "../donnees/reserve.js";
 import { densitePoint } from "../moteur/densite.js";
-import { MAX_COMPARER, basculerMisDeCote, lignesDeComparaison } from "../catalogue/comparer.js";
+import { MAX_COMPARER, basculerMisDeCote, lignesDeComparaison, listesAGarder } from "../catalogue/comparer.js";
 
 const COULEUR_PAR_DEFAUT = "#D07E5B";
 
@@ -44,6 +44,11 @@ function useMisDeCote(cle) {
 /** Vider la liste du choix d'un point (après « Choisir », ou en revenant au builder). */
 export function viderMisDeCote(cle = "choix") {
   misDeCote[cle] = [];
+}
+/** À chaque changement d'adresse : vide les listes qu'on ne garde plus (accueil pour le catalogue, builder pour le choix). */
+export function suivreNavigation(chemin) {
+  const garder = listesAGarder(chemin);
+  for (const cle of Object.keys(misDeCote)) if (!garder[cle]) misDeCote[cle] = [];
 }
 
 /** Couleurs proposées : celles des laines de la réserve, sinon terracotta. */
